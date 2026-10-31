@@ -1,0 +1,30 @@
+{
+  "id": "junggu-004",
+  "name": "동대문디자인플라자 뮤지엄",
+  "aliases": [
+    "동대문디자인플라자",
+    "DDP",
+    "DDP 뮤지엄",
+    "동대문디자인플라자 (DDP)"
+  ],
+  "gu": "중구",
+  "type": "미술관",
+  "lat": 37.5665,
+  "lng": 127.0092,
+  "representative": true,
+  "hours": {
+    "mon": { "open": "10:00", "close": "20:00" },
+    "tue": { "open": "10:00", "close": "20:00" },
+    "wed": { "open": "10:00", "close": "20:00" },
+    "thu": { "open": "10:00", "close": "20:00" },
+    "fri": { "open": "10:00", "close": "20:00" },
+    "sat": { "open": "10:00", "close": "20:00" },
+    "sun": { "open": "10:00", "close": "20:00" }
+  },
+  "lastEntry": "19:00",
+  "visitMinutes": 90,
+  "entry": "현장 발권 / 온라인 예매",
+  "reservation": "선택 (사전 예매 권장)",
+  "source": "https://nol.yanolja.com/ticket/products/26013560",
+  "verified": "2026-10-31"
+}

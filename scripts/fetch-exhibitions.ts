@@ -32,6 +32,7 @@ interface RawSeoulEvent {
   ORG_LINK: string;
   LAT: string; // Latitude (위도)
   LOT: string; // Longitude (경도)
+  PRO_TIME: string; // 운영시간 문구. 자유 서술이라 그대로는 못 쓴다
 }
 
 async function fetchExhibitions() {
@@ -86,6 +87,7 @@ async function fetchExhibitions() {
         end,
         field: item.CODENAME || '전시/미술',
         placeName: item.PLACE.trim(),
+        hoursText: (item.PRO_TIME || '').trim(),
         link: item.ORG_LINK || '',
         lat: Number(item.LAT),
         lng: Number(item.LOT),

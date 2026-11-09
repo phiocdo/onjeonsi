@@ -28,6 +28,7 @@ export interface Exhibition {
   end: string;
   field?: string;
   placeName?: string;
+  hoursText?: string;
   link?: string;
   lat?: number;
   lng?: number;

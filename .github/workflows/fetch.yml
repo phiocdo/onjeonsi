@@ -1,0 +1,51 @@
+name: 전시 데이터 수집
+
+# 전시, 공휴일 데이터를 새로 받아와 저장소에 커밋하면
+# 수집 결과가 main 에 올라가면 deploy.yml 이 이어 돌아 사이트가 갱신된다
+on:
+  schedule:
+    # UTC 기준이라 20:00 UTC = 다음 날 05:00 KST에 전시 데이터 수집
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: 전시 데이터 수집
+        run: npx tsx scripts/fetch-exhibitions.ts
+        env:
+          SEOUL_DATA_API_KEY: ${{ secrets.SEOUL_DATA_API_KEY }}
+
+      - name: 공휴일 데이터 수집
+        run: npx tsx scripts/fetch-holidays.ts
+        env:
+          HOLIDAY_API_KEY: ${{ secrets.HOLIDAY_API_KEY }}
+
+      - name: 변경이 있으면 커밋
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/
+          if git diff --cached --quiet; then
+            echo "변경 없음 - 커밋하지 않습니다."
+          else
+            git commit -m 'chore(data): 전시·공휴일 데이터 자동 수집'
+            git push
+          fi

@@ -1,14 +1,8 @@
-.team-architecture {
-  --arch-bg: #0f172a;
-  --arch-card: #1e293b;
-  --arch-card-border: rgba(255, 255, 255, 0.08);
-  --arch-text: #f8fafc;
-  --arch-muted: #94a3b8;
-  --arch-line: #475569;
 
+.team-architecture {
   width: 100%;
-  color: var(--arch-text);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #24292f;
+  overflow: hidden;
 }
 
 .arch-legend {
@@ -16,57 +10,40 @@
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px 20px;
-  margin: 0 auto 20px;
+  gap: 18px;
+  padding: 16px 10px;
 }
 
 .arch-owner {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #cbd5e1;
-  font-size: 12px;
-  font-weight: 500;
+  color: dimgray;
+  font-size: 11px;
   white-space: nowrap;
 }
 
 .arch-owner i {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  flex: 0 0 6px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
   background: currentColor;
+  border-radius: 50%;
 }
 
 .arch-owner--iljung {
-  color: #38bdf8;
+  color: royalblue;
 }
 
 .arch-owner--minje {
-  color: #fbbf24;
+  color: mediumpurple;
 }
 
 .arch-owner--jongmin {
-  color: #a78bfa;
+  color: seagreen;
 }
 
 .arch-owner--chanhui {
-  color: #34d399;
-}
-
-.arch-legend__optional {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #94a3b8;
-  font-size: 12px;
-}
-
-.arch-legend__optional i {
-  display: inline-block;
-  width: 16px;
-  border-top: 2px dashed #a78bfa;
+  color: darkgoldenrod;
 }
 
 .arch-scroll {
@@ -75,27 +52,23 @@
   overflow-y: hidden;
   padding-bottom: 12px;
   scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
 }
 
 .arch-canvas {
   position: relative;
-  isolation: isolate;
   width: 100%;
-  max-width: 1440px;
-  min-width: 1080px;
-  aspect-ratio: 1440 / 940;
-  margin: 0 auto;
+  min-width: 1200px;
+  height: 1420px;
+  background: #fafbfc;
+  border: 1px solid gainsboro;
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
-  background-color: var(--arch-bg);
 }
 
 .arch-links {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 1;
   width: 100%;
   height: 100%;
   overflow: visible;
@@ -103,279 +76,399 @@
 }
 
 .arch-links marker path {
-  fill: var(--arch-line);
+  fill: slategray;
 }
 
 .arch-edge__path {
   fill: none;
-  stroke: var(--arch-line);
-  stroke-width: 2;
+  stroke: slategray;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.6;
-  vector-effect: non-scaling-stroke;
 }
 
-.arch-edge--dashed .arch-edge__path {
-  stroke: #a78bfa;
-  stroke-dasharray: 6 6;
-  opacity: 0.7;
+.arch-edge--data .arch-edge__path {
+  stroke: royalblue;
+}
+
+.arch-edge--engine .arch-edge__path {
+  stroke: seagreen;
+}
+
+.arch-edge--discover .arch-edge__path {
+  stroke: mediumpurple;
+}
+
+.arch-edge--archive .arch-edge__path {
+  stroke: darkgoldenrod;
+}
+
+.arch-edge--deploy .arch-edge__path {
+  stroke: slategray;
 }
 
 .arch-edge__label rect {
-  fill: #1e293b;
-  stroke: rgba(255, 255, 255, 0.1);
+  fill: white;
+  stroke: gainsboro;
   stroke-width: 1;
 }
 
 .arch-edge__label text {
-  fill: #e2e8f0;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: -0.2px;
+  fill: dimgray;
+  font-size: 10px;
+  font-weight: 600;
 }
 
-.arch-edge__label--optional rect {
-  fill: #1e1b4b;
-  stroke: rgba(167, 139, 250, 0.3);
-}
-
-.arch-edge__label--optional text {
-  fill: #c4b5fd;
-  font-size: 11px;
-}
-
-/* 기능 노드 */
 .arch-node {
   position: absolute;
-  z-index: 1;
-  transform: translate(-50%, -50%);
+  z-index: 2;
   box-sizing: border-box;
-  padding: 18px 20px 14px;
-  border: 1px solid var(--arch-card-border);
-  border-radius: 16px;
-  background: var(--arch-card);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 18px;
+  background: white;
+  border: 1px solid gainsboro;
+  border-radius: 10px;
+  box-shadow: 0 3px 12px rgb(0 0 0 / 5%);
 }
 
-.arch-node::before {
-  position: absolute;
-  top: 0;
-  left: 20px;
-  width: 32px;
-  height: 2px;
-  border-radius: 0 0 4px 4px;
-  background: var(--node-accent, #64748b);
-  content: "";
-}
-
-.arch-node--data {
-  --node-accent: #38bdf8;
-}
-
-.arch-node--discover {
-  --node-accent: #34d399;
+.arch-node--pipeline {
+  border-top: 3px solid royalblue;
 }
 
 .arch-node--judge {
-  --node-accent: #a78bfa;
+  border-top: 3px solid seagreen;
+}
+
+.arch-node--discover {
+  border-top: 3px solid mediumpurple;
 }
 
 .arch-node--archive {
-  --node-accent: #fbbf24;
+  border-top: 3px solid darkgoldenrod;
+}
+
+.arch-node--deploy {
+  border-top: 3px solid slategray;
 }
 
 .arch-node__category {
-  margin-bottom: 6px;
-  color: var(--node-accent);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  text-transform: uppercase;
+  margin-bottom: 8px;
+  color: gray;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
 }
 
 .arch-node h3 {
-  margin: 0 0 10px;
-  color: #f8fafc;
-  font-size: clamp(16px, 1.4vw, 19px);
-  font-weight: 650;
-  letter-spacing: -0.4px;
-  line-height: 1.3;
+  margin: 0 0 13px;
+  color: #24292f;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .arch-node ul {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.arch-node li {
-  position: relative;
-  padding-left: 10px;
-  color: var(--arch-muted);
-  font-size: clamp(11px, 0.85vw, 12px);
-  font-weight: 400;
-  letter-spacing: -0.2px;
-  line-height: 1.4;
-  word-break: keep-all;
-}
-
-.arch-node li::before {
-  position: absolute;
-  top: 0.55em;
-  left: 0;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--node-accent);
-  content: "";
-}
-
-.arch-node__footer {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.arch-node__path {
-  color: #64748b;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 9px;
-  letter-spacing: -0.2px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.arch-owners {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-}
-
-/* 중앙 서비스 */
-.arch-hub {
-  position: absolute;
-  top: 46.3%;
-  left: 50%;
-  z-index: 2;
-  display: flex;
-  width: 27.1%;
-  min-width: 300px;
-  max-width: 390px;
-  min-height: 175px;
-  box-sizing: border-box;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  transform: translate(-50%, -50%);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  border-radius: 20px;
-  background: #1e293b;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  text-align: center;
-}
-
-.arch-hub__symbol {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  margin-bottom: 6px;
-  place-items: center;
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  border-radius: 8px;
-  background: rgba(56, 189, 248, 0.1);
-  color: #38bdf8;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.arch-hub h2 {
+  gap: 7px;
   margin: 0;
-  color: #f8fafc;
-  font-size: clamp(22px, 2.2vw, 30px);
-  font-weight: 700;
-  letter-spacing: -0.8px;
+  padding-left: 16px;
+  color: dimgray;
+  font-size: 11px;
+  line-height: 1.6;
 }
 
-.arch-hub p {
-  margin: 8px 0 0;
-  color: var(--arch-muted);
-  font-size: clamp(11px, 0.9vw, 12px);
-  font-weight: 400;
-  letter-spacing: -0.2px;
-  line-height: 1.5;
+.arch-node__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid whitesmoke;
 }
 
-/* 수집·배포 경로 */
-.arch-infra {
+.arch-node__files span {
+  padding: 4px 6px;
+  color: royalblue;
+  background: aliceblue;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 9px;
+}
+
+.arch-node .arch-owners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.arch-node .arch-owner {
+  font-size: 10px;
+}
+
+.arch-repo {
+  position: absolute;
+  z-index: 3;
+  top: 100px;
+  left: 29.375%;
+  width: 41.25%;
+  background: white;
+  border: 1px solid gainsboro;
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 7%);
+  overflow: hidden;
+}
+
+.arch-repo__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 56px;
+  padding: 11px 18px;
+  border-bottom: 1px solid gainsboro;
+}
+
+.arch-repo__identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.arch-repo__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  padding: 12px 10px 0;
+  width: 34px;
+  height: 34px;
+  background: whitesmoke;
+  border: 1px solid gainsboro;
+  border-radius: 8px;
 }
 
-.arch-infra__title {
-  color: #cbd5e1;
-  font-size: 11px;
-  font-weight: 600;
+.arch-repo__icon i {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border: 2px solid dimgray;
+  border-radius: 4px;
 }
 
-.arch-infra__paths {
-  color: #64748b;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+.arch-repo__icon i::before,
+.arch-repo__icon i::after {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  content: "";
+  background: white;
+  border: 1.5px solid dimgray;
+  border-radius: 2px;
+}
+
+.arch-repo__icon i::before {
+  top: -5px;
+  left: -5px;
+}
+
+.arch-repo__icon i::after {
+  right: -5px;
+  bottom: -5px;
+}
+
+.arch-repo__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: gray;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  line-height: 11px;
+}
+
+.arch-repo__identity h2 {
+  margin: 0;
+  color: royalblue;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.arch-repo__branch {
+  padding: 4px 9px;
+  color: dimgray;
+  background: whitesmoke;
+  border: 1px solid gainsboro;
+  border-radius: 5px;
+  font-family: monospace;
   font-size: 10px;
-  letter-spacing: -0.2px;
 }
 
-@media (max-width: 760px) {
+.arch-repo__summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 7px 18px;
+  color: dimgray;
+  background: whitesmoke;
+  border-bottom: 1px solid gainsboro;
+  font-size: 9px;
+  line-height: 12px;
+}
+
+.arch-repo__summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.arch-dot {
+  width: 7px;
+  height: 7px;
+  background: royalblue;
+  border-radius: 50%;
+}
+
+.arch-repo__tree-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 21px;
+  padding: 5px 14px;
+  color: gray;
+  background: #fafbfc;
+  border-bottom: 1px solid gainsboro;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 11px;
+}
+
+.arch-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 18px;
+  padding-right: 12px;
+  border-bottom: 1px solid whitesmoke;
+  transition: background 0.15s;
+}
+
+.arch-file:hover {
+  background: aliceblue;
+}
+
+.arch-file__name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #24292f;
+  font-family: monospace;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.arch-file__name > span {
+  color: gray;
+}
+
+.arch-folder,
+.arch-document {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.arch-folder {
+  width: 12px;
+  height: 8px;
+  margin-top: 2px;
+  background: cornflowerblue;
+  border-radius: 2px;
+}
+
+.arch-folder::before {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 6px;
+  height: 4px;
+  content: "";
+  background: cornflowerblue;
+  border-radius: 2px 2px 0 0;
+}
+
+.arch-document {
+  width: 10px;
+  height: 12px;
+  background: aliceblue;
+  border: 1px solid lightskyblue;
+  border-radius: 2px;
+}
+
+.arch-file__note {
+  color: gray;
+  font-size: 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.arch-file--pending .arch-file__note {
+  color: darkgoldenrod;
+  font-weight: 700;
+}
+
+.arch-file--pending .arch-file__name {
+  color: darkgoldenrod;
+}
+
+.arch-repo__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 27px;
+  padding: 7px 14px;
+  color: gray;
+  background: whitesmoke;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+}
+
+.arch-caption {
+  position: absolute;
+  right: 18px;
+  bottom: 12px;
+  left: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: gray;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
   .arch-legend {
     justify-content: flex-start;
-    padding-inline: 4px;
-    gap: 8px 12px;
+    gap: 12px;
+  }
+
+  .arch-scroll {
+    overflow-x: auto;
   }
 
   .arch-canvas {
-    min-width: 1080px;
-    border-radius: 16px;
+    width: 1200px;
+    min-width: 1200px;
   }
 
-  .arch-node {
-    padding: 16px 16px 12px;
-  }
-
-  .arch-node__path {
-    font-size: 9px;
-  }
-
-  .arch-infra {
-    justify-content: flex-start;
-    padding-inline: 4px;
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .arch-node {
-    transition: 
-      border-color 150ms ease, 
-      box-shadow 150ms ease, 
-      transform 150ms ease;
-  }
-
-  .arch-node:hover {
-    z-index: 3;
-    transform: translate(-50%, -50%) translateY(-2px);
-    border-color: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  .arch-caption {
+    flex-direction: column;
+    gap: 5px;
   }
 }

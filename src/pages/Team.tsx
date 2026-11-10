@@ -3,14 +3,15 @@ import "./Team.css";
 
 type MemberKey = "iljung" | "minje" | "jongmin" | "chanhui";
 
-const MEMBERS: Record<MemberKey, string> = {
-  iljung: "김일중",
-  minje: "김민제",
-  jongmin: "임종민",
-  chanhui: "임찬희",
+type RepoItem = {
+  id: string;
+  name: string;
+  kind: "folder" | "file";
+  depth: number;
+  note?: string;
 };
 
-type ArchitectureNode = {
+type NodeData = {
   id: string;
   x: number;
   y: number;
@@ -18,299 +19,406 @@ type ArchitectureNode = {
   category: string;
   title: string;
   details: string[];
-  path: string;
+  files: string[];
   owners: MemberKey[];
 };
 
-const NODES: ArchitectureNode[] = [
-  {
-    id: "data",
-    x: 470,
-    y: 155,
-    width: 410,
-    category: "수집 · 정리",
-    title: "전시 · 시설 데이터",
-    details: [
-      "문화행사 자료 수집 · 전시 정보 정리",
-      "시설별 운영시간 · 휴관 · 입장 마감",
-      "시설 정보 · 출처 · 확인일 관리",
-    ],
-    path: "scripts/  ·  data/",
-    owners: ["iljung", "minje"],
-  },
-  {
-    id: "discover",
-    x: 1160,
-    y: 430,
-    width: 410,
-    category: "지도 · 탐색",
-    title: "전시 탐색 · 상세 정보",
-    details: [
-      "내 동네 · 기준 위치 · 반경 탐색",
-      "한눈에 보기 · 언제 갈까",
-      "지도 · 운영 정보 · 혼잡도 확인",
-    ],
-    path: "src/pages/  ·  src/components/",
-    owners: ["iljung", "chanhui"],
-  },
-  {
-    id: "judge",
-    x: 280,
-    y: 430,
-    width: 410,
-    category: "조건 계산",
-    title: "운영 가능 판정",
-    details: [
-      "전시 기간 · 휴관 여부 · 입장 마감",
-      "폐관 전 종료 · 머물 수 있는 시간",
-      "가능 / 불가 / 확인 필요와 판정 사유",
-    ],
-    path: "src/judge/  ·  src/mock/",
-    owners: ["jongmin"],
-  },
-  {
-    id: "archive",
-    x: 720,
-    y: 780,
-    width: 440,
-    category: "기록 · 추천",
-    title: "관람 기록 · 맞춤 추천",
-    details: [
-      "방문 날짜 · 별점 · 관람 시간 · 메모",
-      "개인 기록장 · 분야별 맞춤 추천",
-      "동의한 기록은 익명 통계로 공유",
-    ],
-    path: "src/pages/  ·  src/components/  ·  localStorage",
-    owners: ["chanhui", "minje", "iljung", "jongmin"],
-  },
-];
-
-type EdgeProps = {
+type EdgeData = {
+  id: string;
   path: string;
   label: string;
   x: number;
   y: number;
   width: number;
-  dashed?: boolean;
-  optional?: boolean;
+  direction: "in" | "out" | "both";
+  tone: string;
 };
 
-function Edge({
-  path,
-  label,
-  x,
-  y,
-  width,
-  dashed = false,
-  optional = false,
-}: EdgeProps) {
-  return (
-    <g className={`arch-edge${dashed ? " arch-edge--dashed" : ""}`}>
-      <path
-        d={path}
-        markerEnd="url(#arch-arrow)"
-        className="arch-edge__path"
-      />
+const MEMBERS: Record<MemberKey, string> = {
+  iljung: "김일중",
+  minje: "김민제",
+  jongmin: "임종민",
+  chanhui: "임찬희",
+};
 
-      <g
-        className={`arch-edge__label${optional ? " arch-edge__label--optional" : ""}`}
-        transform={`translate(${x}, ${y})`}
-      >
-        <rect x={-width / 2} y={-13} width={width} height={26} rx={13} />
-        <text textAnchor="middle" dominantBaseline="middle">
-          {label}
-        </text>
-      </g>
-    </g>
-  );
-}
+const REPO: RepoItem[] = [
+  { id: "github", name: ".github", kind: "folder", depth: 0 },
+  { id: "workflows", name: "workflows", kind: "folder", depth: 1 },
+  { id: "data", name: "data", kind: "folder", depth: 0 },
+  { id: "exhibitions", name: "exhibitions", kind: "folder", depth: 1 },
+  { id: "auto", name: "auto.json", kind: "file", depth: 2, note: "서울시 API 자동 수집" },
+  { id: "holidays", name: "holidays", kind: "folder", depth: 1 },
+  { id: "holiday-json", name: "holidays.json", kind: "file", depth: 2, note: "공공데이터포털 자동 수집" },
+  { id: "venues", name: "venues", kind: "folder", depth: 1, note: "작성 중 · 직접 조사" },
+  { id: "public", name: "public", kind: "folder", depth: 0 },
+  { id: "scripts", name: "scripts", kind: "folder", depth: 0 },
+  { id: "fetch-exhibitions", name: "fetch-exhibitions.ts", kind: "file", depth: 1 },
+  { id: "fetch-holidays", name: "fetch-holidays.ts", kind: "file", depth: 1 },
+  { id: "src", name: "src", kind: "folder", depth: 0 },
+  { id: "assets", name: "assets", kind: "folder", depth: 1 },
+  { id: "engine", name: "engine", kind: "folder", depth: 1 },
+  { id: "constants", name: "constants.ts", kind: "file", depth: 2 },
+  { id: "judge", name: "judge.ts", kind: "file", depth: 2 },
+  { id: "reasons", name: "reasons.ts", kind: "file", depth: 2 },
+  { id: "sanity", name: "sanity.test.ts", kind: "file", depth: 2 },
+  { id: "mock", name: "mock", kind: "folder", depth: 1 },
+  { id: "mock-data", name: "data.ts", kind: "file", depth: 2 },
+  { id: "pages", name: "pages", kind: "folder", depth: 1 },
+  { id: "archive", name: "Archive.tsx", kind: "file", depth: 2 },
+  { id: "nearby-css", name: "NearbyExhibitions.css", kind: "file", depth: 2 },
+  { id: "nearby", name: "NearbyExhibitions.tsx", kind: "file", depth: 2 },
+  { id: "overview-list", name: "OverviewList.tsx", kind: "file", depth: 2 },
+  { id: "overview-page", name: "OverviewPage.tsx", kind: "file", depth: 2 },
+  { id: "team-css", name: "Team.css", kind: "file", depth: 2 },
+  { id: "team", name: "Team.tsx", kind: "file", depth: 2, note: "현재 프로젝트 구조도" },
+  { id: "when", name: "When.tsx", kind: "file", depth: 2 },
+  { id: "types", name: "types", kind: "folder", depth: 1 },
+  { id: "types-index", name: "index.ts", kind: "file", depth: 2 },
+  { id: "app", name: "App.tsx", kind: "file", depth: 1 },
+  { id: "index-css", name: "index.css", kind: "file", depth: 1 },
+  { id: "main", name: "main.tsx", kind: "file", depth: 1 },
+  { id: "env", name: ".env.example", kind: "file", depth: 0 },
+  { id: "gitignore", name: ".gitignore", kind: "file", depth: 0 },
+  { id: "readme", name: "README.md", kind: "file", depth: 0 },
+  { id: "eslint", name: "eslint.config.js", kind: "file", depth: 0 },
+  { id: "html", name: "index.html", kind: "file", depth: 0 },
+  { id: "lock", name: "package-lock.json", kind: "file", depth: 0 },
+  { id: "package", name: "package.json", kind: "file", depth: 0 },
+  { id: "tsconfig-app", name: "tsconfig.app.json", kind: "file", depth: 0 },
+  { id: "tsconfig", name: "tsconfig.json", kind: "file", depth: 0 },
+  { id: "tsconfig-node", name: "tsconfig.node.json", kind: "file", depth: 0 },
+  { id: "vite", name: "vite.config.ts", kind: "file", depth: 0 },
+];
 
-function Owners({ members }: { members: MemberKey[] }) {
+const NODES: NodeData[] = [
+  {
+    id: "pipeline",
+    x: 30,
+    y: 280,
+    width: 350,
+    category: "DATA PIPELINE",
+    title: "데이터 수집 · 정리",
+    details: [
+      "서울시 API에서 종로 · 중구 전시 수집",
+      "공공데이터포털에서 공휴일 수집",
+      "시설 운영 정보는 직접 조사",
+    ],
+    files: ["scripts/", "data/exhibitions/", "data/holidays/", "data/venues/"],
+    owners: ["iljung", "minje"],
+  },
+  {
+    id: "judge",
+    x: 30,
+    y: 790,
+    width: 350,
+    category: "JUDGEMENT ENGINE",
+    title: "운영 가능 판정",
+    details: [
+      "전시 기간 · 휴관 · 입장 마감 확인",
+      "폐관 전 관람 종료 및 머물 시간 계산",
+      "가능 · 불가 · 확인 필요와 판정 사유",
+    ],
+    files: ["src/engine/", "src/mock/", "src/types/"],
+    owners: ["jongmin"],
+  },
+  {
+    id: "discover",
+    x: 1220,
+    y: 280,
+    width: 350,
+    category: "EXHIBITION DISCOVERY",
+    title: "내 동네 · 전시 탐색",
+    details: [
+      "카카오맵 · 기준 위치 · 반경 탐색",
+      "한눈에 보기 · 전시 상세 정보",
+      "언제 갈까 · 시간대별 운영 가능 판정",
+    ],
+    files: ["NearbyExhibitions.tsx", "OverviewPage.tsx", "When.tsx"],
+    owners: ["iljung", "chanhui"],
+  },
+  {
+    id: "archive",
+    x: 1220,
+    y: 790,
+    width: 350,
+    category: "PERSONAL ARCHIVE",
+    title: "관람 기록 · 맞춤 추천",
+    details: [
+      "방문 날짜 · 별점 · 실제 관람 시간",
+      "개인 기록장 · 날짜별 메모",
+      "동의한 기록을 익명 통계로 활용",
+    ],
+    files: ["src/pages/Archive.tsx"],
+    owners: ["chanhui", "minje", "iljung", "jongmin"],
+  },
+  {
+    id: "deploy",
+    x: 625,
+    y: 1190,
+    width: 350,
+    category: "AUTOMATION · DEPLOY",
+    title: "자동 수집 · 빌드 · 배포",
+    details: [
+      "GitHub Actions 워크플로",
+      "Vite 설정 및 빌드",
+      "GitHub Pages 배포",
+    ],
+    files: [".github/workflows/", "vite.config.ts", "package.json"],
+    owners: ["iljung", "chanhui"],
+  },
+];
+
+const EDGES: EdgeData[] = [
+  {
+    id: "collect-exhibitions",
+    path: "M 380 350 C 420 350 430 392 470 392",
+    label: "전시 수집",
+    x: 420,
+    y: 328,
+    width: 90,
+    direction: "in",
+    tone: "data",
+  },
+  {
+    id: "collect-holidays",
+    path: "M 380 405 C 420 405 430 410 470 410",
+    label: "공휴일 수집",
+    x: 420,
+    y: 435,
+    width: 100,
+    direction: "in",
+    tone: "data",
+  },
+  {
+    id: "data-to-discover",
+    path: "M 1130 284 C 1170 284 1175 350 1220 350",
+    label: "전시 데이터",
+    x: 1175,
+    y: 265,
+    width: 100,
+    direction: "out",
+    tone: "data",
+  },
+  {
+    id: "holiday-to-judge",
+    path: "M 470 320 C 420 350 420 840 380 840",
+    label: "공휴일 정보",
+    x: 420,
+    y: 635,
+    width: 100,
+    direction: "out",
+    tone: "engine",
+  },
+  {
+    id: "engine",
+    path: "M 470 500 C 420 500 420 880 380 880",
+    label: "판정 로직 · 결과",
+    x: 420,
+    y: 690,
+    width: 125,
+    direction: "both",
+    tone: "engine",
+  },
+  {
+    id: "pages",
+    path: "M 1130 644 C 1175 644 1175 420 1220 420",
+    label: "탐색 화면",
+    x: 1175,
+    y: 565,
+    width: 90,
+    direction: "both",
+    tone: "discover",
+  },
+  {
+    id: "archive",
+    path: "M 1130 608 C 1175 608 1175 875 1220 875",
+    label: "관람 기록",
+    x: 1175,
+    y: 740,
+    width: 90,
+    direction: "both",
+    tone: "archive",
+  },
+  {
+    id: "workflows",
+    path: "M 470 230 C 410 230 410 1260 625 1260",
+    label: "자동 실행",
+    x: 430,
+    y: 1150,
+    width: 90,
+    direction: "out",
+    tone: "deploy",
+  },
+  {
+    id: "vite",
+    path: "M 1130 1022 C 1190 1060 1190 1260 975 1260",
+    label: "빌드 · 배포 설정",
+    x: 1170,
+    y: 1150,
+    width: 125,
+    direction: "out",
+    tone: "deploy",
+  },
+];
+
+const ORDER: MemberKey[] = ["iljung", "minje", "jongmin", "chanhui"];
+
+// 담당자 표시
+function A({ members }: { members: MemberKey[] }) {
   return (
     <div className="arch-owners" aria-label="담당 팀원">
       {members.map((member) => (
-        <span
-          className={`arch-owner arch-owner--${member}`}
-          key={member}
-        >
-          <i aria-hidden="true" />
-          {MEMBERS[member]}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function Node({ node }: { node: ArchitectureNode }) {
-  return (
-    <article
-      className={`arch-node arch-node--${node.id}`}
-      style={{
-        left: `${(node.x / 1440) * 100}%`,
-        top: `${(node.y / 940) * 100}%`,
-        width: `${(node.width / 1440) * 100}%`,
-      }}
-    >
-      <div className="arch-node__category">{node.category}</div>
-
-      <h3>{node.title}</h3>
-
-      <ul>
-        {node.details.map((detail) => (
-          <li key={detail}>{detail}</li>
-        ))}
-      </ul>
-
-      <div className="arch-node__footer">
-        <span className="arch-node__path">{node.path}</span>
-        <Owners members={node.owners} />
-      </div>
-    </article>
-  );
-}
-
-function MemberLegend() {
-  const order: MemberKey[] = [
-    "iljung",
-    "minje",
-    "jongmin",
-    "chanhui",
-  ];
-
-  return (
-    <div className="arch-legend" aria-label="담당자 색상">
-      {order.map((member) => (
         <span className={`arch-owner arch-owner--${member}`} key={member}>
           <i aria-hidden="true" />
           {MEMBERS[member]}
         </span>
       ))}
-      <span className="arch-legend__optional">
-        <i aria-hidden="true" />
-        선택 기능
-      </span>
     </div>
   );
 }
 
-export default function Team() {
+// 저장소 목록 표시
+function B() {
   return (
-    <section className="team-architecture" aria-label="온전시 프로젝트 구조">
-      <MemberLegend />
+    <section className="arch-repo" aria-label="GitHub 저장소 구조">
+      <header className="arch-repo__header">
+        <div className="arch-repo__identity">
+          <span className="arch-repo__icon" aria-hidden="true">
+            <i />
+          </span>
+          <div>
+            <span className="arch-repo__eyebrow">PROJECT REPOSITORY</span>
+            <h2>onjeonsi</h2>
+          </div>
+        </div>
+        <span className="arch-repo__branch">main</span>
+      </header>
+
+      <div className="arch-repo__summary">
+        <span><i className="arch-dot" /> TypeScript</span>
+        <span>React</span>
+        <span>Vite</span>
+        <span>GitHub Pages</span>
+      </div>
+
+      <div className="arch-repo__tree">
+        <div className="arch-repo__tree-head">
+          <span>NAME</span>
+          <span>DESCRIPTION</span>
+        </div>
+
+        {REPO.map((item) => (
+          <div
+            className={`arch-file${item.kind === "folder" ? " arch-file--folder" : ""}${item.id === "venues" ? " arch-file--pending" : ""}`}
+            style={{ paddingLeft: `${14 + item.depth * 18}px` }}
+            key={item.id}
+          >
+            <span className="arch-file__name">
+              <i className={item.kind === "folder" ? "arch-folder" : "arch-document"} />
+              {item.name}
+              {item.kind === "folder" && <span>/</span>}
+            </span>
+            <span className="arch-file__note">{item.note ?? ""}</span>
+          </div>
+        ))}
+      </div>
+
+      <footer className="arch-repo__footer">
+        <span>EXPANDED DIRECTORY TREE</span>
+        <span>{REPO.length} ITEMS</span>
+      </footer>
+    </section>
+  );
+}
+
+// 연결 화살표 표시
+function C({ edge }: { edge: EdgeData }) {
+  return (
+    <g className={`arch-edge arch-edge--${edge.tone}`}>
+      <path
+        d={edge.path}
+        markerStart={edge.direction === "both" ? "url(#arch-arrow)" : undefined}
+        markerEnd="url(#arch-arrow)"
+        className="arch-edge__path"
+      />
+      <g className="arch-edge__label" transform={`translate(${edge.x}, ${edge.y})`}>
+        <rect x={-edge.width / 2} y={-12} width={edge.width} height={24} rx={12} />
+        <text textAnchor="middle" dominantBaseline="middle">{edge.label}</text>
+      </g>
+    </g>
+  );
+}
+
+// 기능 영역 표시
+function D({ node }: { node: NodeData }) {
+  return (
+    <article
+      className={`arch-node arch-node--${node.id}`}
+      style={{
+        left: `${(node.x / 1600) * 100}%`,
+        top: `${(node.y / 1420) * 100}%`,
+        width: `${(node.width / 1600) * 100}%`,
+      }}
+    >
+      <div className="arch-node__category">{node.category}</div>
+      <h3>{node.title}</h3>
+      <ul>
+        {node.details.map((detail) => <li key={detail}>{detail}</li>)}
+      </ul>
+      <div className="arch-node__files">
+        {node.files.map((file) => <span key={file}>{file}</span>)}
+      </div>
+      <A members={node.owners} />
+    </article>
+  );
+}
+
+// 담당자 범례 표시
+function E() {
+  return (
+    <div className="arch-legend" aria-label="담당자 색상">
+      {ORDER.map((member) => (
+        <span className={`arch-owner arch-owner--${member}`} key={member}>
+          <i aria-hidden="true" />
+          {MEMBERS[member]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// 저장소 중심 관계도 표시
+export default function MAIN() {
+  return (
+    <section className="team-architecture" aria-label="온전시 GitHub 저장소 중심 관계도">
+      <E />
 
       <div className="arch-scroll">
         <div className="arch-canvas">
           <svg
             className="arch-links"
-            viewBox="0 0 1440 940"
+            viewBox="0 0 1600 1420"
             preserveAspectRatio="none"
             role="img"
-            aria-label="전시 데이터, 탐색, 판정, 관람 기록 사이의 연결 관계"
+            aria-label="GitHub 저장소의 파일과 프로젝트 기능 사이의 연결 관계"
           >
             <defs>
-              <marker
-                id="arch-arrow"
-                viewBox="0 0 10 10"
-                refX="8"
-                refY="5"
-                markerWidth="7"
-                markerHeight="7"
-                orient="auto"
-              >
+              <marker id="arch-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" />
               </marker>
             </defs>
-
-            {/* 데이터에서 탐색 화면으로 */}
-            <Edge
-              path="M 660 185 C 770 65, 900 75, 985 315"
-              label="전시 · 시설 · 위치 정보"
-              x={830}
-              y={105}
-              width={194}
-            />
-
-            {/* 데이터에서 판정 엔진으로 */}
-            <Edge
-              path="M 350 248 C 260 264, 180 274, 252 315"
-              label="운영시간 · 휴관 · 마감"
-              x={235}
-              y={278}
-              width={190}
-            />
-
-            {/* 탐색 조건이 판정으로 전달 */}
-            <Edge
-              path="M 975 355 C 875 250, 565 250, 465 355"
-              label="위치 · 반경 · 머물 시간"
-              x={720}
-              y={275}
-              width={210}
-            />
-
-            {/* 판정 결과가 탐색 화면으로 반환 */}
-            <Edge
-              path="M 465 520 C 565 630, 875 630, 975 520"
-              label="가능 여부 · 판정 사유"
-              x={720}
-              y={612}
-              width={196}
-            />
-
-            {/* 탐색한 전시를 관람 기록으로 */}
-            <Edge
-              path="M 1210 545 C 1220 630, 1080 710, 945 758"
-              label="방문 날짜 · 별점 · 메모"
-              x={1150}
-              y={650}
-              width={200}
-            />
-
-            {/* 관람 기록에서 개인화 추천으로 */}
-            <Edge
-              path="M 970 800 C 1320 835, 1410 655, 1315 550"
-              label="개인 추천 · 공유 통계"
-              x={1290}
-              y={785}
-              width={190}
-            />
-
-            {/* 실제 관람 시간 통계는 선택적으로 판정에 반영 */}
-            <Edge
-              path="M 500 765 C 390 760, 280 660, 270 555"
-              label="실제 관람시간 중앙값 반영"
-              x={370}
-              y={700}
-              width={218}
-              dashed
-              optional
-            />
+            {EDGES.map((edge) => <C edge={edge} key={edge.id} />)}
           </svg>
 
-          {NODES.map((node) => (
-            <Node node={node} key={node.id} />
-          ))}
+          {NODES.map((node) => <D node={node} key={node.id} />)}
 
-          <div className="arch-hub">
-            <span className="arch-hub__symbol" aria-hidden="true">
-              온
-            </span>
-            <h2>온전시</h2>
-            <p>
-              전시를 찾고 · 가능한 시간을 확인하고
-              <br />
-              관람 경험을 기록하는 서비스
-            </p>
+          <B />
+
+          <div className="arch-caption">
+            <span>REPOSITORY ARCHITECTURE</span>
+            <span>DATA → ENGINE → SERVICE → ARCHIVE</span>
           </div>
         </div>
-      </div>
-
-      <div className="arch-infra">
-        <span className="arch-infra__title">자동 수집 · 배포</span>
-        <span className="arch-infra__paths">
-          scripts/ · data/ · .github/workflows/ · vite.config.ts
-        </span>
-        <Owners members={["iljung", "chanhui"]} />
       </div>
     </section>
   );

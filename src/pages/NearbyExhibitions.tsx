@@ -1,22 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import exhibitions from '../../data/exhibitions/auto.json'
 import { mockItems } from '../mock/data'
+import { JUDGE_STATUS, type JudgeKey } from '../mock/exhibits'
+import ExhibitCard from '../components/ExhibitCard'
 import './NearbyExhibitions.css'
 
 declare global {
-  interface Window { kakao: any }
+  interface Window {
+    kakao: any
+  }
 }
+
+type Judge = { result: JudgeKey; reasons: string[] }
+type SpotItem = { id: string | number; title: string; placeName: string; judge: Judge }
 
 const GWANGHWAMUN = { lat: 37.5759, lng: 126.9768 }
 const RADIUS_OPTIONS = [500, 1000, 2000]
+const LEVEL_BY_RADIUS: Record<number, number> = { 500: 5, 1000: 6, 2000: 7 }
 
-const JUDGE_LABEL = {
-  possible: '가능',
-  impossible: '불가',
-  unknown: '확인 필요',
-}
-
-// 하버사인 공식으로 두 좌표 사이 거리(m)를 구한다
 function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371000
   const toRad = (d: number) => (d * Math.PI) / 180
@@ -28,42 +30,81 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) 
   return 2 * R * Math.asin(Math.sqrt(a))
 }
 
+function buildInfo(items: SpotItem[], onSelect: (item: SpotItem) => void) {
+  const box = document.createElement('div')
+  box.className = 'info-box'
+
+  const name = document.createElement('strong')
+  name.textContent = items[0].placeName
+  box.appendChild(name)
+
+  items.forEach((item) => {
+    const row = document.createElement('button')
+    row.type = 'button'
+    row.className = 'info-row'
+
+    const badge = document.createElement('span')
+    badge.className = `badge ${item.judge.result}`
+    badge.textContent = JUDGE_STATUS[item.judge.result]
+
+    const title = document.createElement('span')
+    title.textContent = item.title
+
+    row.append(badge, title)
+    row.addEventListener('click', () => onSelect(item))
+    box.appendChild(row)
+  })
+
+  return box
+}
+
 function NearbyExhibitions() {
+  const navigate = useNavigate()
+  const navigateRef = useRef(navigate)
   const mapRef = useRef<HTMLDivElement>(null)
   const mapObj = useRef<any>(null)
-  const layers = useRef<any[]>([])
   const [ready, setReady] = useState(false)
+  const [failed] = useState(() => !window.kakao?.maps)
   const [center, setCenter] = useState(GWANGHWAMUN)
   const [label, setLabel] = useState('광화문')
   const [radius, setRadius] = useState(1000)
 
-  const today = new Date().toISOString().slice(0, 10)
+  useEffect(() => {
+    navigateRef.current = navigate
+  }, [navigate])
 
-  const nearby = exhibitions
-    .filter(
-      (ex) =>
-        ex.lat && ex.lng &&
-        ex.start <= today && today <= ex.end &&
-        distanceMeters(center.lat, center.lng, ex.lat, ex.lng) <= radius
-    )
-    .map((ex) => ({
-      ...ex,
-      distance: distanceMeters(center.lat, center.lng, ex.lat!, ex.lng!),
-    }))
-    .sort((a, b) => a.distance - b.distance)
-    // 판정 함수가 아직 없어 mock/data.ts의 결과 3개를 돌려 쓴다
-    .map((ex, i) => ({ ...ex, judge: mockItems[i % mockItems.length].judgeResult }))
+  const nearby = useMemo(() => {
+    const today = new Date().toLocaleDateString('sv-SE')
+    return exhibitions
+      .filter(
+        (ex) =>
+          ex.lat &&
+          ex.lng &&
+          ex.start <= today &&
+          today <= ex.end &&
+          distanceMeters(center.lat, center.lng, ex.lat, ex.lng) <= radius
+      )
+      .map((ex) => ({
+        ...ex,
+        distance: distanceMeters(center.lat, center.lng, ex.lat!, ex.lng!),
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .map((ex, i) => ({ ...ex, judge: mockItems[i % mockItems.length].judgeResult }))
+  }, [center, radius])
 
-  // 한 장소에서 전시가 여러 개 열리므로 좌표 단위로 묶는다
-  const spots = Object.values(
-    nearby.reduce<Record<string, typeof nearby>>((acc, ex) => {
-      const key = `${ex.lat},${ex.lng}`
-      ;(acc[key] ||= []).push(ex)
-      return acc
-    }, {})
+  const spots = useMemo(
+    () =>
+      Object.values(
+        nearby.reduce<Record<string, typeof nearby>>((acc, ex) => {
+          const key = `${ex.lat},${ex.lng}`
+          ;(acc[key] ||= []).push(ex)
+          return acc
+        }, {})
+      ),
+    [nearby]
   )
 
-  function useMyLocation() {
+  function locateMe() {
     if (!navigator.geolocation) {
       alert('이 브라우저에서는 현재 위치를 쓸 수 없습니다.')
       return
@@ -77,14 +118,14 @@ function NearbyExhibitions() {
     )
   }
 
-
   useEffect(() => {
+    if (failed) return
     window.kakao.maps.load(() => {
-      if (mapObj.current) return
-      const map = new window.kakao.maps.Map(mapRef.current!, {
+      if (mapObj.current || !mapRef.current) return
+      const map = new window.kakao.maps.Map(mapRef.current, {
         center: new window.kakao.maps.LatLng(GWANGHWAMUN.lat, GWANGHWAMUN.lng),
         level: 6,
-        disableDoubleClickZoom: true, // 더블클릭은 기준 위치 옮기기에 쓴다
+        disableDoubleClickZoom: true,
       })
       window.kakao.maps.event.addListener(map, 'dblclick', (e: any) => {
         setCenter({ lat: e.latLng.getLat(), lng: e.latLng.getLng() })
@@ -93,46 +134,47 @@ function NearbyExhibitions() {
       mapObj.current = map
       setReady(true)
     })
-  }, [])
-
+  }, [failed])
 
   useEffect(() => {
     const map = mapObj.current
     if (!map) return
 
-    layers.current.forEach((o) => o.setMap(null))
-    layers.current = []
-
+    const layers: any[] = []
     const pos = new window.kakao.maps.LatLng(center.lat, center.lng)
     map.setCenter(pos)
+    map.setLevel(LEVEL_BY_RADIUS[radius] ?? 6)
 
-    const circle = new window.kakao.maps.Circle({
-      center: pos,
-      radius,
-      strokeWeight: 2,
-      strokeColor: '#555',
-      strokeOpacity: 0.7,
-      fillColor: '#555',
-      fillOpacity: 0.06,
-      map,
-    })
-    layers.current.push(circle)
+    layers.push(
+      new window.kakao.maps.Circle({
+        center: pos,
+        radius,
+        strokeWeight: 2,
+        strokeColor: '#111111',
+        strokeOpacity: 0.8,
+        fillColor: '#d8ff3e',
+        fillOpacity: 0.18,
+        map,
+      })
+    )
 
-   
-    const dot = new window.kakao.maps.CustomOverlay({
-      position: pos,
-      content: '<div class="center-dot"></div>',
-      zIndex: 10,
-      map,
-    })
-    layers.current.push(dot)
+    layers.push(
+      new window.kakao.maps.CustomOverlay({
+        position: pos,
+        content: '<div class="center-dot"></div>',
+        zIndex: 10,
+        map,
+      })
+    )
 
     const info = new window.kakao.maps.InfoWindow({ removable: true })
-    layers.current.push(info)
-    let openedId: string | null = null
+    let openedId: string | number | null = null
+
+    const goDetail = (item: SpotItem) => {
+      navigateRef.current(`/overview/${item.id}`, { state: { judge: item.judge } })
+    }
 
     spots.forEach((items) => {
-      // 여러 전시가 겹치면 가장 좋은 판정을 핀 색으로 쓴다
       const best =
         items.find((x) => x.judge.result === 'possible') ??
         items.find((x) => x.judge.result === 'unknown') ??
@@ -143,19 +185,19 @@ function NearbyExhibitions() {
       const pin = document.createElement('div')
       pin.className = `pin ${best.judge.result}`
       if (items.length > 1) {
-        pin.innerHTML = `<span>${items.length}</span>`
+        pin.textContent = String(items.length)
       }
 
-      const marker = new window.kakao.maps.CustomOverlay({
-        position,
-        content: pin,
-        yAnchor: 1,
-        clickable: true,
-        map,
-      })
-      layers.current.push(marker)
+      layers.push(
+        new window.kakao.maps.CustomOverlay({
+          position,
+          content: pin,
+          yAnchor: 1,
+          clickable: true,
+          map,
+        })
+      )
 
-      // 카카오는 mousedown 으로도 지도 클릭을 잡으므로 함께 막는다
       ;['mousedown', 'touchstart'].forEach((type) =>
         pin.addEventListener(type, (e) => e.stopPropagation())
       )
@@ -168,34 +210,33 @@ function NearbyExhibitions() {
           openedId = null
           return
         }
-        const rows = items
-          .map(
-            (ex) =>
-              `<div class="info-row">` +
-                `<span class="badge ${ex.judge.result}">${JUDGE_LABEL[ex.judge.result]}</span>` +
-                `<span>${ex.title}</span>` +
-              `</div>`
-          )
-          .join('')
-        info.setContent(
-          `<div class="info-box"><strong>${items[0].placeName}</strong>${rows}</div>`
-        )
+        info.setContent(buildInfo(items, goDetail))
         info.setPosition(position)
         info.open(map)
         openedId = spotId
       })
     })
-  }, [ready, center, radius])
+
+    return () => {
+      info.close()
+      layers.forEach((o) => o.setMap(null))
+    }
+  }, [ready, center, radius, spots])
 
   return (
-    <div className="layout">
-      <aside className="sidebar">
-        <div className="filter">
+    <section className="nearby">
+      <div className="nearby-head">
+        <div>
           <h1>{label}</h1>
-
-          <div className="place">
-            <button onClick={useMyLocation}>현재 위치</button>
+          <p className="hint">지도를 두 번 누르면 그 자리가 기준 위치가 돼요</p>
+        </div>
+        <div className="nearby-controls">
+          <div className="chips">
+            <button className="chip" onClick={locateMe}>
+              현재 위치
+            </button>
             <button
+              className="chip"
               onClick={() => {
                 setCenter(GWANGHWAMUN)
                 setLabel('광화문')
@@ -204,50 +245,51 @@ function NearbyExhibitions() {
               광화문
             </button>
           </div>
-          <p className="hint">지도를 두 번 누르면 그 자리가 기준이 됩니다</p>
-
-          <div className="radius">
+          <div className="chips">
             {RADIUS_OPTIONS.map((r) => (
               <button
                 key={r}
-                className={r === radius ? 'on' : ''}
+                className={r === radius ? 'chip chosen' : 'chip'}
                 onClick={() => setRadius(r)}
               >
                 {r < 1000 ? `${r}m` : `${r / 1000}km`}
               </button>
             ))}
           </div>
-
-          <p className="count">전시 {nearby.length}건</p>
         </div>
+      </div>
 
-        {nearby.map((ex) => {
-          const judge = ex.judge
-
-          return (
-            <article key={ex.id} className="item">
-              <div className="meta">
-                <span className={`badge ${judge.result}`}>
-                  {JUDGE_LABEL[judge.result]}
-                </span>
-                <span className="dist">{Math.round(ex.distance)}m</span>
-              </div>
-              <h2>{ex.title}</h2>
-              <p className="venue">{ex.placeName}</p>
-              {judge.reasons.map((reason, j) => (
-                <p key={j} className="reason">· {reason}</p>
-              ))}
-            </article>
-          )
-        })}
-
-        {nearby.length === 0 && (
-          <p className="empty">이 범위에 오늘 볼 수 있는 전시가 없습니다.</p>
+      <div className="map-box">
+        <div ref={mapRef} className="map" />
+        {failed && (
+          <p className="map-error">
+            지도를 불러오지 못했어요. .env의 카카오맵 키를 확인하고 서버를 다시 켜 주세요.
+          </p>
         )}
-      </aside>
+      </div>
 
-      <div ref={mapRef} className="map" />
-    </div>
+      <div className="filter-row nearby-count">
+        <span className="count">전시 {nearby.length}건</span>
+      </div>
+
+      {nearby.length ? (
+        <div className="card-grid">
+          {nearby.map((ex) => (
+            <ExhibitCard
+              key={ex.id}
+              to={`/overview/${ex.id}`}
+              state={{ judge: ex.judge }}
+              title={ex.title}
+              venue={ex.placeName}
+              status={JUDGE_STATUS[ex.judge.result]}
+              lines={[`${Math.round(ex.distance)}m`, ex.judge.reasons[0] ?? '']}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="empty-result">이 범위에 오늘 볼 수 있는 전시가 없어요.</p>
+      )}
+    </section>
   )
 }
 

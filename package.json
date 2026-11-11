@@ -16,7 +16,8 @@
     "fuse.js": "^7.5.0",
     "leaflet": "^1.9.4",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,0 +1,474 @@
+
+.team-architecture {
+  width: 100%;
+  color: #24292f;
+  overflow: hidden;
+}
+
+.arch-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 16px 10px;
+}
+
+.arch-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: dimgray;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.arch-owner i {
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+  border-radius: 50%;
+}
+
+.arch-owner--iljung {
+  color: royalblue;
+}
+
+.arch-owner--minje {
+  color: mediumpurple;
+}
+
+.arch-owner--jongmin {
+  color: seagreen;
+}
+
+.arch-owner--chanhui {
+  color: darkgoldenrod;
+}
+
+.arch-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+}
+
+.arch-canvas {
+  position: relative;
+  width: 100%;
+  min-width: 1200px;
+  height: 1420px;
+  background: #fafbfc;
+  border: 1px solid gainsboro;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.arch-links {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.arch-links marker path {
+  fill: slategray;
+}
+
+.arch-edge__path {
+  fill: none;
+  stroke: slategray;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.arch-edge--data .arch-edge__path {
+  stroke: royalblue;
+}
+
+.arch-edge--engine .arch-edge__path {
+  stroke: seagreen;
+}
+
+.arch-edge--discover .arch-edge__path {
+  stroke: mediumpurple;
+}
+
+.arch-edge--archive .arch-edge__path {
+  stroke: darkgoldenrod;
+}
+
+.arch-edge--deploy .arch-edge__path {
+  stroke: slategray;
+}
+
+.arch-edge__label rect {
+  fill: white;
+  stroke: gainsboro;
+  stroke-width: 1;
+}
+
+.arch-edge__label text {
+  fill: dimgray;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.arch-node {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  padding: 18px;
+  background: white;
+  border: 1px solid gainsboro;
+  border-radius: 10px;
+  box-shadow: 0 3px 12px rgb(0 0 0 / 5%);
+}
+
+.arch-node--pipeline {
+  border-top: 3px solid royalblue;
+}
+
+.arch-node--judge {
+  border-top: 3px solid seagreen;
+}
+
+.arch-node--discover {
+  border-top: 3px solid mediumpurple;
+}
+
+.arch-node--archive {
+  border-top: 3px solid darkgoldenrod;
+}
+
+.arch-node--deploy {
+  border-top: 3px solid slategray;
+}
+
+.arch-node__category {
+  margin-bottom: 8px;
+  color: gray;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+.arch-node h3 {
+  margin: 0 0 13px;
+  color: #24292f;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.arch-node ul {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding-left: 16px;
+  color: dimgray;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.arch-node__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid whitesmoke;
+}
+
+.arch-node__files span {
+  padding: 4px 6px;
+  color: royalblue;
+  background: aliceblue;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 9px;
+}
+
+.arch-node .arch-owners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.arch-node .arch-owner {
+  font-size: 10px;
+}
+
+.arch-repo {
+  position: absolute;
+  z-index: 3;
+  top: 100px;
+  left: 29.375%;
+  width: 41.25%;
+  background: white;
+  border: 1px solid gainsboro;
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 7%);
+  overflow: hidden;
+}
+
+.arch-repo__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 56px;
+  padding: 11px 18px;
+  border-bottom: 1px solid gainsboro;
+}
+
+.arch-repo__identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.arch-repo__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: whitesmoke;
+  border: 1px solid gainsboro;
+  border-radius: 8px;
+}
+
+.arch-repo__icon i {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border: 2px solid dimgray;
+  border-radius: 4px;
+}
+
+.arch-repo__icon i::before,
+.arch-repo__icon i::after {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  content: "";
+  background: white;
+  border: 1.5px solid dimgray;
+  border-radius: 2px;
+}
+
+.arch-repo__icon i::before {
+  top: -5px;
+  left: -5px;
+}
+
+.arch-repo__icon i::after {
+  right: -5px;
+  bottom: -5px;
+}
+
+.arch-repo__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: gray;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  line-height: 11px;
+}
+
+.arch-repo__identity h2 {
+  margin: 0;
+  color: royalblue;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.arch-repo__branch {
+  padding: 4px 9px;
+  color: dimgray;
+  background: whitesmoke;
+  border: 1px solid gainsboro;
+  border-radius: 5px;
+  font-family: monospace;
+  font-size: 10px;
+}
+
+.arch-repo__summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 7px 18px;
+  color: dimgray;
+  background: whitesmoke;
+  border-bottom: 1px solid gainsboro;
+  font-size: 9px;
+  line-height: 12px;
+}
+
+.arch-repo__summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.arch-dot {
+  width: 7px;
+  height: 7px;
+  background: royalblue;
+  border-radius: 50%;
+}
+
+.arch-repo__tree-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 21px;
+  padding: 5px 14px;
+  color: gray;
+  background: #fafbfc;
+  border-bottom: 1px solid gainsboro;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 11px;
+}
+
+.arch-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 18px;
+  padding-right: 12px;
+  border-bottom: 1px solid whitesmoke;
+  transition: background 0.15s;
+}
+
+.arch-file:hover {
+  background: aliceblue;
+}
+
+.arch-file__name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #24292f;
+  font-family: monospace;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.arch-file__name > span {
+  color: gray;
+}
+
+.arch-folder,
+.arch-document {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.arch-folder {
+  width: 12px;
+  height: 8px;
+  margin-top: 2px;
+  background: cornflowerblue;
+  border-radius: 2px;
+}
+
+.arch-folder::before {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 6px;
+  height: 4px;
+  content: "";
+  background: cornflowerblue;
+  border-radius: 2px 2px 0 0;
+}
+
+.arch-document {
+  width: 10px;
+  height: 12px;
+  background: aliceblue;
+  border: 1px solid lightskyblue;
+  border-radius: 2px;
+}
+
+.arch-file__note {
+  color: gray;
+  font-size: 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.arch-file--pending .arch-file__note {
+  color: darkgoldenrod;
+  font-weight: 700;
+}
+
+.arch-file--pending .arch-file__name {
+  color: darkgoldenrod;
+}
+
+.arch-repo__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 27px;
+  padding: 7px 14px;
+  color: gray;
+  background: whitesmoke;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+}
+
+.arch-caption {
+  position: absolute;
+  right: 18px;
+  bottom: 12px;
+  left: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: gray;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
+  .arch-legend {
+    justify-content: flex-start;
+    gap: 12px;
+  }
+
+  .arch-scroll {
+    overflow-x: auto;
+  }
+
+  .arch-canvas {
+    width: 1200px;
+    min-width: 1200px;
+  }
+
+  .arch-caption {
+    flex-direction: column;
+    gap: 5px;
+  }
+}

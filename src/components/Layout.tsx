@@ -1,30 +1,44 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
-const TEAM = true
+type TAB_ITEM = {
+  TO: string
+  LABEL: string
+  KEY: 'around' | 'all' | 'when' | 'archive' | 'team'
+  END: boolean
+}
 
-const BASE = [
-  { to: '/', label: '내 주변', end: true },
-  { to: '/overview', label: '한눈에', end: false },
-  { to: '/when', label: '언제 갈까', end: false },
-  { to: '/archive', label: '아카이브', end: false },
+const TABS: TAB_ITEM[] = [
+  { TO: '/', LABEL: '내 주변', KEY: 'around', END: true },
+  { TO: '/overview', LABEL: '한눈에', KEY: 'all', END: false },
+  { TO: '/when', LABEL: '언제 갈까', KEY: 'when', END: false },
+  { TO: '/archive', LABEL: '아카이브', KEY: 'archive', END: false },
+  { TO: '/team', LABEL: '팀', KEY: 'team', END: false },
 ]
 
-const TABS = TEAM ? [...BASE, { to: '/team', label: 'TEAM', end: false }] : BASE
+const ICON_PATH = (KEY: TAB_ITEM['KEY']) => `${import.meta.env.BASE_URL}${KEY}.png`
 
-export default function Layout() {
+const FIND_ACTIVE_TAB = (PATHNAME: string): TAB_ITEM => {
+  const FOUND = TABS.find((TAB) => (TAB.END ? PATHNAME === TAB.TO : PATHNAME.startsWith(TAB.TO)))
+  return FOUND ?? TABS[0]
+}
+
+export default function LAYOUT() {
+  const LOCATION = useLocation()
+  const ACTIVE_TAB = FIND_ACTIVE_TAB(LOCATION.pathname)
+
   return (
     <main className="site-shell">
       <header className="topbar">
-        <Link to="/" className="brand">
-          ON<span>.</span>JEONSI
-        </Link>
+        <nav className="tab-bar" aria-label="주요 메뉴">
+          <div className="tab-list">
+            {TABS.map((TAB) => (
+              <NavLink key={TAB.TO} to={TAB.TO} end={TAB.END} className={({ isActive }) => (isActive ? 'tab-link active' : 'tab-link')}>
+                {TAB.LABEL}
+              </NavLink>
+            ))}
+          </div>
 
-        <nav className="tabs">
-          {TABS.map((tab) => (
-            <NavLink key={tab.to} to={tab.to} end={tab.end} className={({ isActive }) => isActive ? 'active' : ''}>
-              {tab.label}
-            </NavLink>
-          ))}
+          <img key={ACTIVE_TAB.KEY} className="tab-icon" src={ICON_PATH(ACTIVE_TAB.KEY)} width={32} height={32}/>
         </nav>
       </header>
 

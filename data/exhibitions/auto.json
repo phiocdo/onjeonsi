@@ -23,12 +23,44 @@
       "exceptions": []
     },
     "link": "https://www.kiroart.or.kr/",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=0a362205997645d081b9b7f9314dd9ea&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160056&menuNo=200009",
     "lat": null,
     "lng": 126.987230558854,
-    "fetchedAt": "2026-11-12T07:01:04.289Z"
+    "fetchedAt": "2026-11-14T04:15:49.854Z"
   },
   {
     "id": "auto-seoul-2",
+    "venueId": "",
+    "title": "[서울갤러리] 런치 스테이지 [하모니시스트 이한결]",
+    "start": "2026-11-28",
+    "end": "2026-11-28",
+    "field": "콘서트",
+    "placeName": "서울갤러리 지하 1층 공연장",
+    "hoursText": "14:00~14:30",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "tue": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "sun": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://www.seoul.go.kr/seoulgallery/www/program/view.do?key=2509020016&prgmSn=193",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=0aab61d6cfbc49ecbaea1c5fb760a6a6&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160190&menuNo=200008",
+    "lat": 37.566370776634,
+    "lng": 126.977918351844,
+    "fetchedAt": "2026-11-14T04:15:49.854Z"
+  },
+  {
+    "id": "auto-seoul-3",
     "venueId": "",
     "title": "파인캐릭터 2026 (FineCharacter 2026)",
     "start": "2026-11-27",
@@ -51,12 +83,134 @@
       "exceptions": []
     },
     "link": "https://finecharacter.kr/",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=f941d1c83dad4804b0f02fc3817af386&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=158731&menuNo=200009",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-12T07:01:04.290Z"
+    "fetchedAt": "2026-11-14T04:15:49.854Z"
   },
   {
-    "id": "auto-seoul-3",
+    "id": "auto-seoul-4",
+    "venueId": "",
+    "title": "언폴드엑스 2026 [리얼리티체크(Reality Check)]",
+    "start": "2026-11-26",
+    "end": "2026-12-09",
+    "field": "전시/미술",
+    "placeName": "문화역서울284",
+    "hoursText": "11:00~19:00",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "tue": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "sun": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": " https://unfoldx.org/about/",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=5d347245a5534a3d9a5252eb5bddeb70&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160179&menuNo=200009",
+    "lat": 37.5560581817344,
+    "lng": 126.972115894161,
+    "fetchedAt": "2026-11-14T04:15:49.854Z"
+  },
+  {
+    "id": "auto-seoul-5",
+    "venueId": "",
+    "title": "[서울갤러리] 런치 스테이지 [싱어송라이터 이훈주]",
+    "start": "2026-11-25",
+    "end": "2026-11-25",
+    "field": "콘서트",
+    "placeName": "서울갤러리 지하 1층 공연장",
+    "hoursText": "12:30~13:00",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "tue": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "sun": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://www.seoul.go.kr/seoulgallery/www/program/view.do?key=2509020016&prgmSn=192",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=2adc562fa58e48fc826d480c1bf99c2f&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160189&menuNo=200008",
+    "lat": 37.566370776634,
+    "lng": 126.977918351844,
+    "fetchedAt": "2026-11-14T04:15:49.854Z"
+  },
+  {
+    "id": "auto-seoul-6",
+    "venueId": "",
+    "title": "[서울갤러리] 런치 스테이지 [싱어송라이터 사운드힐즈]",
+    "start": "2026-11-21",
+    "end": "2026-11-21",
+    "field": "콘서트",
+    "placeName": "서울갤러리 지하 1층 공연장",
+    "hoursText": "14:00~14:30",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "tue": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "sun": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://www.seoul.go.kr/seoulgallery/www/program/view.do?key=2509020016&prgmSn=191",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=7e9bca59b3f1460982e96c89b0d701d3&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160188&menuNo=200008",
+    "lat": 37.566370776634,
+    "lng": 126.977918351844,
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
+  },
+  {
+    "id": "auto-seoul-7",
+    "venueId": "",
+    "title": "[서울갤러리] 런치 스테이지 [첼리스트 빅바플]",
+    "start": "2026-11-18",
+    "end": "2026-11-18",
+    "field": "클래식",
+    "placeName": "서울갤러리 지하 1층 공연장",
+    "hoursText": "12:30~13:00",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "tue": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]},
+        "sun": {"isOpen":true,"intervals":[{"open":"12:30","close":"13:00"}]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://www.seoul.go.kr/seoulgallery/www/program/view.do?key=2509020016&prgmSn=190",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=88704a6c420e4a19b0e0ba386515c6d0&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160187&menuNo=200008",
+    "lat": 37.566370776634,
+    "lng": 126.977918351844,
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
+  },
+  {
+    "id": "auto-seoul-8",
     "venueId": "",
     "title": "[서울역사박물관] 다시 모은 조각들, 인사동의 시간",
     "start": "2026-11-17",
@@ -79,12 +233,14 @@
       "exceptions": []
     },
     "link": "https://museum.seoul.go.kr/www/board/NR_boardView.do?sortName=&q_listType=THUMBNAIL&searchVal=&bbsCd=1002&endDt=&searchKey=TITLE___1002&sso=ok&regPwd=N&museumCd=&pageType=&sortOrder=&q_exhSttus=next&startDt=&currentPage=&seq=20261106093257087&ctgCd=&showSummaryYn=N",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=03d0141078a04b3eb04e310436c5e1cc&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160152&menuNo=200009",
     "lat": 37.5707849313822,
     "lng": 126.986198735519,
-    "fetchedAt": "2026-11-12T07:01:04.290Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-4",
+    "id": "auto-seoul-9",
     "venueId": "",
     "title": "2026 제3회 아트노마드 아트페어(ARTNOMAD ARTFAIR)",
     "start": "2026-11-17",
@@ -112,12 +268,14 @@
       ]
     },
     "link": "https://www.specialarts.co.kr/",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=3fe40ab0c2e945cf82cacad8adc1f3ed&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160147&menuNo=200009",
     "lat": 37.559304933707146,
     "lng": 126.994440072131,
-    "fetchedAt": "2026-11-12T07:01:04.291Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-5",
+    "id": "auto-seoul-10",
     "venueId": "",
     "title": "2026 서울국제예술포럼(SAFT)",
     "start": "2026-11-17",
@@ -140,12 +298,74 @@
       "exceptions": []
     },
     "link": "https://event-us.kr/sfacfuture/event/137785",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=7eb73f87f69245f9948039c7cc438591&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159959&menuNo=200013",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-12T07:01:04.291Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-6",
+    "id": "auto-seoul-11",
+    "venueId": "",
+    "title": "두 개의 숲, 하나의 기억_SPACE 302 2026 기획전",
+    "start": "2026-11-14",
+    "end": "2026-11-23",
+    "field": "전시/미술",
+    "placeName": "와이아트 갤러리",
+    "hoursText": "평일 11:00~19:00  / 토요일 12:00~18:00",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "tue": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"12:00","close":"18:00"}]},
+        "sun": {"isOpen":false,"intervals":[]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://blog.naver.com/gu5658/224474277703",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=88efad89a8ba4c1db4357880ebaf7421&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160185&menuNo=200009",
+    "lat": 37.5623817630809,
+    "lng": 126.991642957434,
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
+  },
+  {
+    "id": "auto-seoul-12",
+    "venueId": "",
+    "title": "[서울갤러리] 런치 스테이지 [기타리스트 HOOON]",
+    "start": "2026-11-14",
+    "end": "2026-11-14",
+    "field": "콘서트",
+    "placeName": "서울갤러리 지하 1층 공연장",
+    "hoursText": "14:00~14:30",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "tue": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]},
+        "sun": {"isOpen":true,"intervals":[{"open":"14:00","close":"14:30"}]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://www.seoul.go.kr/seoulgallery/www/program/view.do?key=2509020016&prgmSn=189",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=c8f92914411449d1b90a5e0ea151c111&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160186&menuNo=200008",
+    "lat": 37.566370776634,
+    "lng": 126.977918351844,
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
+  },
+  {
+    "id": "auto-seoul-13",
     "venueId": "",
     "title": "[보시기에 좋았더라 ···KI TOV]  조미경 초대 개인전",
     "start": "2026-11-12",
@@ -168,12 +388,14 @@
       "exceptions": []
     },
     "link": "https://doam.me/Exhibition_Information/?q=YToxOntzOjEyOiJrZXl3b3JkX3R5cGUiO3M6MzoiYWxsIjt9&bmode=view&idx=175286337&t=board",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=ecfd15fc0a7b4f9c836bc3ec6ef9ee5d&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160142&menuNo=200009",
     "lat": 37.60603328383823,
     "lng": 126.96904312496109,
-    "fetchedAt": "2026-11-12T07:01:04.291Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-7",
+    "id": "auto-seoul-14",
     "venueId": "",
     "title": "해요 개인전 [Duologue]",
     "start": "2026-11-11",
@@ -196,12 +418,14 @@
       "exceptions": []
     },
     "link": "https://service.designhouse.co.kr/indexmain/view?idx=1390",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=e4fbedd5bb294f9bbea4c81641890286&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160136&menuNo=200009",
     "lat": 37.5833833879584,
     "lng": 126.982999426985,
-    "fetchedAt": "2026-11-12T07:01:04.292Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-8",
+    "id": "auto-seoul-15",
     "venueId": "",
     "title": "[운현궁] 2026 기획전시 [궁, 시간을 수 놓다]",
     "start": "2026-11-10",
@@ -224,12 +448,14 @@
       "exceptions": []
     },
     "link": "https://www.unhyeongung.or.kr/sub/prpgram/exhibition_list.php?abmode=view&no=2021&group=basic&code=B35",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=41ddc59ed51547579149121cdbdbbb70&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160148&menuNo=200009",
     "lat": 37.57607864675475,
     "lng": 126.98708335796199,
-    "fetchedAt": "2026-11-12T07:01:04.292Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-9",
+    "id": "auto-seoul-16",
     "venueId": "",
     "title": "[주석모음집] 전시를 만드는 일에 대하여",
     "start": "2026-11-06",
@@ -252,12 +478,14 @@
       "exceptions": []
     },
     "link": "https://archivist.kr/exi?m=gov&i=1793653275",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=b9f895aad74b41669941d54980fa739e&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160094&menuNo=200009",
     "lat": 37.5772195722771,
     "lng": 127.009089447244,
-    "fetchedAt": "2026-11-12T07:01:04.292Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-10",
+    "id": "auto-seoul-17",
     "venueId": "",
     "title": "[서울시립미술관 서소문본관] 《린 허쉬만 리슨: 나의 [나]들》 전시 연계 강연",
     "start": "2026-11-04",
@@ -280,12 +508,14 @@
       "exceptions": []
     },
     "link": "https://sema.seoul.go.kr/kr/whatson/education/detail?acadmyEeNo=1600266",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=b9863608142c4c2a8479c3beefb12c09&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160075&menuNo=200011",
     "lat": 37.5641060692766,
     "lng": 126.973699316136,
-    "fetchedAt": "2026-11-12T07:01:04.292Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-11",
+    "id": "auto-seoul-18",
     "venueId": "",
     "title": "[서울공예박물관 어린이박물관] 《나무의 비밀》 - 소목장세미와 만나는 나무공예",
     "start": "2026-11-03",
@@ -308,12 +538,14 @@
       "exceptions": []
     },
     "link": "https://craftmuseum.seoul.go.kr/exhibit/plan/view/199",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=5c84da024fc14095ae182a9ee42f4d0b&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160085&menuNo=200009",
     "lat": 37.5766481740232,
     "lng": 126.983533363501,
-    "fetchedAt": "2026-11-12T07:01:04.292Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-12",
+    "id": "auto-seoul-19",
     "venueId": "",
     "title": "[교보아트스페이스] 동양화에 기운 Hearts Inclined to Ink",
     "start": "2026-11-03",
@@ -336,12 +568,14 @@
       "exceptions": []
     },
     "link": "https://store.kyobobook.co.kr/culture/art-space/877",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=7951b5354d1946df8576ae18328ac8c8&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160113&menuNo=200009",
     "lat": 37.57098891966223,
     "lng": 126.97791812044534,
-    "fetchedAt": "2026-11-12T07:01:04.292Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-13",
+    "id": "auto-seoul-20",
     "venueId": "",
     "title": "[남산골한옥마을] 2026 남산골 아트 프로젝트 〈겹, Layer-層〉 세 번째 선정 전시 《축적된 손, 木手》",
     "start": "2026-11-03",
@@ -364,12 +598,14 @@
       "exceptions": []
     },
     "link": "https://www.hanokmaeul.co.kr/exhibition-now/?bmode=view&idx=175285690&back_url=Lw%3D%3D&t=board&page=",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=a9d993f0bee54c7391d13f1cbe2e8f27&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160097&menuNo=200009",
     "lat": 37.559304933707146,
     "lng": 126.994440072131,
-    "fetchedAt": "2026-11-12T07:01:04.292Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-14",
+    "id": "auto-seoul-21",
     "venueId": "",
     "title": "팝업&페스티벌 [SSE PBR FEST]",
     "start": "2026-10-31",
@@ -392,40 +628,14 @@
       "exceptions": []
     },
     "link": "https://ddpshowroom.sba.kr/menu/news/view?idx=202",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=7af6944ada2c45bcb9c7f1226e9eaacb&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160059&menuNo=200010",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-12T07:01:04.292Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-15",
-    "venueId": "",
-    "title": "유별남 사진전 [兪  ;  그러하다]",
-    "start": "2026-10-30",
-    "end": "2026-11-12",
-    "field": "전시/미술",
-    "placeName": "와이아트 갤러리",
-    "hoursText": "평일 11:00~19:00 / 토 12:00~18:00 / 심야갤러리 11.5.(목) 22:00까지",
-    "operatingHours": {
-      "scheduleType": "scheduled",
-      "weekdays": {
-        "mon": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
-        "tue": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
-        "wed": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
-        "thu": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
-        "fri": {"isOpen":true,"intervals":[{"open":"11:00","close":"19:00"}]},
-        "sat": {"isOpen":true,"intervals":[{"open":"12:00","close":"18:00"}]},
-        "sun": {"isOpen":false,"intervals":[]}
-      },
-      "holiday": null,
-      "exceptions": []
-    },
-    "link": "https://blog.naver.com/gu5658/224450449586",
-    "lat": 37.5623817630809,
-    "lng": 126.991642957434,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
-  },
-  {
-    "id": "auto-seoul-16",
+    "id": "auto-seoul-22",
     "venueId": "",
     "title": "[서울역사박물관] 2026 딜쿠샤 주변 직장인 대상 점심시간 프로그램 [가을, 커피, 딜쿠샤 인사이드]",
     "start": "2026-10-28",
@@ -448,12 +658,14 @@
       "exceptions": []
     },
     "link": "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S261007133847859076",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=f5b49294131840e1a7fb98ca4573a871&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160002&menuNo=200011",
     "lat": 37.5730423068152,
     "lng": 126.963476480113,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-17",
+    "id": "auto-seoul-23",
     "venueId": "",
     "title": "[서울공예박물관] 2026 신당창작아케이드 기획전시 《각각의 각》",
     "start": "2026-10-27",
@@ -476,12 +688,14 @@
       "exceptions": []
     },
     "link": "https://craftmuseum.seoul.go.kr/exhibit/plan/view/198",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=3bcb7a54ced5443189ebc52d2484383f&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160083&menuNo=200009",
     "lat": 37.5766481740232,
     "lng": 126.983533363501,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-18",
+    "id": "auto-seoul-24",
     "venueId": "",
     "title": "[서울시립미술관 서소문본관] 린 허쉬만 리슨: 나의 [나]들",
     "start": "2026-10-21",
@@ -504,12 +718,14 @@
       "exceptions": []
     },
     "link": "https://sema.seoul.go.kr/kr/whatson/exhibition/detail?exNo=1559068",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=8be072d96c9a429c80bc789679727b47&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159756&menuNo=200009",
     "lat": 37.5641060692766,
     "lng": 126.973699316136,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-19",
+    "id": "auto-seoul-25",
     "venueId": "",
     "title": "[서울공예박물관] 공예동행@쇼윈도 #6. 실루엣 Silhouette",
     "start": "2026-10-21",
@@ -532,12 +748,14 @@
       "exceptions": []
     },
     "link": "https://craftmuseum.seoul.go.kr/exhibit/plan/view/197",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=705198c3bf8542f495cef858d00ce51f&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160081&menuNo=200009",
     "lat": 37.5766481740232,
     "lng": 126.983533363501,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-20",
+    "id": "auto-seoul-26",
     "venueId": "",
     "title": "[서울공예박물관] 현대공예 기증특별전 [에퀴녹스 : 추분_춘분]",
     "start": "2026-09-22",
@@ -560,12 +778,14 @@
       "exceptions": []
     },
     "link": "https://craftmuseum.seoul.go.kr/exhibit/plan/view/194",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=c2b1b7f717144ee7a5d287790d38e386&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159218&menuNo=200009",
     "lat": 37.5766481740232,
     "lng": 126.983533363501,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-21",
+    "id": "auto-seoul-27",
     "venueId": "",
     "title": "[서울디자인재단] 현대카드 컬처프로젝트 31 웨인 티보 전 [The Order of Things]",
     "start": "2026-09-19",
@@ -588,12 +808,14 @@
       "exceptions": []
     },
     "link": "https://ddp.or.kr/index.html?menuno=230&siteno=2&bbsno=610&boardno=15&bbstopno=610&act=view&subno=",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=a9b98562f3fe451aa93842672b25f8e1&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159624&menuNo=200009",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-22",
+    "id": "auto-seoul-28",
     "venueId": "",
     "title": "DDP 루프탑투어 2026",
     "start": "2026-09-04",
@@ -616,12 +838,14 @@
       "exceptions": []
     },
     "link": "https://ddp.or.kr/index.html?menuno=797&siteno=2&bbsno=14&boardno=145&bbstopno=14&act=view&subno=1",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=f786fe9b07c94708b59451b836f44589&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159276&menuNo=200011",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.855Z"
   },
   {
-    "id": "auto-seoul-23",
+    "id": "auto-seoul-29",
     "venueId": "",
     "title": "2026 아뜰리에 광화 세 번째 전시 [물드는 빛]",
     "start": "2026-09-01",
@@ -644,12 +868,14 @@
       "exceptions": []
     },
     "link": "https://www.instagram.com/p/Dch53fkgeBD/",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=d5124a7282a248e2a849ca3f0a5943f8&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159582&menuNo=200009",
     "lat": 37.57260128068914,
     "lng": 126.97577534746529,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-24",
+    "id": "auto-seoul-30",
     "venueId": "",
     "title": "[서울시립 미술아카이브] 소장자료 기획전 [오윤]",
     "start": "2026-08-27",
@@ -672,12 +898,14 @@
       "exceptions": []
     },
     "link": "https://sema.seoul.go.kr/kr/whatson/exhibition/detail?exNo=1576838",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=a829a1c2820447f5aaa9047dc613eeea&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159460&menuNo=200009",
     "lat": 37.6078008399411,
     "lng": 126.97190179486,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-25",
+    "id": "auto-seoul-31",
     "venueId": "",
     "title": "[서울역사박물관] 태화관_시간을 잇는 공간",
     "start": "2026-06-26",
@@ -700,12 +928,14 @@
       "exceptions": []
     },
     "link": "https://museum.seoul.go.kr/www/board/NR_boardView.do?sortName=&q_listType=THUMBNAIL&searchVal=&bbsCd=1002&endDt=&searchKey=TITLE___1002&sso=ok&regPwd=N&museumCd=&pageType=&sortOrder=&q_exhSttus=next&startDt=&currentPage=&seq=20260623170800431&ctgCd=&showSummaryYn=N",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=ce0c0494297949a38bb5e2106bd16fbb&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=158657&menuNo=200009",
     "lat": 37.57189081127559,
     "lng": 126.98338815886143,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-26",
+    "id": "auto-seoul-32",
     "venueId": "",
     "title": "[서울우리소리박물관] 2026 서울우리소리박물관 기획전 [다시, 아리랑]",
     "start": "2026-06-18",
@@ -728,12 +958,14 @@
       "exceptions": []
     },
     "link": "https://museum.seoul.go.kr/sekm/front/display/specialView.do?currentPage=1&search_query=&e_id=131&e_cd=3&locale=KO",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=4277bcac1a50437682bd95e3987745ce&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=158406&menuNo=200009",
     "lat": 37.577157928122,
     "lng": 126.989622047178,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-27",
+    "id": "auto-seoul-33",
     "venueId": "",
     "title": "팔색찬란 - K로 가득한 지역",
     "start": "2026-06-04",
@@ -756,12 +988,14 @@
       "exceptions": []
     },
     "link": "https://cwdsarangchae.kr/ko/board/specialexhibition/current/detail.kto?searchNo=3598",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=ed98d4bdc198459f97fac9b0b43477ea&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=158419&menuNo=200009",
     "lat": 37.582544875368,
     "lng": 126.973059283309,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-28",
+    "id": "auto-seoul-34",
     "venueId": "",
     "title": "[종로문화재단] 2026 박노수미술관 작가 협업전시 [향, 산수를 물들이다]",
     "start": "2026-05-15",
@@ -784,12 +1018,14 @@
       "exceptions": []
     },
     "link": "https://www.jfac.or.kr/site/main/program/perf_exhi_list_view?pgIdx=2702",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=5f03761607dd4fe69af0fc1fa4ed6490&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=157807&menuNo=200009",
     "lat": 37.5813191962491,
     "lng": 126.966818545949,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-29",
+    "id": "auto-seoul-35",
     "venueId": "",
     "title": "[서울공예박물관] 공예협력전시 [안동별궁, 시간의 겹]",
     "start": "2026-04-28",
@@ -812,12 +1048,14 @@
       "exceptions": []
     },
     "link": "https://craftmuseum.seoul.go.kr/exhibit/plan/view/184",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=a1622fcb6e024123ac90f40cdc8e32fd&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=157420&menuNo=200009",
     "lat": 37.5766481740232,
     "lng": 126.983533363501,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-30",
+    "id": "auto-seoul-36",
     "venueId": "",
     "title": "[서울시립미술관 서소문본관] 가나아트컬렉션 《기술의 저변: 경계에 선 장면들》",
     "start": "2026-04-16",
@@ -840,12 +1078,14 @@
       "exceptions": []
     },
     "link": "https://sema.seoul.go.kr/kr/whatson/exhibition/detail?exNo=1509709",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=a4d0b10a374d4e7fb8f255560c9ef279&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=157284&menuNo=200009",
     "lat": 37.5641060692766,
     "lng": 126.973699316136,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-31",
+    "id": "auto-seoul-37",
     "venueId": "",
     "title": "[서울역사박물관] 2026년 [느낌있는 박물관] 중·고등학교 특수학급 기관 모집",
     "start": "2026-04-01",
@@ -868,12 +1108,14 @@
       "exceptions": []
     },
     "link": "https://museum.seoul.go.kr/www/board/NR_boardView.do?q_applyState=- 전 체 -&actionMethod=&sortName=&searchVal=&actionUri=&bbsCd=1005&endDt=&categoryVal=&searchKey=&sso=ok&regPwd=N&pageType=&sortOrder=&startDt=&rssYn=&currentPage=2&seq=20260203111350005&ctgCd=&showSummaryYn=N",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=f76ba86eca1b43ff935a895f5017bcfd&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=156940&menuNo=200011",
     "lat": 37.570507525011855,
     "lng": 126.97052372473162,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-32",
+    "id": "auto-seoul-38",
     "venueId": "",
     "title": "[서울역사박물관] 2026년 청소년 박물관 톡(TALK) 모집안내",
     "start": "2026-03-24",
@@ -896,12 +1138,14 @@
       "exceptions": []
     },
     "link": "https://museum.seoul.go.kr/www/board/NR_boardView.do?q_applyState=- 전 체 -&actionMethod=&sortName=&searchVal=&actionUri=&bbsCd=1005&endDt=&categoryVal=&searchKey=&sso=ok&regPwd=N&pageType=&sortOrder=&startDt=&rssYn=&currentPage=2&seq=20260309101139424&ctgCd=&showSummaryYn=N",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=eca24afbbdb94aa9872d0473e2cc1590&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=156976&menuNo=200011",
     "lat": 37.570507525011855,
     "lng": 126.97052372473162,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-33",
+    "id": "auto-seoul-39",
     "venueId": "",
     "title": "[DDP] Dream in Light",
     "start": "2026-01-09",
@@ -924,12 +1168,14 @@
       "exceptions": []
     },
     "link": "https://ddp.or.kr/index.html?menuno=239&siteno=2&bbsno=721&boardno=16&bbstopno=721&act=view&subno=",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=bfa59aa56eed4af8b441d88bad873037&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=156491&menuNo=200009",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-34",
+    "id": "auto-seoul-40",
     "venueId": "",
     "title": "DDP 건축투어 2026",
     "start": "2026-01-02",
@@ -952,12 +1198,14 @@
       "exceptions": []
     },
     "link": "https://ddp.or.kr/index.html?menuno=797&siteno=2&bbsno=11&boardno=145&bbstopno=11&act=view&subno=1",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=687b3c25e2e94dc9a9b8af5824a58ccc&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=158747&menuNo=200011",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   },
   {
-    "id": "auto-seoul-35",
+    "id": "auto-seoul-41",
     "venueId": "",
     "title": "[종로문화재단] 박노수미술관 개관12주년 기념전시 [산수·격물]",
     "start": "2025-09-19",
@@ -980,8 +1228,10 @@
       "exceptions": []
     },
     "link": "https://www.jfac.or.kr/site/main/program/perf_exhi_list_view?pgIdx=2519",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=b3d1bbb9284b4b97bda71e967e5bb5a9&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=155699&menuNo=200009",
     "lat": 37.5813191962491,
     "lng": 126.966818545949,
-    "fetchedAt": "2026-11-12T07:01:04.293Z"
+    "fetchedAt": "2026-11-14T04:15:49.856Z"
   }
 ]

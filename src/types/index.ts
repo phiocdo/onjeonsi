@@ -58,7 +58,9 @@ export interface Exhibition {
   placeName?: string;
   hoursText?: string; // 운영시간 원문 (서울시 API PRO_TIME)
   operatingHours?: ParsedOperatingHours; // hoursText를 요일별로 푼 것
-  link?: string;
+  link?: string; // 기관 홈페이지 (서울시 API ORG_LINK)
+  imageUrl?: string; // 대표 이미지 (MAIN_IMG)
+  detailUrl?: string; // 서울문화포털 상세 페이지 (HMPG_ADDR)
   lat?: number;
   lng?: number;
   fetchedAt?: string;

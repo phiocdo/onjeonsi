@@ -30,7 +30,9 @@ interface RawSeoulEvent {
   GUNAME: string;
   STRTDATE: string;
   END_DATE: string;
-  ORG_LINK: string;
+  ORG_LINK: string; // 기관 홈페이지
+  MAIN_IMG: string; // 대표 이미지
+  HMPG_ADDR: string; // 서울문화포털 상세 페이지
   LAT: string; // Latitude (위도)
   LOT: string; // Longitude (경도)
   PRO_TIME: string; // 운영시간 문구. 자유 서술이라 그대로는 못 쓴다
@@ -167,6 +169,8 @@ async function fetchExhibitions() {
         hoursText,
         operatingHours,
         link: item.ORG_LINK || '',
+        imageUrl: item.MAIN_IMG || '',
+        detailUrl: item.HMPG_ADDR || '',
         lat: Number(item.LAT),
         lng: Number(item.LOT),
         fetchedAt: new Date().toISOString()

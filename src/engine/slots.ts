@@ -57,7 +57,7 @@ export function findStartCandidates(
   judge: JudgeFn,
   limit = 3,
 ): StartCandidates {
-  const visit = input.venue.visitMinutes || DEFAULT_VISIT_MINUTES;
+  const visit = input.venue.visitMinutes ?? DEFAULT_VISIT_MINUTES;
   const possible: string[] = [];
   const unavailable: StartCandidates['unavailable'] = [];
   const unknown: string[] = [];

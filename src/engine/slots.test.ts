@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Venue, Exhibition, JudgeInput, JudgeResult } from '../types';
 import type { JudgeFn } from './judge';
+import { judge as realJudge } from './judge';
 import { findStartCandidates } from './slots';
 import { toMinutes, fromMinutes } from './time';
 
@@ -68,6 +69,43 @@ describe('findStartCandidates', () => {
     const input = { ...baseInput, venue: { ...venue, visitMinutes: undefined } };
     findStartCandidates(input, [{ start: '10:00', end: '11:30' }], judge, 10);
     expect(judge.mock.calls.map(([i]) => i.stayStart)).toEqual(['10:00', '10:30']);
+    // 마지막 후보(10:30) + 기본 60분 = 11:30 = range.end. judge에도 visitMinutes 없이 넘긴다.
+    expect(judge.mock.calls.every(([i]) => i.venue.visitMinutes === undefined)).toBe(true);
+  });
+
+  describe('관람 시간은 judge와 같은 값을 쓴다 (visitMinutes ?? 기본값)', () => {
+    const openVenue: Venue = {
+      ...venue,
+      hours: { tue: { open: '09:00', close: '22:00' } },
+      lastEntry: '21:00',
+    };
+
+    it.each([
+      { visitMinutes: 0, expected: ['10:00', '10:30', '11:00', '11:30', '12:00'] },
+      { visitMinutes: 30, expected: ['10:00', '10:30', '11:00', '11:30'] },
+      { visitMinutes: 90, expected: ['10:00', '10:30'] },
+      { visitMinutes: undefined, expected: ['10:00', '10:30', '11:00'] },
+    ])('visitMinutes=$visitMinutes', ({ visitMinutes, expected }) => {
+      const judge = vi.fn<JudgeFn>(realJudge);
+      const input = { ...baseInput, venue: { ...openVenue, visitMinutes } };
+      const res = findStartCandidates(input, [{ start: '10:00', end: '12:00' }], judge, 10);
+
+      expect(judge.mock.calls.map(([i]) => i.stayStart)).toEqual(expected);
+      expect(res.possible).toEqual(expected);
+
+      // judge에 넘긴 visitMinutes로 judge가 계산한 관람 시간과 후보 계산에 쓴 관람 시간이 같다.
+      const used = visitMinutes ?? 60;
+      judge.mock.results.forEach((r, k) => {
+        const passed = judge.mock.calls[k][0].venue.visitMinutes;
+        expect(passed).toBe(visitMinutes);
+        const out = r.value as JudgeResult;
+        expect(toMinutes(out.endTime!)! - toMinutes(out.entryTime!)!).toBe(used);
+      });
+      // 다음 후보는 관람 시간을 더하면 range.end(12:00)를 넘는다.
+      const last = toMinutes(expected[expected.length - 1])!;
+      expect(last + used).toBeLessThanOrEqual(toMinutes('12:00')!);
+      expect(last + 30 + used).toBeGreaterThan(toMinutes('12:00')!);
+    });
   });
 
   it('브레이크 타임으로 나뉜 구간은 각각 따로 후보를 만든다', () => {

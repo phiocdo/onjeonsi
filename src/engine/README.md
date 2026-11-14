@@ -117,13 +117,14 @@ const judged = nearby.map(({ ex, distance }) => {
   const v = venues.find((x) => x.id === ex.venueId);
   const result: JudgeResult = v
     ? judge({ venue: v, exhibition: ex, date: today, stayStart: '14:00', stayEnd: '17:00', holidays })
-    : { result: 'unknown', reasons: [] }; // 사유 문구는 화면에서 정한다
+    : { result: 'unknown', reasons: [] }; // 시설 정보 없음 사유는 REASONS에 추가 예정
   return { id: ex.id, title: ex.title, distance, judge: result };
 });
 
 // 3) 판정 → 여유 시간 → 거리 → id 순으로 정렬
 const list = rankExhibitions(judged);
-// 결과: PR 병합 후 확인 필요
+// 결과: 지금 데이터는 auto.json의 venueId가 모두 빈 문자열이라
+// 시설을 찾지 못해 모두 unknown이 된다
 ```
 
 `calculateDistance` 결과 예시 (위 `me`에서 예시 시설까지):
@@ -149,7 +150,10 @@ const candidates = findStartCandidates(
   ],
   judge,
 );
-// 결과: PR 병합 후 확인 필요
+// 실행 결과
+// { possible: ['10:00', '10:30', '11:00'], unavailable: [], unknown: [] }
+// 09:00 출발은 개관 시각 10:00 입장으로 당겨진다.
+// limit 3이 첫 구간에서 다 차서 16:00 구간은 결과에 없다.
 ```
 
 ### 실제 데이터 상태
@@ -313,8 +317,8 @@ export function findStartCandidates(
 ## 6. 데이터 규칙
 
 - 판정은 시설 JSON(`Venue`)만 근거로 합니다.
-  - 전시의 `operatingHours`(PR #22에서 추가)와 `hoursText`는 판정에 쓰지 않습니다.
-  - PR #22 리뷰에서 제안된 내용이고, 11/19에 확정 예정입니다.
+  - 전시의 `operatingHours`는 PR #22(미병합)에서 제안된 표시용 필드입니다. 판정에는 쓰지 않습니다.
+  - 전시의 `hoursText`도 판정에 쓰지 않습니다.
 - 시각은 `HH:MM` 두 자리입니다. `9:00`, `24:00`은 형식 오류로 `unknown`이 됩니다.
 - 날짜는 0을 채운 `YYYY-MM-DD` 문자열입니다.
   - 문자열 그대로 비교합니다.
@@ -328,7 +332,7 @@ export function findStartCandidates(
 - `holidays`는 호출하는 쪽에서 `data/holidays/holidays.json`을 읽어 넘깁니다. 엔진은 파일을 읽지 않습니다.
 - 좌표는 `Number.isFinite`로 확인한 뒤 씁니다. `auto.json`에 `lat: null`이 있습니다.
 - `lastEntry`는 시설 전체에 하나입니다. 요일별로 다르게 둘 수 없습니다.
-- 작성 규칙은 'JSON 데이터 작성 가이드'를 참고합니다.
+- 작성 규칙은 팀 Notion의 'JSON 데이터 작성 가이드'를 참고합니다.
 
 ## 7. 사유 문구 (`REASONS`)
 
@@ -357,7 +361,7 @@ export function findStartCandidates(
 - `stayEnd < stayStart`인지 검사하지 않습니다. 이때는 보통 `NOT_ENOUGH_STAY`로 불가가 됩니다.
 - 전시별 운영 시간(`hoursText`)은 무시합니다. 전시가 시설보다 일찍 닫아도 반영되지 않습니다.
 - `stats`의 `medianMinutes`는 아직 판정의 관람 시간(`visitMinutes`)과 연결되지 않았습니다.
-- `tsconfig`의 `strict`가 꺼져 있습니다. 그래서 선택 필드(`lastEntry`, `hours` 등)는 코드에서 직접 확인합니다.
+- TypeScript 6부터 `strict`가 기본으로 켜집니다(`tsconfig`에 따로 적지 않음). 선택 필드(`lastEntry`, `hours` 등)는 `undefined`인지 확인해야 컴파일됩니다.
 
 ## 9. 화면에서 쓸 때
 
@@ -385,7 +389,7 @@ npx vitest run -t "휴관"                  # 테스트 이름으로 거르기
 - `src/engine/constants.ts`: 기본값
 - `src/engine/*.test.ts`: 테스트
 - `src/types`: `Venue`, `Exhibition`, `JudgeInput`, `JudgeResult` 타입
-- `schema/`: JSON 스키마
-- 'JSON 데이터 작성 가이드'
+- `schema/`: JSON 스키마 (PR #28 병합 후)
+- 팀 Notion의 'JSON 데이터 작성 가이드'
 - `src/mock`: 목 데이터의 판정 문구
 - `src/pages/Team.tsx`: 구조 설명

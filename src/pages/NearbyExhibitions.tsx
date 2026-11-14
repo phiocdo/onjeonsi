@@ -1,226 +1,166 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import exhibitions from '../../data/exhibitions/auto.json'
+import { calculateDistance, sortByDistance, type Coordinate } from '../engine/distance'
+import type { JudgeResult } from '../types'
 import { mockItems } from '../mock/data'
-import { JUDGE_STATUS, type JudgeKey } from '../mock/exhibits'
+import { JUDGE_STATUS } from '../mock/exhibits'
 import ExhibitCard from '../components/ExhibitCard'
 import './NearbyExhibitions.css'
 
 declare global {
-  interface Window {
-    kakao: any
-  }
+  interface Window { kakao: any }
 }
 
-type Judge = { result: JudgeKey; reasons: string[] }
-type SpotItem = { id: string | number; title: string; placeName: string; judge: Judge }
+type Item = { id: string | number; title: string; placeName: string; lat: number; lng: number; dist: number; in: boolean; judge: JudgeResult }
 
-const GWANGHWAMUN = { lat: 37.5759, lng: 126.9768 }
-const RADIUS_OPTIONS = [500, 1000, 2000]
-const LEVEL_BY_RADIUS: Record<number, number> = { 500: 5, 1000: 6, 2000: 7 }
+const BASE: Coordinate = { lat: 37.5759, lng: 126.9768 }
+const RADII = [500, 1000, 2000]
+const ZOOM: Record<number, number> = { 500: 5, 1000: 6, 2000: 7 }
+const CHIP = { backgroundColor: '#ffffff', color: '#111111' }
+const HINT = { color: '#ffffff' }
 
-function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const R = 6371000
-  const toRad = (d: number) => (d * Math.PI) / 180
-  const dLat = toRad(lat2 - lat1)
-  const dLng = toRad(lng2 - lng1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(a))
-}
-
-function buildInfo(items: SpotItem[], onSelect: (item: SpotItem) => void) {
+// 장소 말풍선 DOM 생성
+function INFO(items: Item[], pick: (item: Item) => void) {
   const box = document.createElement('div')
   box.className = 'info-box'
-
   const name = document.createElement('strong')
   name.textContent = items[0].placeName
   box.appendChild(name)
-
   items.forEach((item) => {
     const row = document.createElement('button')
     row.type = 'button'
     row.className = 'info-row'
-
     const badge = document.createElement('span')
-    badge.className = `badge ${item.judge.result}`
-    badge.textContent = JUDGE_STATUS[item.judge.result]
-
+    badge.className = item.in ? `badge ${item.judge.result}` : 'badge out'
+    badge.textContent = item.in ? JUDGE_STATUS[item.judge.result] : '반경 밖'
     const title = document.createElement('span')
     title.textContent = item.title
-
     row.append(badge, title)
-    row.addEventListener('click', () => onSelect(item))
+    row.addEventListener('click', () => pick(item))
     box.appendChild(row)
   })
-
   return box
 }
 
+// 동일 좌표 전시 묶음
+function GROUP(list: Item[]) {
+  return Object.values(
+    list.reduce<Record<string, Item[]>>((acc, ex) => {
+      const key = `${ex.lat},${ex.lng}`
+      ;(acc[key] ||= []).push(ex)
+      return acc
+    }, {})
+  )
+}
+
+// 지도 핀 상태 판별
+function PIN(items: Item[]) {
+  const inside = items.filter((x) => x.in)
+  if (!inside.length) return 'out'
+  const best = inside.find((x) => x.judge.result === 'possible') ?? inside.find((x) => x.judge.result === 'unknown') ?? inside[0]
+  return best.judge.result
+}
+
+// 법정동 이름 조회
+function DONG(pos: Coordinate, fallback: string, done: (name: string) => void) {
+  const svc = window.kakao?.maps?.services
+  if (!svc) { done(fallback); return }
+  new svc.Geocoder().coord2RegionCode(pos.lng, pos.lat, (res: any[], status: string) => {
+    const found = status === svc.Status.OK ? res.find((r) => r.region_type === 'B') : null
+    done(found ? `${found.region_2depth_name} ${found.region_3depth_name}` : fallback)
+  })
+}
+
 function NearbyExhibitions() {
-  const navigate = useNavigate()
-  const navigateRef = useRef(navigate)
-  const mapRef = useRef<HTMLDivElement>(null)
-  const mapObj = useRef<any>(null)
+  const nav = useNavigate()
+  const navRef = useRef(nav)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<any>(null)
   const [ready, setReady] = useState(false)
-  const [failed] = useState(() => !window.kakao?.maps)
-  const [center, setCenter] = useState(GWANGHWAMUN)
-  const [label, setLabel] = useState('광화문')
+  const [fail] = useState(() => !window.kakao?.maps)
+  const [center, setCenter] = useState<Coordinate>(BASE)
+  const [label, setLabel] = useState('종로구 세종로')
   const [radius, setRadius] = useState(1000)
 
-  useEffect(() => {
-    navigateRef.current = navigate
-  }, [navigate])
+  useEffect(() => { navRef.current = nav }, [nav])
 
-  const nearby = useMemo(() => {
+  const all = useMemo<Item[]>(() => {
     const today = new Date().toLocaleDateString('sv-SE')
-    return exhibitions
-      .filter(
-        (ex) =>
-          ex.lat &&
-          ex.lng &&
-          ex.start <= today &&
-          today <= ex.end &&
-          distanceMeters(center.lat, center.lng, ex.lat, ex.lng) <= radius
-      )
-      .map((ex) => ({
-        ...ex,
-        distance: distanceMeters(center.lat, center.lng, ex.lat!, ex.lng!),
-      }))
-      .sort((a, b) => a.distance - b.distance)
-      .map((ex, i) => ({ ...ex, judge: mockItems[i % mockItems.length].judgeResult }))
+    const valid = exhibitions.filter((ex) => ex.lat != null && ex.lng != null && ex.start <= today && today <= ex.end)
+    const sorted = sortByDistance(valid, center, (ex) => ({ lat: ex.lat!, lng: ex.lng! }))
+    return sorted.map((ex, i) => {
+      const dist = calculateDistance(center, { lat: ex.lat!, lng: ex.lng! })
+      return { id: ex.id, title: ex.title, placeName: ex.placeName, lat: ex.lat!, lng: ex.lng!, dist, in: dist <= radius, judge: mockItems[i % mockItems.length].judgeResult }
+    })
   }, [center, radius])
 
-  const spots = useMemo(
-    () =>
-      Object.values(
-        nearby.reduce<Record<string, typeof nearby>>((acc, ex) => {
-          const key = `${ex.lat},${ex.lng}`
-          ;(acc[key] ||= []).push(ex)
-          return acc
-        }, {})
-      ),
-    [nearby]
-  )
+  const near = useMemo(() => all.filter((ex) => ex.in), [all])
+  const spots = useMemo(() => GROUP(all), [all])
 
-  function locateMe() {
-    if (!navigator.geolocation) {
-      alert('이 브라우저에서는 현재 위치를 쓸 수 없습니다.')
-      return
-    }
+  // 기준 좌표와 법정동 라벨 갱신
+  function MOVE(next: Coordinate, fallback: string) {
+    setCenter(next)
+    DONG(next, fallback, setLabel)
+  }
+
+  // 현재 위치 좌표 설정
+  function LOCATE() {
+    if (!navigator.geolocation) { alert('이 브라우저에서는 현재 위치를 쓸 수 없습니다.'); return }
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-        setLabel('현재 위치')
-      },
+      (pos) => MOVE({ lat: pos.coords.latitude, lng: pos.coords.longitude }, '현재 위치'),
       () => alert('위치 권한이 거부되었습니다.')
     )
   }
 
   useEffect(() => {
-    if (failed) return
+    if (fail) return
     window.kakao.maps.load(() => {
-      if (mapObj.current || !mapRef.current) return
-      const map = new window.kakao.maps.Map(mapRef.current, {
-        center: new window.kakao.maps.LatLng(GWANGHWAMUN.lat, GWANGHWAMUN.lng),
-        level: 6,
-        disableDoubleClickZoom: true,
-      })
-      window.kakao.maps.event.addListener(map, 'dblclick', (e: any) => {
-        setCenter({ lat: e.latLng.getLat(), lng: e.latLng.getLng() })
-        setLabel('지도에서 선택한 위치')
-      })
-      mapObj.current = map
+      if (mapRef.current || !boxRef.current) return
+      const map = new window.kakao.maps.Map(boxRef.current, { center: new window.kakao.maps.LatLng(BASE.lat, BASE.lng), level: 6, disableDoubleClickZoom: true })
+      window.kakao.maps.event.addListener(map, 'dblclick', (e: any) => MOVE({ lat: e.latLng.getLat(), lng: e.latLng.getLng() }, '선택한 위치'))
+      mapRef.current = map
       setReady(true)
     })
-  }, [failed])
+  }, [fail])
 
   useEffect(() => {
-    const map = mapObj.current
+    const map = mapRef.current
     if (!map) return
-
     const layers: any[] = []
     const pos = new window.kakao.maps.LatLng(center.lat, center.lng)
     map.setCenter(pos)
-    map.setLevel(LEVEL_BY_RADIUS[radius] ?? 6)
+    map.setLevel(ZOOM[radius] ?? 6)
 
-    layers.push(
-      new window.kakao.maps.Circle({
-        center: pos,
-        radius,
-        strokeWeight: 2,
-        strokeColor: '#111111',
-        strokeOpacity: 0.8,
-        fillColor: '#d8ff3e',
-        fillOpacity: 0.18,
-        map,
-      })
-    )
-
-    layers.push(
-      new window.kakao.maps.CustomOverlay({
-        position: pos,
-        content: '<div class="center-dot"></div>',
-        zIndex: 10,
-        map,
-      })
-    )
+    layers.push(new window.kakao.maps.Circle({ center: pos, radius, strokeWeight: 2, strokeColor: '#111111', strokeOpacity: 0.8, fillColor: '#d8ff3e', fillOpacity: 0.18, map }))
+    layers.push(new window.kakao.maps.CustomOverlay({ position: pos, content: '<div class="center-dot"></div>', zIndex: 10, map }))
 
     const info = new window.kakao.maps.InfoWindow({ removable: true })
-    let openedId: string | number | null = null
-
-    const goDetail = (item: SpotItem) => {
-      navigateRef.current(`/overview/${item.id}`, { state: { judge: item.judge } })
-    }
+    let openId: string | number | null = null
+    const go = (item: Item) => navRef.current(`/overview/${item.id}`, { state: { judge: item.judge } })
 
     spots.forEach((items) => {
-      const best =
-        items.find((x) => x.judge.result === 'possible') ??
-        items.find((x) => x.judge.result === 'unknown') ??
-        items[0]
-
+      const state = PIN(items)
       const position = new window.kakao.maps.LatLng(items[0].lat, items[0].lng)
-
       const pin = document.createElement('div')
-      pin.className = `pin ${best.judge.result}`
-      if (items.length > 1) {
-        pin.textContent = String(items.length)
-      }
+      pin.className = `pin ${state}`
+      if (items.length > 1) pin.textContent = String(items.length)
 
-      layers.push(
-        new window.kakao.maps.CustomOverlay({
-          position,
-          content: pin,
-          yAnchor: 1,
-          clickable: true,
-          map,
-        })
-      )
-
-      ;['mousedown', 'touchstart'].forEach((type) =>
-        pin.addEventListener(type, (e) => e.stopPropagation())
-      )
+      layers.push(new window.kakao.maps.CustomOverlay({ position, content: pin, yAnchor: 0.5, clickable: true, zIndex: state === 'out' ? 2 : 5, map }))
+      ;['mousedown', 'touchstart'].forEach((t) => pin.addEventListener(t, (e) => e.stopPropagation()))
 
       const spotId = items[0].id
       pin.addEventListener('click', (e) => {
         e.stopPropagation()
-        if (openedId === spotId) {
-          info.close()
-          openedId = null
-          return
-        }
-        info.setContent(buildInfo(items, goDetail))
+        if (openId === spotId) { info.close(); openId = null; return }
+        info.setContent(INFO(items, go))
         info.setPosition(position)
         info.open(map)
-        openedId = spotId
+        openId = spotId
       })
     })
 
-    return () => {
-      info.close()
-      layers.forEach((o) => o.setMap(null))
-    }
+    return () => { info.close(); layers.forEach((o) => o.setMap(null)) }
   }, [ready, center, radius, spots])
 
   return (
@@ -228,66 +168,38 @@ function NearbyExhibitions() {
       <div className="nearby-head">
         <div>
           <h1>{label}</h1>
-          <p className="hint">지도를 두 번 누르면 그 자리가 기준 위치가 돼요</p>
+          <p className="hint" style={HINT}>지도를 두 번 눌러 위치를 변경하십시오.</p>
         </div>
         <div className="nearby-controls">
           <div className="chips">
-            <button className="chip" onClick={locateMe}>
-              현재 위치
-            </button>
-            <button
-              className="chip"
-              onClick={() => {
-                setCenter(GWANGHWAMUN)
-                setLabel('광화문')
-              }}
-            >
-              광화문
-            </button>
+            <button className="chip" style={CHIP} onClick={LOCATE}>현재 위치</button>
+            <button className="chip" style={CHIP} onClick={() => MOVE(BASE, '종로구 세종로')}>광화문</button>
           </div>
           <div className="chips">
-            {RADIUS_OPTIONS.map((r) => (
-              <button
-                key={r}
-                className={r === radius ? 'chip chosen' : 'chip'}
-                onClick={() => setRadius(r)}
-              >
-                {r < 1000 ? `${r}m` : `${r / 1000}km`}
-              </button>
+            {RADII.map((r) => (
+              <button key={r} className={r === radius ? 'chip chosen' : 'chip'} style={CHIP} onClick={() => setRadius(r)}>{r < 1000 ? `${r}m` : `${r / 1000}km`}</button>
             ))}
           </div>
         </div>
       </div>
 
       <div className="map-box">
-        <div ref={mapRef} className="map" />
-        {failed && (
-          <p className="map-error">
-            지도를 불러오지 못했어요. .env의 카카오맵 키를 확인하고 서버를 다시 켜 주세요.
-          </p>
-        )}
+        <div ref={boxRef} className="map" />
+        {fail && <p className="map-error">지도를 불러오지 못했습니다.</p>}
       </div>
 
       <div className="filter-row nearby-count">
-        <span className="count">전시 {nearby.length}건</span>
+        <span className="count">전시 {near.length}건</span>
       </div>
 
-      {nearby.length ? (
+      {near.length ? (
         <div className="card-grid">
-          {nearby.map((ex) => (
-            <ExhibitCard
-              key={ex.id}
-              to={`/overview/${ex.id}`}
-              state={{ judge: ex.judge }}
-              title={ex.title}
-              venue={ex.placeName}
-              status={JUDGE_STATUS[ex.judge.result]}
-              lines={[`${Math.round(ex.distance)}m`, ex.judge.reasons[0] ?? '']}
-            />
+          {near.map((ex) => (
+            <ExhibitCard key={ex.id} to={`/overview/${ex.id}`} state={{ judge: ex.judge }} title={ex.title} venue={ex.placeName} status={JUDGE_STATUS[ex.judge.result]} lines={[`${ex.dist}m`, ex.judge.reasons[0] ?? '']} />
           ))}
         </div>
       ) : (
-        <p className="empty-result">이 범위에 오늘 볼 수 있는 전시가 없어요.</p>
+        <p className="empty-result">오늘 볼 수 있는 전시가 없습니다.</p>
       )}
     </section>
   )

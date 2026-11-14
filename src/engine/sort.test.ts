@@ -43,6 +43,15 @@ describe('rankExhibitions', () => {
     expect(ids(rankExhibitions(items))).toEqual(['zero', 'none']);
   });
 
+  it('여유 시간 0은 값으로 보아 120 → 0 → 없음 순으로 놓는다', () => {
+    const items: Item[] = [
+      { id: 'a-none', judge: possible(undefined) },
+      { id: 'b-zero', judge: possible(0) },
+      { id: 'c-big', judge: possible(120) },
+    ];
+    expect(ids(rankExhibitions(items))).toEqual(['c-big', 'b-zero', 'a-none']);
+  });
+
   it('여유 시간이 같으면 거리가 가까운 순으로 놓는다', () => {
     const items: Item[] = [
       { id: 'far', judge: possible(30), distance: 3000 },

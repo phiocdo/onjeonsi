@@ -104,8 +104,10 @@ async function fetchHolidays() {
 
     } catch (e) {
         console.error('❌ fetch-holidays 스크립트 실행 중 에러 발생:', e);
-        // 종료 코드가 0이면 워크플로가 실패를 알아채지 못하고 커밋 단계로 넘어간다
-        process.exit(1);
+        // 종료 코드가 0이면 워크플로가 실패를 알아채지 못하고 커밋 단계로 넘어간다.
+        // process.exit()은 비동기 작업이 정리되는 중에 부르면 libuv 어서션으로 죽는다
+        // (Windows에서 종료 코드가 1이 아니라 127로 나왔다)
+        process.exitCode = 1;
     }
     
 }

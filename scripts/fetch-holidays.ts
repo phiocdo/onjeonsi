@@ -45,8 +45,7 @@ async function fetchYear(year: number): Promise<string[]> {
 
         // 요청이 정상 처리됐는지 확인 ("00"이 정상)
         if (data.response?.header?.resultCode !== '00') {
-            console.error('❌ 데이터를 불러오지 못했습니다:', data);
-            return [];
+            throw new Error(`응답이 정상이 아닙니다: ${JSON.stringify(data).slice(0, 200)}`);
         }
 
         // 응답에서 공휴일 목록 꺼내기
@@ -63,10 +62,17 @@ async function fetchYear(year: number): Promise<string[]> {
         });
 
 
+        // 공휴일이 하나도 없는 해는 없다. 0건이면 응답 형식이 바뀐 것으로 본다
+        if (holidays.length === 0) {
+            throw new Error(`공휴일이 0건입니다: ${JSON.stringify(data).slice(0, 200)}`);
+        }
+
         return holidays;
     } catch (e) {
-        console.error('공공데이터포털 특일(공휴일) 처리 중 에러 발생', e);
-        return [];
+        // 빈 배열을 돌려주면 공휴일이 하나도 없는 holidays.json이 저장되고,
+        // judge가 공휴일 휴관을 전부 놓쳐 설날에도 "가능"이 나온다.
+        // 한 해만 실패해도 나머지 한 해만 저장되므로 실패는 실패로 올려 보낸다
+        throw new Error(`${year}년 공휴일을 불러오지 못했습니다: ${e instanceof Error ? e.message : String(e)}`);
     }
 
 }
@@ -98,6 +104,8 @@ async function fetchHolidays() {
 
     } catch (e) {
         console.error('❌ fetch-holidays 스크립트 실행 중 에러 발생:', e);
+        // 종료 코드가 0이면 워크플로가 실패를 알아채지 못하고 커밋 단계로 넘어간다
+        process.exit(1);
     }
     
 }

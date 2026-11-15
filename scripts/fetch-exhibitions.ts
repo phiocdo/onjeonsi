@@ -99,7 +99,8 @@ async function fetchExhibitions() {
     const total: number = head.culturalEventInfo?.list_total_count ?? 0;
     if (!total) {
       console.error('❌ 전체 건수를 읽지 못했습니다:', JSON.stringify(head).slice(0, 200));
-      return;
+      // 종료 코드가 0이면 워크플로가 실패를 알아채지 못하고 커밋 단계로 넘어간다
+      process.exit(1);
     }
     console.log(`📦 API 전체 행사 수: ${total}건 (${Math.ceil(total / PAGE_SIZE)}번 호출)`);
 
@@ -159,8 +160,8 @@ async function fetchExhibitions() {
       const operatingHours = parseHours(hoursText, year);
       if (operatingHours.scheduleType === 'unknown') unknownHours++;
 
-      const title = item.TITLE.trim();
-      const placeName = item.PLACE.trim();
+      const title = (item.TITLE || '').trim();
+      const placeName = (item.PLACE || '').trim();
 
       return {
         // 목록 순서가 아니라 전시 내용으로 만든다. 수집마다 같은 id가 나와야 한다
@@ -208,6 +209,9 @@ async function fetchExhibitions() {
     console.log(`   운영시간 파싱: ${exhibitions.length - unknownHours}건 / 판별 불가 ${unknownHours}건`);
   } catch (error) {
     console.error('❌ 스크립트 실행 중 에러 발생:', error);
+    // 에러를 로그만 찍고 0으로 끝내면, 수집이 조용히 건너뛰어진 채
+    // 예전 파일이 검사를 통과하고 "변경 없음"으로 커밋 단계가 끝난다
+    process.exit(1);
   }
 }
 

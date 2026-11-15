@@ -40,6 +40,14 @@ describe('makeExhibitionId', () => {
     expect(id).toMatch(/^auto-seoul-[0-9a-f]{12}$/);
   });
 
+  it('장소가 비어 있어도 크래시 없이 id가 나온다', () => {
+    // 서울시 API가 PLACE를 비워서 보내는 경우
+    expect(makeExhibitionId({ title: '언폴드엑스 2026', placeName: null, start: '2026-10-01' }))
+      .toMatch(/^auto-seoul-[0-9a-f]{12}$/);
+    expect(makeExhibitionId({ title: null, placeName: undefined, start: null }))
+      .toMatch(/^auto-seoul-[0-9a-f]{12}$/);
+  });
+
   it('앞뒤 공백은 같은 전시로 본다', () => {
     const a = 전시('  언폴드엑스 2026 ', ' DDP ', '2026-10-01');
     const b = 전시('언폴드엑스 2026', 'DDP', '2026-10-01');

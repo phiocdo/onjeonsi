@@ -21,9 +21,11 @@ import { createHash } from 'crypto';
  * 새 전시가 생긴 것처럼 보인다. 수집 시각을 넣지 않는 이유도 같다 (매번 달라진다).
  */
 export function makeExhibitionId(exhibition: {
-  title: string;
-  placeName: string;
-  start: string;
+  // 서울시 API가 비워서 보내는 경우를 타입에도 남겨 둔다.
+  // 타입을 string 으로만 두면 아래 `?? ''` 가 죽은 코드처럼 보여 지워질 수 있다
+  title: string | null | undefined;
+  placeName: string | null | undefined;
+  start: string | null | undefined;
 }): string {
   const key = [exhibition.title, exhibition.placeName, exhibition.start]
     .map(part => (part ?? '').trim())

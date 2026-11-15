@@ -4,6 +4,7 @@
   "description": "YYYY-MM-DD 문자열 배열. 오름차순 여부는 스키마로 검사하지 못한다.",
   "type": "array",
   "uniqueItems": true,
+  "minItems": 1,
   "items": {
     "$ref": "#/definitions/date"
   },

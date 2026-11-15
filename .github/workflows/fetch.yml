@@ -38,6 +38,11 @@ jobs:
         env:
           HOLIDAY_API_KEY: ${{ secrets.HOLIDAY_API_KEY }}
 
+      # 이 단계가 실패하면 아래 커밋 단계가 실행되지 않으므로
+      # 스키마에 어긋난 데이터는 main 에 올라가지 않는다
+      - name: 데이터 형식 검사
+        run: npx tsx scripts/validate-data.ts
+
       - name: 변경이 있으면 커밋
         run: |
           git config user.name 'github-actions[bot]'

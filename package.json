@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "validate": "tsx scripts/validate-data.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0",

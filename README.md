@@ -65,6 +65,7 @@ npm run dev
 | `npm run build` | 타입 검사 후 `dist/`에 빌드 |
 | `npm run preview` | 빌드 결과를 로컬에서 확인 |
 | `npm run lint` | ESLint 검사 |
+| `npm run validate` | `data/`의 JSON이 `schema/` 형식에 맞는지 검사 |
 
 ## 데이터
 
@@ -86,14 +87,23 @@ npx tsx scripts/fetch-holidays.ts      # data/holidays/holidays.json 갱신
 
 `.env`가 없으면 환경 변수에서 키를 찾습니다. GitHub Actions에서는 Secrets로 주입합니다.
 
+### 형식 검사
+
+수집 워크플로는 매일 05:00에 사람 없이 돌아갑니다. 그래서 수집과 커밋 사이에
+`scripts/validate-data.ts`로 `schema/`의 형식에 맞는지 검사하고, 어긋나면 그 단계에서
+실패해 커밋·배포로 넘어가지 않습니다.
+
 ## 폴더 구조
 
 ```
-.github/workflows/   GitHub Actions (배포)
+.github/workflows/   GitHub Actions (수집·배포)
 data/                수집·조사한 JSON 데이터
-scripts/             데이터 수집 스크립트 (tsx로 실행)
+schema/              data/ 각 파일의 형식 정의 (JSON Schema)
+scripts/             데이터 수집·검사 스크립트 (tsx로 실행)
 src/
   pages/             화면
+  engine/            판정·거리·정렬 로직
+  lib/               운영시간 문구 해석 등 보조 함수
   types/             공용 타입 정의 (Venue, Exhibition, JudgeInput ...)
   mock/              판정 로직 완성 전 임시 데이터
   assets/            이미지

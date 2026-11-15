@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "전시 장소 → 시설 연결표 (data/venue-links.json)",
+  "description": "data/venue-links.json, 상태: 제안. 키는 data/exhibitions/auto.json의 placeName 원문(공백·괄호·층을 지우지 않은 그대로), 값은 시설 id 또는 null. null은 일부러 어느 시설에도 연결하지 않는다는 뜻이다. aliases 부분 일치보다 이 표가 먼저다. 스키마로 잡지 못하는 것: 키가 auto.json에 실제로 있는 placeName인지, 값이 data/venues에 있는 id인지.",
+  "type": "object",
+  "propertyNames": {
+    "type": "string",
+    "minLength": 1
+  },
+  "additionalProperties": {
+    "anyOf": [
+      {
+        "type": "string",
+        "pattern": "^venue-[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      {
+        "type": "null"
+      }
+    ]
+  }
+}

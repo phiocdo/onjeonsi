@@ -1,0 +1,186 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "판정 테스트 시나리오 (data/scenarios/judge-scenarios.json)",
+  "description": "data/scenarios/judge-scenarios.json, 상태: 제안. 실제 시설(data/venues/{venueId}.json)과 날짜로 judge의 정답을 적어 두고 테스트로 돌린다. 공휴일은 data/holidays/holidays.json을 쓴다. expectedReasons는 문구가 아니라 src/engine/reasons.ts의 REASONS 키로 적는다 (NOT_IMPLEMENTED 제외). 스키마로 잡지 못하는 것: id가 겹치는지, venueId 파일이 있는지, stayStart가 stayEnd보다 이른지, date가 exhibition 기간 안인지.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "title",
+      "venueId",
+      "exhibition",
+      "date",
+      "stayStart",
+      "stayEnd",
+      "expected",
+      "expectedReasons",
+      "basis"
+    ],
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^S\\d{2,3}$",
+        "description": "시나리오 번호 (예: S01)"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "venueId": {
+        "type": "string",
+        "pattern": "^venue-[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "시설 id (data/venues/{id}.json)"
+      },
+      "exhibition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end"
+        ],
+        "properties": {
+          "start": {
+            "$ref": "#/definitions/date"
+          },
+          "end": {
+            "$ref": "#/definitions/date"
+          }
+        },
+        "description": "판정에 필요한 전시 기간만 적는다"
+      },
+      "date": {
+        "$ref": "#/definitions/date"
+      },
+      "stayStart": {
+        "$ref": "#/definitions/time"
+      },
+      "stayEnd": {
+        "$ref": "#/definitions/time"
+      },
+      "expected": {
+        "type": "string",
+        "enum": [
+          "possible",
+          "impossible",
+          "unknown"
+        ]
+      },
+      "expectedReasons": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "enum": [
+            "OUT_OF_PERIOD",
+            "CLOSED_DATE",
+            "CLOSED_WEEKDAY",
+            "CLOSED_HOLIDAY",
+            "AFTER_LAST_ENTRY",
+            "NOT_ENOUGH_BEFORE_CLOSE",
+            "NOT_ENOUGH_STAY",
+            "MISSING_HOURS",
+            "MISSING_LAST_ENTRY"
+          ]
+        },
+        "description": "possible이면 0개, impossible이면 1개 이상, unknown이면 MISSING_HOURS·MISSING_LAST_ENTRY만 1개 이상"
+      },
+      "basis": {
+        "type": "string",
+        "minLength": 1,
+        "description": "정답의 근거 (확인한 운영 정보와 날짜)"
+      }
+    },
+    "allOf": [
+      {
+        "if": {
+          "type": "object",
+          "properties": {
+            "expected": {
+              "type": "string",
+              "const": "possible"
+            }
+          },
+          "required": [
+            "expected"
+          ]
+        },
+        "then": {
+          "type": "object",
+          "properties": {
+            "expectedReasons": {
+              "type": "array",
+              "maxItems": 0
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "type": "object",
+          "properties": {
+            "expected": {
+              "type": "string",
+              "const": "impossible"
+            }
+          },
+          "required": [
+            "expected"
+          ]
+        },
+        "then": {
+          "type": "object",
+          "properties": {
+            "expectedReasons": {
+              "type": "array",
+              "minItems": 1
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "type": "object",
+          "properties": {
+            "expected": {
+              "type": "string",
+              "const": "unknown"
+            }
+          },
+          "required": [
+            "expected"
+          ]
+        },
+        "then": {
+          "type": "object",
+          "properties": {
+            "expectedReasons": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "MISSING_HOURS",
+                  "MISSING_LAST_ENTRY"
+                ]
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "definitions": {
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
+      "description": "YYYY-MM-DD"
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+      "description": "HH:MM, 24시간제 두 자리 (00:00~23:59)"
+    }
+  }
+}

@@ -64,25 +64,33 @@ function markOneLine(schedule: unknown): string {
   return DS_MARK + JSON.stringify(schedule) + DS_MARK;
 }
 
+/** 요일 7개를 각각 한 줄로 표시해 둔다 */
+function markWeekdays(weekdays: Record<string, unknown>): Record<string, string> {
+  return Object.fromEntries(Object.entries(weekdays).map(([day, s]) => [day, markOneLine(s)]));
+}
+
 /** 표시해 둔 일정만 한 줄로 되돌리고, 나머지는 보통 들여쓰기로 쓴다 */
 function stringifyExhibitions(list: Record<string, unknown>[]): string {
   const prepared = list.map(ex => {
     const oh = ex.operatingHours as Record<string, unknown> | undefined;
     if (!oh) return ex;
-    const weekdays = Object.fromEntries(
-      Object.entries(oh.weekdays as Record<string, unknown>).map(([day, s]) => [day, markOneLine(s)])
-    );
     const exceptions = (oh.exceptions as Array<{ date: string; schedule: unknown }>).map(e => ({
       date: e.date,
       schedule: markOneLine(e.schedule)
+    }));
+    // periods 안의 요일도 같은 방식으로 한 줄씩 쓴다
+    const periods = (oh.periods as Array<Record<string, unknown>> | undefined)?.map(p => ({
+      ...p,
+      weekdays: markWeekdays(p.weekdays as Record<string, unknown>)
     }));
     return {
       ...ex,
       operatingHours: {
         ...oh,
-        weekdays,
+        weekdays: markWeekdays(oh.weekdays as Record<string, unknown>),
         holiday: oh.holiday ? markOneLine(oh.holiday) : null,
-        exceptions
+        exceptions,
+        ...(periods ? { periods } : {})
       }
     };
   });

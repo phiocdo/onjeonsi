@@ -311,6 +311,62 @@ describe('parseHours — 특정 날짜 예외', () => {
   });
 });
 
+describe('parseHours — 격주·N째주', () => {
+  it('"1, 3째주 토"를 weeksOfMonth로 담는다', () => {
+    const r = parseHours('1, 3째주 토 1회차(3,4학년) 13:30-15:00 2회차(5,6학년) 15:30-17:00', 2026);
+    expect(openDays('1, 3째주 토 1회차(3,4학년) 13:30-15:00 2회차(5,6학년) 15:30-17:00')).toEqual(['sat']);
+    expect(r.weekdays.sat.weeksOfMonth).toEqual([1, 3]);
+    // 회차가 둘이면 구간도 둘이다
+    expect(r.weekdays.sat.intervals).toEqual([
+      { open: '13:30', close: '15:00' },
+      { open: '15:30', close: '17:00' },
+    ]);
+  });
+
+  it('"2, 4째주"도 담는다', () => {
+    expect(parseHours('2, 4째주 토 1회차 14:00~15:20 2회차 16:00~17:20', 2026).weekdays.sat.weeksOfMonth)
+      .toEqual([2, 4]);
+  });
+
+  it('"첫째·셋째 주"처럼 한글로 적힌 것도 담는다', () => {
+    expect(parseHours('첫째·셋째 주 토요일 10:00~12:00', 2026).weekdays.sat.weeksOfMonth)
+      .toEqual([1, 3]);
+  });
+
+  it('매주 하는 전시에는 weeksOfMonth를 넣지 않는다', () => {
+    expect(parseHours('10:00~18:00', 2026).weekdays.mon.weeksOfMonth).toBeUndefined();
+  });
+});
+
+describe('parseHours — N일부터 일정이 바뀌는 경우', () => {
+  it('기본 일정은 그대로 두고 periods에 담는다', () => {
+    const t = '화-일 10:00~18:00 ※ 월 휴관, 9.15.(화)부터 화,수,금,토,일 21:00까지';
+    const r = parseHours(t, 2026);
+    // 9월 15일 전에는 18시까지다. 바로 반영하면 아직 없는 야간개관을 "가능"으로 안내한다
+    expect(span(t, 'tue')).toBe('10:00-18:00');
+    expect(r.periods).toHaveLength(1);
+    expect(r.periods![0].from).toBe('2026-09-15');
+    expect(r.periods![0].weekdays.tue.intervals[0].close).toBe('21:00');
+    // 목요일은 목록에 없으므로 그대로다
+    expect(r.periods![0].weekdays.thu.intervals[0].close).toBe('18:00');
+  });
+
+  it('"2024년 4월 12일(금)부터" 형식도 읽는다', () => {
+    const r = parseHours('10:00 ~ 18:00 (평일, 주말 동일) ※ 2024년 4월 12일(금)부터 매주 금요일은 21:00까지 야간개관합니다.', 2026);
+    expect(r.periods![0].from).toBe('2024-04-12');
+    expect(r.periods![0].weekdays.fri.intervals[0].close).toBe('21:00');
+  });
+
+  it('기준일을 하루짜리 예외로 넣지 않는다', () => {
+    const r = parseHours('10:00 ~ 18:00 ※ 2024년 4월 12일(금)부터 매주 금요일은 21:00까지', 2026);
+    expect(r.exceptions).toEqual([]);
+  });
+
+  it('바뀌는 게 없으면 periods를 넣지 않는다', () => {
+    expect(parseHours('10:00~18:00', 2026).periods).toBeUndefined();
+  });
+});
+
 describe('parseHours — 상시와 판별 불가', () => {
   it('상시 운영은 always_open 으로 둔다', () => {
     const r = parseHours('월-일요일 0:00~24:00', 2026);

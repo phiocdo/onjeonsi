@@ -15,9 +15,15 @@ import type { DaySchedule, ParsedOperatingHours, TimeInterval, Weekday } from '.
  * 읽어낼 수 없는 문구는 추측하지 않고 scheduleType: 'unknown' 으로 둔다.
  * 틀린 시간으로 "가능"이 나오는 것보다 "확인 필요"가 나오는 쪽이 안전하다.
  *
+ * 요일별 일정으로 담을 수 없는 두 가지는 타입을 늘려 담는다.
+ *   "1, 3째주 토 ..."        -> DaySchedule.weeksOfMonth
+ *   "9.15.(화)부터 ..."       -> ParsedOperatingHours.periods
+ * 판정하는 쪽에서 이 둘을 보지 않으면 쉬는 주나 아직 오지 않은 날의 일정을
+ * 적용해 "가능"이 잘못 나온다.
+ *
  * 종로·중구 전시 2,300건으로 재면 이렇다.
  *   제대로 읽음   1,948건 (84.7%)
- *   읽었지만 틀림     43건 ( 1.9%)   격주("1,3째주 토")와 "N일부터 변경"이 대부분이다
+ *   읽었지만 틀림     43건 ( 1.9%)
  *   못 읽음          309건 (13.4%)   "홈페이지 참고", "14:00"처럼 원문에 정보가 없는 것이 많다
  */
 
@@ -154,6 +160,95 @@ function readTrailingDayScope(after: string): Weekday[] | null {
   if (/\d{1,2}:\d{2}|까지/.test(after)) return null;
   const weekly = /매주\s*((?:[월화수목금토일]\s*(?:요일)?\s*[,·]?\s*)+)/.exec(after);
   return weekly ? readDayScope(weekly[1]) : null;
+}
+
+const ORDINAL_TO_WEEK: Record<string, number> = { 첫: 1, 둘: 2, 두: 2, 셋: 3, 세: 3, 넷: 4, 네: 4, 다섯: 5 };
+
+/**
+ * "1, 3째주", "둘째·넷째 주" 처럼 몇째 주인지 읽는다. 없으면 null
+ * 숫자 없이 "격주" 라고만 적힌 것은 어느 주인지 알 수 없어 읽지 않는다.
+ */
+function readWeeksOfMonth(scope: string): number[] | null {
+  if (!/째\s*주|주\s*차/.test(scope)) return null;
+
+  const weeks = new Set<number>();
+  // "1, 3째주" / "2,4째주" — 째주 앞에 붙은 숫자들을 모은다
+  const numeric = /((?:\d\s*[,·]?\s*)+)째\s*주/.exec(scope);
+  if (numeric) {
+    for (const d of numeric[1].matchAll(/\d/g)) {
+      const n = Number(d[0]);
+      if (n >= 1 && n <= 5) weeks.add(n);
+    }
+  }
+  // "첫째·셋째 주"
+  for (const m of scope.matchAll(/(첫|둘|두|셋|세|넷|네|다섯)\s*째/g)) {
+    weeks.add(ORDINAL_TO_WEEK[m[1]]);
+  }
+
+  return weeks.size ? [...weeks].sort((a, b) => a - b) : null;
+}
+
+/**
+ * 연장 운영을 반영한다. 이미 넣어둔 구간의 close 만 바꿔치운다.
+ *   "금요일은 21:00까지"           조사가 끼는 경우
+ *   "화,수,금,토,일 21:00까지"      요일이 여러 개인 경우
+ */
+function applyExtensions(weekdays: Record<Weekday, DaySchedule>, source: string): void {
+  for (const m of source.matchAll(
+    /(?:매주\s*)?((?:[월화수목금토일]\s*(?:요일)?\s*[,·]?\s*)+)(?:은|는|에|부터)?\s*(\d{1,2}:\d{2})\s*까지/g,
+  )) {
+    const close = padTime(m[2]);
+    if (!close) continue;
+    // "요일" 의 '일' 을 일요일로 세지 않도록 먼저 지운다
+    const listed = m[1].replace(/요일/g, '');
+    const days = [...new Set([...listed.matchAll(/[월화수목금토일]/g)].map(d => KO_TO_DAY[d[0]]))];
+    for (const day of days) {
+      const cur = weekdays[day];
+      if (!cur.isOpen || !cur.intervals.length) continue;
+      const last = cur.intervals[cur.intervals.length - 1];
+      if ((toMinutes(close) ?? 0) <= (toMinutes(last.open) ?? 0)) continue;
+      weekdays[day] = {
+        ...cur,
+        intervals: [...cur.intervals.slice(0, -1), { ...last, close }],
+        note: '연장 운영',
+      };
+    }
+  }
+}
+
+/**
+ * "9.15.(화)부터 ...", "2024년 4월 12일(금)부터 ..." 처럼
+ * 어느 날짜부터 일정이 바뀌는 절을 떼어낸다.
+ *
+ * 떼어내지 않고 그대로 반영하면 그 날짜 전에도 바뀐 시간이 적용되어,
+ * 아직 시작하지 않은 야간개관을 "가능"으로 안내하게 된다.
+ */
+function splitPeriodClauses(
+  text: string,
+  year: number,
+): { baseText: string; clauses: Array<{ from: string; clause: string }> } {
+  const clauses: Array<{ from: string; clause: string }> = [];
+  let baseText = text;
+
+  const pattern = /(?:(\d{4})\s*[.년]\s*)?(\d{1,2})\s*[.월]\s*(\d{1,2})\s*[.일]?\s*(?:\([월화수목금토일]\))?\s*부터/g;
+  for (const m of text.matchAll(pattern)) {
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) continue;
+
+    // '부터' 뒤부터 다음 규칙 경계까지가 그 기간의 설명이다
+    const clause = text.slice(m.index + m[0].length).split(/[/;]|※|\*+/)[0];
+    if (!clause.trim()) continue;
+
+    const y = m[1] ? Number(m[1]) : year;
+    clauses.push({
+      from: `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+      clause,
+    });
+    baseText = baseText.replace(m[0] + clause, ' ');
+  }
+
+  return { baseText, clauses };
 }
 
 /**
@@ -338,6 +433,9 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
   const weekdays = Object.fromEntries(ORDER.map(d => [d, emptyDay()])) as Record<Weekday, DaySchedule>;
   const exceptions: ParsedOperatingHours['exceptions'] = [];
 
+  // "N일부터 일정이 바뀐다"는 절을 떼어낸다. 기본 일정은 그 절 없이 읽는다
+  const { baseText, clauses: periodClauses } = splitPeriodClauses(text, year);
+
   // (2) 특정 날짜 예외를 먼저 떼어낸다. 남은 문구가 요일 규칙이 된다.
   //    먼저 떼지 않으면 (3)에서 "11.17" 의 숫자를 시각으로 착각할 수 있다.
   //    끝 시각만 적힌 경우("22:00까지")는 그 요일의 여는 시각이 필요해 뒤로 미룬다
@@ -348,6 +446,8 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     if (idx < 0) continue;
     // 그 날짜 뒤쪽에서 시간 구간을 찾는다
     const after = rest.slice(idx + found.raw.length);
+    // "9.15.(화)부터" 는 하루만의 예외가 아니라 그 날부터 바뀌는 일정이다 (periods 가 담는다)
+    if (/^\s*부터/.test(after)) continue;
     const tail = after.slice(0, 60);
     const rangeMatch = /(\d{1,2}:\d{2})\s*[~-]\s*(\d{1,2}:\d{2})/.exec(tail);
     const range = rangeMatch ? readRange(rangeMatch[0]) : null;
@@ -379,7 +479,7 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
 
   // 시간 구간을 하나씩 훑고, 앞 구간이 끝난 지점부터 이번 구간 앞까지를 요일 지정으로 읽는다.
   // 쉼표로 쪼개면 "토,일" 같은 요일 목록이 같이 끊겨서 이 방식으로 바꿨다.
-  type Assignment = { scope: Weekday[] | null; interval: TimeInterval };
+  type Assignment = { scope: Weekday[] | null; interval: TimeInterval; weeks: number[] | null };
   const assignments: Assignment[] = [];
 
   // 앞 조각이 요일만 적고 끝났으면 다음 조각의 지정으로 쓴다
@@ -399,6 +499,8 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     const bare = piece.replace(/(\d{1,2}:\d{2})\s*[~-]\s*(\d{1,2}:\d{2})/g, '').trim() === '';
     const fromPrevious: Weekday[] | null = carried ?? (bare ? lastScope : null);
     carried = null;
+    // 한 조각 안에서 앞 구간의 요일을 물려받을 때 쓴다
+    let scopeInPiece: Weekday[] | null = null;
     let cursor = 0;
     for (const m of matches) {
       const scopeText = piece.slice(cursor, m.index);
@@ -420,8 +522,16 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
       if (scope === null && matches.length === 1) {
         scope = readTrailingDayScope(piece.slice(cursor)) ?? fromPrevious;
       }
-      if (scope) lastScope = scope;
-      assignments.push({ scope, interval });
+      // "1, 3째주 토 1회차 13:30-15:00 2회차 15:30-17:00" 처럼 한 조각에 회차가 이어지면
+      // 앞 구간의 요일을 그대로 쓴다. "(동절기) 10:00~18:00" 같은 계절 안내는 해당하지 않는다
+      if (scope === null && scopeInPiece && /회차|차시|타임|부\s*$|반\s*$/.test(scopeText.trim())) {
+        scope = scopeInPiece;
+      }
+      if (scope) {
+        lastScope = scope;
+        scopeInPiece = scope;
+      }
+      assignments.push({ scope, interval, weeks: readWeeksOfMonth(scopeText) ?? readWeeksOfMonth(piece) });
     }
   }
 
@@ -441,12 +551,16 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
   // 요일이 지정된 구간은 그 요일에만 넣고, 지정 없는 구간을 덮어쓴다
   //   "10:00~18:00 / 토 12:00~18:00" -> 토요일만 12:00~18:00
   const perDay = new Map<Weekday, TimeInterval[]>();
-  for (const { scope, interval } of assignments) {
+  const weeksPerDay = new Map<Weekday, number[]>();
+  for (const { scope, interval, weeks } of assignments) {
     if (!scope) continue;
     for (const day of scope) {
       perDay.set(day, [...(perDay.get(day) ?? []), interval]);
+      if (weeks && !weeksPerDay.has(day)) weeksPerDay.set(day, weeks);
     }
   }
+  // 요일 지정이 없는데 "1, 3째주" 가 적혀 있으면 모든 요일에 적용한다
+  const sharedWeeks = assignments.find(a => a.scope === null && a.weeks)?.weeks ?? null;
 
   for (const day of ORDER) {
     const intervals = perDay.get(day) ?? shared;
@@ -454,7 +568,11 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     const unique = intervals.filter(
       (iv, i) => intervals.findIndex(other => JSON.stringify(other) === JSON.stringify(iv)) === i,
     );
-    if (unique.length) weekdays[day] = { isOpen: true, intervals: unique };
+    if (!unique.length) continue;
+    const weeks = weeksPerDay.get(day) ?? (perDay.has(day) ? null : sharedWeeks);
+    weekdays[day] = weeks
+      ? { isOpen: true, intervals: unique, weeksOfMonth: weeks }
+      : { isOpen: true, intervals: unique };
   }
 
   // (4) 휴관 선언을 반영해 (3)에서 열어둔 요일을 다시 닫는다
@@ -470,28 +588,8 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
   }
 
   // (5) 연장 운영: (3)에서 넣어둔 구간의 close 만 바꿔치운다.
-  //    "금요일은 21:00까지" 처럼 조사가 끼기도 하고,
-  //    "화,수,금,토,일 21:00까지" 처럼 요일이 여러 개이기도 하다
-  for (const m of text.matchAll(
-    /(?:매주\s*)?((?:[월화수목금토일]\s*(?:요일)?\s*[,·]?\s*)+)(?:은|는|에|부터)?\s*(\d{1,2}:\d{2})\s*까지/g,
-  )) {
-    const close = padTime(m[2]);
-    if (!close) continue;
-    // "요일" 의 '일' 을 일요일로 세지 않도록 먼저 지운다
-    const listed = m[1].replace(/요일/g, '');
-    const days = [...new Set([...listed.matchAll(/[월화수목금토일]/g)].map(d => KO_TO_DAY[d[0]]))];
-    for (const day of days) {
-      const cur = weekdays[day];
-      if (!cur.isOpen || !cur.intervals.length) continue;
-      const last = cur.intervals[cur.intervals.length - 1];
-      if ((toMinutes(close) ?? 0) <= (toMinutes(last.open) ?? 0)) continue;
-      weekdays[day] = {
-        ...cur,
-        intervals: [...cur.intervals.slice(0, -1), { ...last, close }],
-        note: '연장 운영',
-      };
-    }
-  }
+  //    "N일부터" 가 붙은 절은 그 날짜 전에는 적용되지 않으므로 periods 로 따로 뺀다
+  applyExtensions(weekdays, baseText);
 
   // (6) 하루 중간에 쉬는 구간이 있으면 그 요일의 구간을 둘로 쪼갠다
   //    "10:00~18:00 (※ 12~13시 휴관)" -> 10:00~12:00, 13:00~18:00
@@ -537,5 +635,26 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     }
   }
 
-  return { scheduleType: 'scheduled', weekdays, holiday, exceptions };
+  // (8) "N일부터" 절을 기본 일정 위에 얹어 periods 를 만든다.
+  //    그 날짜 이후를 판정할 때는 weekdays 대신 이쪽을 봐야 한다
+  const periods: NonNullable<ParsedOperatingHours['periods']> = [];
+  for (const { from, clause } of periodClauses) {
+    const changed = Object.fromEntries(
+      ORDER.map(d => [d, { ...weekdays[d], intervals: weekdays[d].intervals.map(iv => ({ ...iv })) }]),
+    ) as Record<Weekday, DaySchedule>;
+
+    applyExtensions(changed, clause);
+    // "N일부터 월요일 휴관" 처럼 닫는 경우
+    for (const m of clause.matchAll(/([월화수목금토일])\s*(?:요일)?[^가-힣]{0,4}(?:휴관|휴무)/g)) {
+      changed[KO_TO_DAY[m[1]]] = emptyDay();
+    }
+
+    // 기본 일정과 다르지 않으면 넣지 않는다
+    if (JSON.stringify(changed) === JSON.stringify(weekdays)) continue;
+    periods.push({ from, weekdays: changed });
+  }
+
+  const result: ParsedOperatingHours = { scheduleType: 'scheduled', weekdays, holiday, exceptions };
+  if (periods.length) result.periods = periods;
+  return result;
 }

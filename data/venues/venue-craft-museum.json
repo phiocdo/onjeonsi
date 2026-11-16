@@ -6,22 +6,25 @@
   ],
   "gu": "종로구",
   "type": "박물관",
-  "lat": 37.5778,
-  "lng": 126.9934,
+  "lat": 37.5766481740232,
+  "lng": 126.983533363501,
   "representative": false,
   "hours": {
     "tue": { "open": "10:00", "close": "18:00" },
     "wed": { "open": "10:00", "close": "18:00" },
     "thu": { "open": "10:00", "close": "18:00" },
-    "fri": { "open": "10:00", "close": "21:00" },
-    "sat": { "open": "10:00", "close": "19:00" },
-    "sun": { "open": "10:00", "close": "19:00" }
+    "fri": { "open": "10:00", "close": "18:00" },
+    "sat": { "open": "10:00", "close": "18:00" },
+    "sun": { "open": "10:00", "close": "18:00" }
   },
   "closed": {
-    "weekday": "mon"
+    "weekday": "mon",
+    "dates": [
+      "01-01"
+    ]
   },
-  "lastEntry": "20:00",
+  "lastEntry": "17:30",
   "visitMinutes": 90,
-  "source": "서울시 운영정보",
-  "verified": "2026-11-09"
+  "source": "https://craftmuseum.seoul.go.kr/preview/visit",
+  "verified": "2026-11-16"
 }

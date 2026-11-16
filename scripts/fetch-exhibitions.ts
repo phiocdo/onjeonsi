@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseHours } from '../src/lib/parseHours.ts';
+import { makeExhibitionId, findDuplicateIds } from './exhibition-id.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,6 +99,9 @@ async function fetchExhibitions() {
     const total: number = head.culturalEventInfo?.list_total_count ?? 0;
     if (!total) {
       console.error('❌ 전체 건수를 읽지 못했습니다:', JSON.stringify(head).slice(0, 200));
+      // 종료 코드가 0이면 워크플로가 실패를 알아채지 못하고 커밋 단계로 넘어간다.
+      // process.exit()은 비동기 작업이 정리되는 중에 부르면 libuv 어서션으로 죽는다
+      process.exitCode = 1;
       return;
     }
     console.log(`📦 API 전체 행사 수: ${total}건 (${Math.ceil(total / PAGE_SIZE)}번 호출)`);
@@ -151,21 +155,25 @@ async function fetchExhibitions() {
     // index.ts Exhibition 규격에 맞게 변환
     let unknownHours = 0;
 
-    const exhibitions = filtered.map(({ item, start, end }, idx) => {
+    const exhibitions = filtered.map(({ item, start, end }) => {
       const hoursText = (item.PRO_TIME || '').trim();
       // 특정 날짜 예외("11.17(화)")에 붙일 연도는 전시 시작 연도로 본다
       const year = start ? Number(start.slice(0, 4)) : new Date().getFullYear();
       const operatingHours = parseHours(hoursText, year);
       if (operatingHours.scheduleType === 'unknown') unknownHours++;
 
+      const title = (item.TITLE || '').trim();
+      const placeName = (item.PLACE || '').trim();
+
       return {
-        id: `auto-seoul-${idx + 1}`,
+        // 목록 순서가 아니라 전시 내용으로 만든다. 수집마다 같은 id가 나와야 한다
+        id: makeExhibitionId({ title, placeName, start }),
         venueId: '',
-        title: item.TITLE.trim(),
+        title,
         start,
         end,
         field: item.CODENAME || '전시/미술',
-        placeName: item.PLACE.trim(),
+        placeName,
         hoursText,
         operatingHours,
         link: item.ORG_LINK || '',
@@ -176,6 +184,21 @@ async function fetchExhibitions() {
         fetchedAt: new Date().toISOString()
       };
     });
+
+    // 제목·장소·시작일이 모두 같은 전시가 두 건 올라오면 id도 같아진다.
+    // 스키마로는 id 중복을 잡을 수 없으므로 여기서 멈춘다
+    const duplicated = findDuplicateIds(exhibitions);
+    if (duplicated.length) {
+      console.error(`❌ id가 겹치는 전시가 있습니다 (${duplicated.length}건). 저장하지 않습니다.`);
+      for (const id of duplicated) {
+        console.error(`   ${id}`);
+        for (const ex of exhibitions.filter(e => e.id === id)) {
+          console.error(`     ${ex.start}~${ex.end}  ${ex.placeName}  ${ex.title}`);
+        }
+      }
+      process.exitCode = 1;
+      return;
+    }
 
     const outputDir = path.resolve(__dirname, '../data/exhibitions');
     if (!fs.existsSync(outputDir)) {
@@ -189,6 +212,9 @@ async function fetchExhibitions() {
     console.log(`   운영시간 파싱: ${exhibitions.length - unknownHours}건 / 판별 불가 ${unknownHours}건`);
   } catch (error) {
     console.error('❌ 스크립트 실행 중 에러 발생:', error);
+    // 에러를 로그만 찍고 0으로 끝내면, 수집이 조용히 건너뛰어진 채
+    // 예전 파일이 검사를 통과하고 "변경 없음"으로 커밋 단계가 끝난다
+    process.exitCode = 1;
   }
 }
 

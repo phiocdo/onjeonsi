@@ -49,7 +49,7 @@ function normalizeRanges(ranges: { start: string; end: string }[]): { start: num
  *   형식이 틀리거나 start >= end인 구간은 건너뛴다. 떨어진 구간(브레이크 타임)은 따로 처리한다.
  * - 그래서 possible·unavailable·unknown은 이른 시각 순이고, limit은 가장 이른 시각부터 채운다.
  * - 시작 시각은 range.start를 30분 단위로 올림한다 (10:10 → 10:30).
- * - 후보 + 관람 소요 시간 <= range.end 인 동안만 묻는다.
+ * - 후보 + 관람 소요 시간 <= range.end 이고 후보 < range.end 인 동안만 묻는다.
  */
 export function findStartCandidates(
   input: Omit<JudgeInput, 'stayStart' | 'stayEnd'>,
@@ -76,7 +76,9 @@ export function findStartCandidates(
       pending.run = null;
     };
 
-    for (let t = Math.ceil(start / STEP_MINUTES) * STEP_MINUTES; t + visit <= end; t += STEP_MINUTES) {
+    // t < end: 관람 시간이 0분이면 t + visit <= end만으로는 출발 = 구간 끝이 후보가 되므로 막는다.
+    // 관람 시간이 1분 이상이면 t + visit <= end가 이미 t < end를 뜻하므로 동작이 같다.
+    for (let t = Math.ceil(start / STEP_MINUTES) * STEP_MINUTES; t + visit <= end && t < end; t += STEP_MINUTES) {
       const at = fromMinutes(t);
       const res = judge({ ...input, stayStart: at, stayEnd });
 

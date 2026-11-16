@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Venue, Exhibition, JudgeInput } from '../types';
-import { judge } from './judge';
+import { judge, type ResolvedVenue } from './judge';
 import { REASONS } from './reasons';
 
 function makeVenue(overrides?: Partial<Venue>): Venue {
@@ -129,5 +129,118 @@ describe('judge 판정 본체', () => {
     const result = judge(makeInput({ date: '2026-10-01', venue: { lastEntry: undefined } }));
     expect(result.result).toBe('impossible');
     expect(result.reasons).toEqual([REASONS.OUT_OF_PERIOD]);
+  });
+});
+
+// ResolvedVenue 전용 필드(lastEntryByDay, basis)를 넣은 입력을 만든다
+function makeResolvedInput(
+  venue: Omit<ResolvedVenue, keyof Venue> & Partial<Venue>,
+  overrides?: Omit<MakeInputOverrides, 'venue'>,
+): JudgeInput {
+  const resolved: ResolvedVenue = { ...makeVenue(), ...venue };
+  return { ...makeInput(overrides), venue: resolved };
+}
+
+describe('judge 입력 검사', () => {
+  const INVALID = { result: 'unknown', reasons: [REASONS.INVALID_INPUT], basis: 'venue' };
+
+  it.each([
+    ['2026/11/10'],
+    ['2026-11-1'],
+    ['20261110'],
+    [''],
+  ])('날짜 형식 오류(%s) -> INVALID_INPUT', (date) => {
+    expect(judge(makeInput({ date }))).toEqual(INVALID);
+  });
+
+  it.each([
+    ['2026-02-30'],
+    ['2026-13-01'],
+    ['2026-11-31'],
+  ])('달력에 없는 날짜(%s) -> INVALID_INPUT', (date) => {
+    expect(judge(makeInput({ date }))).toEqual(INVALID);
+  });
+
+  it('시각 형식 오류(9:00, 24:00) -> INVALID_INPUT', () => {
+    expect(judge(makeInput({ stayStart: '9:00', stayEnd: '17:00' }))).toEqual(INVALID);
+    expect(judge(makeInput({ stayStart: '14:00', stayEnd: '24:00' }))).toEqual(INVALID);
+  });
+
+  it('머무는 끝이 시작과 같거나 이르면 -> INVALID_INPUT', () => {
+    expect(judge(makeInput({ stayStart: '14:00', stayEnd: '14:00' }))).toEqual(INVALID);
+    expect(judge(makeInput({ stayStart: '15:00', stayEnd: '14:00' }))).toEqual(INVALID);
+  });
+
+  it('입력 오류는 다른 사유보다 먼저 반환한다 (기간 밖이어도 INVALID_INPUT만)', () => {
+    expect(judge(makeInput({ date: '2026-12-01', stayStart: '15:00', stayEnd: '14:00' }))).toEqual(INVALID);
+  });
+});
+
+describe('judge 입장 마감', () => {
+  // 2026-11-10은 화요일
+  it('lastEntryByDay에 그 요일 값이 있으면 그 값을 쓴다', () => {
+    const result = judge(
+      makeResolvedInput(
+        { lastEntry: '17:00', lastEntryByDay: { tue: '16:00' }, visitMinutes: 30 },
+        { stayStart: '16:30', stayEnd: '18:00' },
+      ),
+    );
+    expect(result.result).toBe('impossible');
+    expect(result.reasons).toEqual([REASONS.AFTER_LAST_ENTRY('16:00')]);
+  });
+
+  it('lastEntryByDay에 그 요일 값이 없으면 lastEntry를 쓴다', () => {
+    const result = judge(
+      makeResolvedInput(
+        { lastEntry: '17:00', lastEntryByDay: { mon: '16:00' }, visitMinutes: 30 },
+        { stayStart: '16:30', stayEnd: '18:00' },
+      ),
+    );
+    expect(result.result).toBe('possible');
+    expect(result.entryTime).toBe('16:30');
+  });
+
+  it('lastEntry도 lastEntryByDay 값도 없으면 MISSING_LAST_ENTRY', () => {
+    const result = judge(makeResolvedInput({ lastEntry: undefined, lastEntryByDay: { mon: '16:00' } }));
+    expect(result.result).toBe('unknown');
+    expect(result.reasons).toEqual([REASONS.MISSING_LAST_ENTRY]);
+  });
+
+  it('입장 마감(20:00)이 그날 폐관(18:00)보다 늦으면 폐관 시각으로 보정한다', () => {
+    const result = judge(
+      makeInput({ venue: { lastEntry: '20:00' }, stayStart: '18:30', stayEnd: '20:00' }),
+    );
+    expect(result.result).toBe('impossible');
+    expect(result.reasons).toContain(REASONS.AFTER_LAST_ENTRY('18:00'));
+    expect(result.reasons).toEqual([REASONS.AFTER_LAST_ENTRY('18:00'), REASONS.NOT_ENOUGH_BEFORE_CLOSE]);
+  });
+});
+
+describe('judge basis', () => {
+  it('venue.basis가 없으면 모든 결과에 basis: venue', () => {
+    expect(judge(makeInput()).basis).toBe('venue'); // possible
+    expect(judge(makeInput({ date: '2026-12-01' })).basis).toBe('venue'); // impossible
+    expect(judge(makeInput({ venue: { hours: {} } })).basis).toBe('venue'); // unknown
+  });
+
+  it('ResolvedVenue의 basis를 그대로 내보낸다', () => {
+    expect(judge(makeResolvedInput({ basis: 'merged' })).basis).toBe('merged');
+    expect(judge(makeResolvedInput({ basis: 'exhibition' }, { date: '2026-12-01' })).basis).toBe('exhibition');
+    expect(judge(makeResolvedInput({ basis: 'exhibition' }, { date: '2026-02-30' })).basis).toBe('exhibition');
+  });
+});
+
+describe('judge 사유 문구', () => {
+  it('공휴일 다음 날 대체 휴관은 새 문구로 나온다', () => {
+    // 2026-11-09(월)이 공휴일이고 월요일 휴관 + nextDay -> 11-10(화) 대체 휴관
+    const result = judge(
+      makeInput({
+        venue: { closed: { weekday: 'mon', ifHoliday: 'nextDay' } },
+        holidays: ['2026-11-09'],
+      }),
+    );
+    expect(result.result).toBe('impossible');
+    expect(result.reasons).toEqual(['공휴일 다음 날이라 휴관입니다']);
+    expect(result.reasons).toEqual([REASONS.CLOSED_HOLIDAY]);
   });
 });

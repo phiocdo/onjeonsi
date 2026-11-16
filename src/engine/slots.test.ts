@@ -81,7 +81,7 @@ describe('findStartCandidates', () => {
     };
 
     it.each([
-      { visitMinutes: 0, expected: ['10:00', '10:30', '11:00', '11:30', '12:00'] },
+      { visitMinutes: 0, expected: ['10:00', '10:30', '11:00', '11:30'] },
       { visitMinutes: 30, expected: ['10:00', '10:30', '11:00', '11:30'] },
       { visitMinutes: 90, expected: ['10:00', '10:30'] },
       { visitMinutes: undefined, expected: ['10:00', '10:30', '11:00'] },
@@ -104,7 +104,7 @@ describe('findStartCandidates', () => {
       // 다음 후보는 관람 시간을 더하면 range.end(12:00)를 넘는다.
       const last = toMinutes(expected[expected.length - 1])!;
       expect(last + used).toBeLessThanOrEqual(toMinutes('12:00')!);
-      expect(last + 30 + used).toBeGreaterThan(toMinutes('12:00')!);
+      expect(last + 30 + Math.max(used, 1)).toBeGreaterThan(toMinutes('12:00')!);
     });
   });
 

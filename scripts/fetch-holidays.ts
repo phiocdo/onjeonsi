@@ -72,7 +72,8 @@ async function fetchYear(year: number): Promise<string[]> {
         // 빈 배열을 돌려주면 공휴일이 하나도 없는 holidays.json이 저장되고,
         // judge가 공휴일 휴관을 전부 놓쳐 설날에도 "가능"이 나온다.
         // 한 해만 실패해도 나머지 한 해만 저장되므로 실패는 실패로 올려 보낸다
-        throw new Error(`${year}년 공휴일을 불러오지 못했습니다: ${e instanceof Error ? e.message : String(e)}`);
+        // cause로 원래 에러를 달아 둬야 스택이 끊기지 않는다 (eslint preserve-caught-error)
+        throw new Error(`${year}년 공휴일을 불러오지 못했습니다`, { cause: e });
     }
 
 }

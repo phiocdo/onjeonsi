@@ -39,6 +39,23 @@ interface RawSeoulEvent {
   PRO_TIME: string; // 운영시간 문구. 자유 서술이라 그대로는 못 쓴다
 }
 
+/**
+ * 좌표 문자열을 숫자로 바꾼다. 쓸 수 없는 값이면 null을 돌려준다.
+ *
+ * `Number()`를 그대로 쓰면 안 된다. 빈 문자열과 공백은 0이 되는데,
+ * 실제로 LAT이 빈 문자열인 전시가 19건 있어서 아프리카 서쪽 바다(0, 0)에
+ * 핀이 찍힌다. 숫자가 아닌 값은 NaN이 되고, JSON으로 쓰면 null이 된다.
+ */
+function toCoord(value: string): number | null {
+  const text = (value ?? '').trim();
+  if (text === '') return null;
+
+  const num = Number(text);
+  if (!Number.isFinite(num) || num === 0) return null;
+
+  return num;
+}
+
 // 요일별 일정은 한 줄에 하나씩 붙여서 저장한다.
 const DS_MARK = '__DS__';
 
@@ -133,8 +150,11 @@ async function fetchExhibitions() {
     console.log(`🎯 종로구·중구 전시: ${inTargetArea.length}건`);
 
     // 이미 끝난 전시는 화면에 쓰지 않으므로 저장하지 않는다.
-    // toISOString은 UTC 기준이라 오전 9시 전에 하루 어긋난다
-    const today = new Date().toLocaleDateString('sv-SE');
+    //
+    // 시간대를 적지 않으면 돌아가는 기계의 시간대를 따른다. 내 PC는 KST라 맞지만
+    // GitHub Actions는 UTC다. 수집은 20:00 UTC(= 05:00 KST 다음 날)에 도는데
+    // 그 시점의 UTC 날짜는 한국 날짜보다 하루 전이라, 어제 끝난 전시가 하루 더 남는다.
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
     let swapped = 0;
 
     const dated = inTargetArea.map(item => {
@@ -164,10 +184,12 @@ async function fetchExhibitions() {
 
       const title = (item.TITLE || '').trim();
       const placeName = (item.PLACE || '').trim();
+      const detailUrl = item.HMPG_ADDR || '';
 
       return {
-        // 목록 순서가 아니라 전시 내용으로 만든다. 수집마다 같은 id가 나와야 한다
-        id: makeExhibitionId({ title, placeName, start }),
+        // 목록 순서가 아니라 전시 자체에서 끌어낸다. 수집마다 같은 id가 나와야 한다.
+        // 서울시가 매긴 cultcode를 먼저 쓰고, 없으면 내용을 해시한다
+        id: makeExhibitionId({ title, placeName, start, detailUrl }),
         venueId: '',
         title,
         start,
@@ -178,9 +200,9 @@ async function fetchExhibitions() {
         operatingHours,
         link: item.ORG_LINK || '',
         imageUrl: item.MAIN_IMG || '',
-        detailUrl: item.HMPG_ADDR || '',
-        lat: Number(item.LAT),
-        lng: Number(item.LOT),
+        detailUrl,
+        lat: toCoord(item.LAT),
+        lng: toCoord(item.LOT),
         fetchedAt: new Date().toISOString()
       };
     });

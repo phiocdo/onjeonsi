@@ -1,9 +1,53 @@
 import { describe, it, expect } from 'vitest';
-import { makeExhibitionId, findDuplicateIds } from './exhibition-id';
+import { makeExhibitionId, findDuplicateIds, readCultcode } from './exhibition-id';
 
 const 전시 = (title: string, placeName: string, start: string) => ({ title, placeName, start });
+const 상세주소 = (code: string) =>
+  `https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=${code}&menuNo=200009`;
 
-describe('makeExhibitionId', () => {
+describe('readCultcode', () => {
+  it('상세 주소에서 cultcode를 꺼낸다', () => {
+    expect(readCultcode(상세주소('160056'))).toBe('160056');
+  });
+
+  it('질의 문자열 순서가 바뀌어도 읽는다', () => {
+    expect(readCultcode('https://culture.seoul.go.kr/x/view.do?menuNo=200009&cultcode=158731')).toBe('158731');
+  });
+
+  it('cultcode가 없으면 null을 돌려준다', () => {
+    expect(readCultcode('https://www.mmca.go.kr')).toBeNull();
+    expect(readCultcode('')).toBeNull();
+    expect(readCultcode(null)).toBeNull();
+  });
+});
+
+describe('makeExhibitionId — cultcode', () => {
+  it('cultcode가 있으면 그것을 id로 쓴다', () => {
+    expect(makeExhibitionId({ ...전시('언폴드엑스 2026', 'DDP', '2026-10-01'), detailUrl: 상세주소('160056') }))
+      .toBe('auto-seoul-160056');
+  });
+
+  it('제목·장소·시작일이 바뀌어도 cultcode가 같으면 같은 id다', () => {
+    const before = { ...전시('언폴드엑스 2026', 'DDP', '2026-10-01'), detailUrl: 상세주소('160056') };
+    const after = { ...전시('언폴드엑스 2026 [수정]', 'DDP 디자인랩', '2026-10-02'), detailUrl: 상세주소('160056') };
+    expect(makeExhibitionId(after)).toBe(makeExhibitionId(before));
+  });
+
+  it('cultcode가 다르면 내용이 같아도 다른 id다', () => {
+    const a = { ...전시('같은 제목', '같은 장소', '2026-10-01'), detailUrl: 상세주소('111111') };
+    const b = { ...전시('같은 제목', '같은 장소', '2026-10-01'), detailUrl: 상세주소('222222') };
+    expect(makeExhibitionId(a)).not.toBe(makeExhibitionId(b));
+  });
+
+  it('cultcode가 없으면 해시로 넘어간다', () => {
+    const 해시 = makeExhibitionId(전시('언폴드엑스 2026', 'DDP', '2026-10-01'));
+    expect(해시).toMatch(/^auto-seoul-[0-9a-f]{12}$/);
+    expect(makeExhibitionId({ ...전시('언폴드엑스 2026', 'DDP', '2026-10-01'), detailUrl: 'https://www.mmca.go.kr' }))
+      .toBe(해시);
+  });
+});
+
+describe('makeExhibitionId — 해시로 넘어간 경우', () =>{
   it('같은 전시는 몇 번을 수집해도 같은 id가 나온다', () => {
     const ex = 전시('언폴드엑스 2026', 'DDP', '2026-10-01');
     expect(makeExhibitionId(ex)).toBe(makeExhibitionId({ ...ex }));

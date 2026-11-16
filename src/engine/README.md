@@ -15,6 +15,8 @@
 | --- | --- |
 | `judge.ts` | 전시 하나를 날짜·머무는 시간으로 판정합니다. 엔진의 중심입니다. |
 | `isOpen.ts` | 시설이 그날 문을 여는지 봅니다. `judge`가 씁니다. |
+| `matchVenue.ts` | 전시의 장소 이름·좌표로 시설(`venueId`)을 찾습니다. |
+| `resolveSchedule.ts` | 시설 정보와 전시 운영 시간을 합쳐 판정에 쓸 시설 정보(`ResolvedVenue`)를 만듭니다. `judgeResolved`도 여기 있습니다. |
 | `time.ts` | `HH:MM`, `YYYY-MM-DD` 계산 도우미입니다. |
 | `reasons.ts` | 판정 사유 문구(`REASONS`)를 한곳에서 정의합니다. |
 | `constants.ts` | 기본값(`DEFAULT_VISIT_MINUTES = 60`)입니다. |
@@ -82,11 +84,11 @@ console.log(judge({ venue, exhibition, date: '2026-11-21', stayStart: '16:30', s
 
 // 실행 결과 (tsx로 확인)
 // 토요일, 09:30 도착 → 개관 시각 10:00으로 당겨 입장
-// { result: 'possible', reasons: [], entryTime: '10:00', endTime: '11:00', slackMinutes: 60 }
+// { result: 'possible', reasons: [], entryTime: '10:00', endTime: '11:00', slackMinutes: 60, basis: 'venue' }
 // 월요일
-// { result: 'impossible', reasons: [ '월요일 휴관입니다' ] }
+// { result: 'impossible', reasons: [ '월요일 휴관입니다' ], basis: 'venue' }
 // 토요일, 16:30 도착 → 입장 마감 17:00 전이고 폐관까지 30분 남음
-// { result: 'possible', reasons: [], entryTime: '16:30', endTime: '17:30', slackMinutes: 30 }
+// { result: 'possible', reasons: [], entryTime: '16:30', endTime: '17:30', slackMinutes: 30, basis: 'venue' }
 ```
 
 ### 내 동네 전시 목록
@@ -187,6 +189,34 @@ export type ResolvedVenue = Venue & {
 - 관람 시간은 `venue.visitMinutes ?? DEFAULT_VISIT_MINUTES`(60)입니다. 0은 0분으로 봅니다.
 - 출력 `JudgeResult`: `result`, `reasons`, `basis`, 그리고 가능일 때만 `entryTime`, `endTime`, `slackMinutes`.
   - `basis`는 모든 결과에 들어갑니다. `venue.basis`가 없으면 `'venue'`입니다.
+
+### resolveSchedule, judgeResolved (`resolveSchedule.ts`)
+
+```ts
+export function resolveSchedule(
+  venue: Venue | null,
+  hours: ParsedOperatingHours | undefined, // 보통 exhibition.operatingHours
+  options = { useExhibitionHours: false },
+): { venue: ResolvedVenue | null; basis: 'venue' | 'exhibition' | 'merged' | null; mismatches: Mismatch[] };
+
+export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: ResolveResult): JudgeResult;
+```
+
+```ts
+const resolved = resolveSchedule(venue ?? null, ex.operatingHours, { useExhibitionHours: true });
+const result = judgeResolved({ exhibition: ex, date, stayStart, stayEnd, holidays }, resolved);
+// resolved.venue가 null이면 { result: 'unknown', reasons: [MISSING_VENUE] }
+```
+
+- 전시 쪽은 "믿을 수 있는 요일"만 씁니다: `scheduleType`이 `'scheduled'`이고, 그 요일이 `isOpen: true`, 구간이 정확히 하나, `open < close`. 나머지 요일은 "모름"입니다(`isOpen: false`도 "모름").
+- 결과
+  - 시설만 있음, 플래그 off, 또는 믿을 요일 없음: 시설 그대로, `basis: 'venue'`.
+  - 시설 없음 + 플래그 on: 믿을 요일만 `hours`로, `lastAdmission`(폐관 이하)을 `lastEntryByDay`로. `closed`는 넣지 않습니다. `basis: 'exhibition'`.
+  - 둘 다 + 플래그 on: 휴관 규칙은 시설 것. 요일별로 겹치는 시간(늦은 개관 ~ 이른 폐관), 겹치지 않으면 그 요일은 뺌, 전시가 "모름"이면 시설 시간. 시설에 없는 요일은 넣지 않습니다. `lastEntryByDay = min(시설 lastEntry, 전시 lastAdmission, 그날 폐관)`. `basis: 'merged'`.
+  - 그 밖: `venue: null`, `basis: null`.
+- `mismatches`: 시설과 전시가 둘 다 있으면 플래그와 상관없이 계산합니다(시설 데이터 점검용). `{ weekday, kind: 'closed' | 'open' | 'close' | 'lastEntry', venueValue, exhibitionValue }`.
+- 입력 `venue`, `hours`는 바꾸지 않습니다.
+- 시설 없이 만든 `venue`(`basis: 'exhibition'`)는 판정용입니다. `id`, `name`, 좌표 등은 빈 값이라 화면에 쓰지 않습니다.
 
 ### isOpen (`isOpen.ts`)
 
@@ -358,7 +388,7 @@ export function findStartCandidates(
 
 - `holidays`는 호출하는 쪽에서 `data/holidays/holidays.json`을 읽어 넘깁니다. 엔진은 파일을 읽지 않습니다.
 - 좌표는 `Number.isFinite`로 확인한 뒤 씁니다. `auto.json`에 `lat: null`이 있습니다.
-- `lastEntry`는 시설 전체에 하나입니다. 요일별로 다르게 둘 수 없습니다.
+- 시설 JSON의 `lastEntry`는 시설 전체에 하나입니다. 요일별 입장 마감(`lastEntryByDay`)은 `resolveSchedule`이 만듭니다.
 - 작성 규칙은 팀 Notion의 'JSON 데이터 작성 가이드'를 참고합니다.
 
 ## 7. 사유 문구 (`REASONS`)
@@ -385,7 +415,8 @@ export function findStartCandidates(
 - 휴관 요일은 하나만 지정할 수 있습니다(`closed.weekday`).
 - 연휴가 이어질 때 대체 휴관 처리가 단순합니다. 전날 하루만 봅니다. 실제 시설 규칙 확인이 필요합니다.
 - 자정을 넘는 운영과 `24:00`은 지원하지 않습니다.
-- 전시별 운영 시간(`hoursText`)은 무시합니다. 전시가 시설보다 일찍 닫아도 반영되지 않습니다.
+- `resolveSchedule`의 `useExhibitionHours`가 꺼져 있으면(기본값) 전시 운영 시간을 판정에 쓰지 않습니다.
+  켜면 믿을 수 있는 요일만 씁니다(4장 참고). 해석기가 '모름'과 '휴관'을 구분하게 되면 켤 예정입니다.
 - `stats`의 `medianMinutes`는 아직 판정의 관람 시간(`visitMinutes`)과 연결되지 않았습니다.
 - TypeScript 6부터 `strict`가 기본으로 켜집니다(`tsconfig`에 따로 적지 않음). 선택 필드(`lastEntry`, `hours` 등)는 `undefined`인지 확인해야 컴파일됩니다.
 

@@ -244,3 +244,34 @@ describe('judge 사유 문구', () => {
     expect(result.reasons).toEqual([REASONS.CLOSED_HOLIDAY]);
   });
 });
+
+describe('judge 지정 휴관일(closed.dates)', () => {
+  const EVERYDAY = { open: '10:00', close: '18:00' };
+  const ALL_DAYS = { mon: EVERYDAY, tue: EVERYDAY, wed: EVERYDAY, thu: EVERYDAY, fri: EVERYDAY, sat: EVERYDAY, sun: EVERYDAY };
+  // 전시 기간은 테스트 날짜를 모두 덮는다
+  const LONG_EXHIBITION = { start: '2026-11-01', end: '2027-12-31' };
+
+  it("'MM-DD'(01-01)는 매년 휴관 -> 2027-01-01 impossible, CLOSED_DATE", () => {
+    const result = judge(
+      makeInput({
+        venue: { hours: ALL_DAYS, closed: { dates: ['01-01'] } },
+        exhibition: LONG_EXHIBITION,
+        date: '2027-01-01',
+      }),
+    );
+    expect(result.result).toBe('impossible');
+    expect(result.reasons).toContain(REASONS.CLOSED_DATE);
+  });
+
+  it("'YYYY-MM-DD'(2026-12-01)는 그해만 휴관 -> 2027-12-01은 CLOSED_DATE로 막히지 않음", () => {
+    const venue = { hours: ALL_DAYS, closed: { dates: ['2026-12-01'] } };
+
+    const thisYear = judge(makeInput({ venue, exhibition: LONG_EXHIBITION, date: '2026-12-01' }));
+    expect(thisYear.result).toBe('impossible');
+    expect(thisYear.reasons).toContain(REASONS.CLOSED_DATE);
+
+    const nextYear = judge(makeInput({ venue, exhibition: LONG_EXHIBITION, date: '2027-12-01' }));
+    expect(nextYear.reasons).not.toContain(REASONS.CLOSED_DATE);
+    expect(nextYear.result).toBe('possible');
+  });
+});

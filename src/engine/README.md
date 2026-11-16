@@ -396,7 +396,7 @@ export function findStartCandidates(
 | 키 | 문구 | 쓰이는 곳 |
 | --- | --- | --- |
 | `OUT_OF_PERIOD` | 전시 기간이 아닙니다 | 전시 기간 밖 |
-| `CLOSED_DATE` | 임시 휴관일입니다 | 지정 휴관일 |
+| `CLOSED_DATE` | 휴관일로 지정된 날입니다 | 지정 휴관일 |
 | `CLOSED_WEEKDAY(weekdayLabel)` | `{요일}요일 휴관입니다` | 정기 휴관 요일 |
 | `CLOSED_HOLIDAY` | 공휴일 다음 날이라 휴관입니다 | 공휴일 다음 날 대체 휴관 |
 | `AFTER_LAST_ENTRY(lastEntry)` | `입장 마감({lastEntry}) 이후입니다` | `s > le` (`le`는 5장 참고) |

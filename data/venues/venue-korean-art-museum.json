@@ -6,8 +6,8 @@
   ],
   "gu": "종로구",
   "type": "미술관",
-  "lat": 37.5755,
-  "lng": 126.9785,
+  "lat": 37.571813,
+  "lng": 126.987188,
   "representative": false,
   "hours": {
     "tue": { "open": "10:00", "close": "18:00" },

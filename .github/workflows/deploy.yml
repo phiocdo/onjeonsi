@@ -1,44 +1,121 @@
 name: Deploy to GitHub Pages
 
+# 수집과 배포를 한 워크플로에서 한다.
+# 봇은 main에 커밋하지 않는다(GH006: main은 보호 브랜치라 봇의 push가 거부된다).
+# 저장소의 data/는 자동 갱신되지 않으며 사람이 PR로 갱신한다.
+# 매일 새로 받은 데이터는 이 실행의 빌드에만 쓰이고, 결과는 collected-data 아티팩트로 남는다.
 on:
   push:
-    branches: [main] # 사람이 푸시 했을 때 워크플로 동작
+    branches: [main] # 사람이 main에 머지했을 때
+  schedule:
+    # UTC 기준이라 20:00 UTC = 다음 날 05:00 KST
+    - cron: '0 20 * * *'
   workflow_dispatch:
-  workflow_run:
-    workflows: ['전시 데이터 수집'] # 수집 워크플로가 동작하고 끝나면 deploy.yml 동작
-    types: [completed]
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# 배포가 겹치지 않게 줄 세운다. 진행 중인 배포를 끊으면 Pages가 어중간한 상태로 남을 수 있다
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
-    # 수집이 실패하면 배포 X
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
+
+      # 수집이 실패해도 저장소에 있는 데이터로 배포는 계속한다.
+      # continue-on-error라서 실패 여부는 conclusion이 아니라 outcome으로 본다
+      - name: 전시 수집
+        id: fetch_exhibitions
+        continue-on-error: true
+        run: npx tsx scripts/fetch-exhibitions.ts
+        env:
+          SEOUL_DATA_API_KEY: ${{ secrets.SEOUL_DATA_API_KEY }}
+
+      - name: 공휴일 수집
+        id: fetch_holidays
+        continue-on-error: true
+        run: npx tsx scripts/fetch-holidays.ts
+        env:
+          HOLIDAY_API_KEY: ${{ secrets.HOLIDAY_API_KEY }}
+
+      # 수집 스크립트는 모두 받은 뒤에만 파일을 쓰지만, 쓰는 도중에 죽는 경우까지
+      # 막으려고 실패한 쪽 파일은 저장소 값으로 되돌린다
+      - name: 수집 실패 처리
+        if: steps.fetch_exhibitions.outcome == 'failure' || steps.fetch_holidays.outcome == 'failure'
+        run: |
+          if [ "${{ steps.fetch_exhibitions.outcome }}" = "failure" ]; then
+            echo "::warning::전시 수집 실패 - 저장소의 data/exhibitions/auto.json으로 배포합니다."
+            git checkout -- data/exhibitions/auto.json
+          fi
+          if [ "${{ steps.fetch_holidays.outcome }}" = "failure" ]; then
+            echo "::warning::공휴일 수집 실패 - 저장소의 data/holidays/holidays.json으로 배포합니다."
+            git checkout -- data/holidays/holidays.json
+          fi
+
+      # 새 데이터가 스키마에 어긋나면 저장소 값으로 되돌려 다시 검사한다.
+      # 저장소 값마저 어긋나면 사람이 고쳐야 하므로 job을 실패시켜 배포하지 않는다
+      - name: 데이터 검사
+        run: |
+          if ! npx tsx scripts/validate-data.ts; then
+            echo "::warning::수집한 데이터가 스키마에 어긋나 저장소의 data/로 되돌립니다."
+            git checkout -- data/
+            npx tsx scripts/validate-data.ts
+          fi
+
+      # 전시 스키마는 빈 배열을 허용하고, 수집 스크립트도 걸러진 전시가 0건이면 []를 그대로 쓴다.
+      # 빈 목록으로 사이트가 비는 것보다 어제 데이터가 낫다
+      - name: 전시 0건 검사
+        run: |
+          count=$(node -e "console.log(JSON.parse(require('fs').readFileSync('data/exhibitions/auto.json','utf8')).length)")
+          if [ "$count" = "0" ]; then
+            echo "::warning::수집한 전시가 0건이라 저장소의 data/exhibitions/auto.json으로 되돌립니다."
+            git checkout -- data/exhibitions/auto.json
+          fi
+
+      # 봇이 커밋하지 않으므로, 이번 배포에 무엇이 쓰였는지는 요약과 아티팩트로 남긴다
+      - name: 요약
+        env:
+          EXHIBITIONS_OUTCOME: ${{ steps.fetch_exhibitions.outcome }}
+          HOLIDAYS_OUTCOME: ${{ steps.fetch_holidays.outcome }}
+        run: |
+          ex=$(node -e "console.log(JSON.parse(require('fs').readFileSync('data/exhibitions/auto.json','utf8')).length)")
+          ho=$(node -e "console.log(JSON.parse(require('fs').readFileSync('data/holidays/holidays.json','utf8')).length)")
+          {
+            echo "## 데이터 수집 결과"
+            echo ""
+            echo "| 항목 | 수집 결과 | 배포에 쓴 건수 |"
+            echo "| --- | --- | --- |"
+            echo "| 전시 | $EXHIBITIONS_OUTCOME | $ex |"
+            echo "| 공휴일 | $HOLIDAYS_OUTCOME | $ho |"
+            echo ""
+            echo "저장소의 data/는 자동 갱신되지 않습니다. 갱신하려면 collected-data 아티팩트를 받아 PR로 올립니다."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 사람이 data/를 PR로 갱신할 때 이 파일을 받아 쓴다
+      - uses: actions/upload-artifact@v6
+        with:
+          name: collected-data
+          path: data/
+          retention-days: 7
 
       - run: npm run build
         env:
           VITE_KAKAO_MAP_KEY: ${{ secrets.VITE_KAKAO_MAP_KEY }}
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 

@@ -7,8 +7,8 @@
   ],
   "gu": "종로구",
   "type": "미술관",
-  "lat": 37.5745,
-  "lng": 126.9778,
+  "lat": 37.5788,
+  "lng": 126.9804,
   "representative": true,
   "hours": {
     "mon": { "open": "10:00", "close": "18:00" },
@@ -21,7 +21,7 @@
   "closed": {
     "weekday": "wed"
   },
-  "lastEntry": "20:00",
+  "lastEntry": "17:00",
   "visitMinutes": 90,
   "source": "국립현대미술관 공식 홈페이지",
   "verified": "2026-11-09"

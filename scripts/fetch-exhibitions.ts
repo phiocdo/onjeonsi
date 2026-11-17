@@ -124,7 +124,7 @@ async function fetchExhibitions() {
     const total: number = head.culturalEventInfo?.list_total_count ?? 0;
     if (!total) {
       console.error('❌ 전체 건수를 읽지 못했습니다:', JSON.stringify(head).slice(0, 200));
-      // 종료 코드가 0이면 워크플로가 실패를 알아채지 못하고 커밋 단계로 넘어간다.
+      // 종료 코드가 0이면 워크플로가 실패를 알아채지 못하고 예전 데이터를 새 데이터로 여긴다.
       // process.exit()은 비동기 작업이 정리되는 중에 부르면 libuv 어서션으로 죽는다
       process.exitCode = 1;
       return;
@@ -243,7 +243,7 @@ async function fetchExhibitions() {
   } catch (error) {
     console.error('❌ 스크립트 실행 중 에러 발생:', error);
     // 에러를 로그만 찍고 0으로 끝내면, 수집이 조용히 건너뛰어진 채
-    // 예전 파일이 검사를 통과하고 "변경 없음"으로 커밋 단계가 끝난다
+    // 예전 파일이 검사를 통과해 수집이 성공한 것처럼 보인다
     process.exitCode = 1;
   }
 }

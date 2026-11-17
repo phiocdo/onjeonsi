@@ -197,6 +197,66 @@ describe('parseHours — 회차가 여러 개인 경우', () => {
     expect(parseHours(t, 2026).weekdays.sat.intervals).toHaveLength(1);
   });
 
+  it('회차로 적힌 요일에는 note 를 붙인다', () => {
+    expect(parseHours('1회차14:00-15:20 / 2회차16:00-17:20', 2026).weekdays.mon.note).toBe('회차 운영');
+    expect(parseHours('1회차 14:00~15:20', 2026).weekdays.mon.note).toBe('회차 운영');
+    expect(parseHours('오전반(10:30~12:00), 오후반(13:30~15:00)', 2026).weekdays.mon.note).toBe('회차 운영');
+    expect(parseHours('1부: 10:00~12:00 / 2부: 14:00~16:00', 2026).weekdays.mon.note).toBe('회차 운영');
+  });
+
+  it('격주 회차는 그 요일에만 note 를 붙인다', () => {
+    const r = parseHours('1, 3째주 토 1회차(3,4학년) 13:30-15:00 2회차(5,6학년) 15:30-17:00', 2026);
+    expect(r.weekdays.sat.note).toBe('회차 운영');
+    expect(r.weekdays.mon.note).toBeUndefined();
+  });
+
+  it('회차 표시가 없으면 구간이 여럿이어도 note 를 붙이지 않는다', () => {
+    expect(parseHours('수요일·목요일 10:00~12:00 / 14:00~16:00', 2026).weekdays.wed.note).toBeUndefined();
+    expect(parseHours('10:00~18:00 (※ 12~13시 휴관)', 2026).weekdays.mon.note).toBeUndefined();
+    expect(parseHours('주말부 10:00~18:00', 2026).weekdays.mon.note).toBeUndefined();
+  });
+
+  it('상시 관람과 회차가 섞인 요일에는 note 를 붙이지 않는다', () => {
+    const r = parseHours('화-일 10:00~18:00 / 토 1회차 14:00~15:00 2회차 16:00~17:00', 2026);
+    expect(r.weekdays.sat.note).toBeUndefined();
+  });
+
+  it('회차 요일에는 sessions 를 붙여 판정이 note 문자열을 보지 않게 한다', () => {
+    const r = parseHours('1회차 14:00~15:20 / 2회차 16:00~17:20', 2026);
+    expect(r.weekdays.mon.sessions).toBe(true);
+    expect(parseHours('10:00~18:00', 2026).weekdays.mon.sessions).toBeUndefined();
+    expect(parseHours('화-일 10:00~18:00 / 토 1회차 14:00~15:00', 2026).weekdays.sat.sessions)
+      .toBeUndefined();
+  });
+
+  it('번호 없이 회차·타임이 들어간 말은 회차로 보지 않는다', () => {
+    // "타임스퀘어" 같은 장소 이름을 회차로 보면 상시 관람 전시가 판정에서 빠진다
+    for (const t of ['타임스퀘어 10:00~22:00', '회차별 상이 10:00~18:00', '라이프타임 10:00~18:00']) {
+      const mon = parseHours(t, 2026).weekdays.mon;
+      expect(mon.sessions, t).toBeUndefined();
+      expect(mon.note, t).toBeUndefined();
+    }
+    expect(parseHours('A타임 10:00~11:00 / B타임 14:00~15:00', 2026).weekdays.mon.sessions).toBe(true);
+    expect(parseHours('1타임 10:00~11:00', 2026).weekdays.mon.sessions).toBe(true);
+  });
+
+  it('번호 없는 "타임"은 앞 구간의 요일을 물려받지 않는다', () => {
+    const t = '토 10:00~12:00 타임스퀘어 14:00~16:00';
+    expect(parseHours(t, 2026).weekdays.sat.intervals).toEqual([{ open: '10:00', close: '12:00' }]);
+    // 번호가 있으면 같은 요일의 다음 회차다
+    expect(parseHours('토 A타임 10:00~12:00 B타임 14:00~16:00', 2026).weekdays.sat.intervals).toHaveLength(2);
+  });
+
+  it('회차 요일에는 연장 운영을 적용하지 않는다', () => {
+    // 마지막 회차를 21:00 까지 늘리면 없는 회차를 만들게 된다
+    const r = parseHours('1회차 10:00~12:00 / 2회차 14:00~16:00 ※ 금요일은 21:00까지', 2026);
+    expect(r.weekdays.fri.intervals).toEqual([
+      { open: '10:00', close: '12:00' },
+      { open: '14:00', close: '16:00' },
+    ]);
+    expect(r.weekdays.fri.note).toBe('회차 운영');
+  });
+
   it('요일이 지정된 구간은 지정 없는 구간을 덮어쓴다', () => {
     const r = parseHours('10:00~18:00 / 토 12:00~18:00', 2026);
     expect(span('10:00~18:00 / 토 12:00~18:00', 'mon')).toBe('10:00-18:00');
@@ -238,6 +298,25 @@ describe('parseHours — 연장 운영', () => {
     expect(span(t, 'wed')).toBe('10:00-21:00');
     expect(span(t, 'fri')).toBe('10:00-21:00');
     expect(span(t, 'thu')).toBe('10:00-18:00');
+  });
+
+  it('기본 시간이 없으면 여는 시각을 몰라 unknown 으로 둔다', () => {
+    // 추측해서 열어 두면 잘못된 "가능"이 나온다
+    for (const t of [
+      '금 21:00까지',
+      '금요일 21:00까지 연장 운영',
+      '매주 금요일은 21:00까지',
+      '화,수,금 21:00까지',
+      '9.15.(화)부터 화,수,금,토,일 21:00까지',
+    ]) {
+      const r = parseHours(t, 2026);
+      expect(r.scheduleType, t).toBe('unknown');
+      expect(r.weekdays.fri.isOpen, t).toBe(false);
+    }
+  });
+
+  it('연장 운영에는 note 를 붙인다', () => {
+    expect(parseHours('10:00~18:00 ※ 화,수,금 21:00까지', 2026).weekdays.fri.note).toBe('연장 운영');
   });
 
   it('"금요일"의 일을 일요일로 세지 않는다', () => {

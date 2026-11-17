@@ -1,5 +1,35 @@
 [
   {
+    "id": "auto-seoul-160108",
+    "venueId": "",
+    "title": "기미르 개인전 [변온 비늘 근처] 한반도 토종&해양 파충류 세밀화",
+    "start": "2026-12-21",
+    "end": "2026-12-29",
+    "field": "전시/미술",
+    "placeName": "갤러리 딜라이트 1층",
+    "hoursText": "12:00~20:00",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":true,"intervals":[{"open":"12:00","close":"20:00"}]},
+        "tue": {"isOpen":true,"intervals":[{"open":"12:00","close":"20:00"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"12:00","close":"20:00"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"12:00","close":"20:00"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"12:00","close":"20:00"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"12:00","close":"20:00"}]},
+        "sun": {"isOpen":true,"intervals":[{"open":"12:00","close":"20:00"}]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://m.blog.naver.com/mir_gallery/224448254555",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=add819e95c874a0ea517f2d016c61e49&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160108&menuNo=200009",
+    "lat": 37.5946214747676,
+    "lng": 126.964724177276,
+    "fetchedAt": "2026-11-17T14:57:12.636Z"
+  },
+  {
     "id": "auto-seoul-160056",
     "venueId": "",
     "title": "2026 제11회 서화·공예 명장대전",
@@ -27,7 +57,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160056&menuNo=200009",
     "lat": null,
     "lng": 126.987230558854,
-    "fetchedAt": "2026-11-16T11:25:55.020Z"
+    "fetchedAt": "2026-11-17T14:57:12.637Z"
   },
   {
     "id": "auto-seoul-160190",
@@ -57,7 +87,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160190&menuNo=200008",
     "lat": 37.566370776634,
     "lng": 126.977918351844,
-    "fetchedAt": "2026-11-16T11:25:55.021Z"
+    "fetchedAt": "2026-11-17T14:57:12.637Z"
   },
   {
     "id": "auto-seoul-158731",
@@ -87,7 +117,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=158731&menuNo=200009",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-16T11:25:55.021Z"
+    "fetchedAt": "2026-11-17T14:57:12.637Z"
   },
   {
     "id": "auto-seoul-160179",
@@ -117,7 +147,37 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160179&menuNo=200009",
     "lat": 37.5560581817344,
     "lng": 126.972115894161,
-    "fetchedAt": "2026-11-16T11:25:55.021Z"
+    "fetchedAt": "2026-11-17T14:57:12.637Z"
+  },
+  {
+    "id": "auto-seoul-160231",
+    "venueId": "",
+    "title": "[서울역사박물관] 제7회 서울역사박물관 배리어프리영화관 [넘버원]",
+    "start": "2026-11-26",
+    "end": "2026-11-26",
+    "field": "영화",
+    "placeName": "서울역사박물관 1층 강당(야주개홀)",
+    "hoursText": "14:00",
+    "operatingHours": {
+      "scheduleType": "unknown",
+      "weekdays": {
+        "mon": {"isOpen":false,"intervals":[]},
+        "tue": {"isOpen":false,"intervals":[]},
+        "wed": {"isOpen":false,"intervals":[]},
+        "thu": {"isOpen":false,"intervals":[]},
+        "fri": {"isOpen":false,"intervals":[]},
+        "sat": {"isOpen":false,"intervals":[]},
+        "sun": {"isOpen":false,"intervals":[]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://museum.seoul.go.kr/www/board/NR_boardView.do?actionMethod=&sortName=&searchVal=&actionUri=&bbsCd=1018&endDt=&searchKey=TITLE___1002&sso=ok&regPwd=N&pageType=&sortOrder=&startDt=&rssYn=&currentPage=&seq=20261030104203021&ctgCd=&showSummaryYn=N",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=14a276a985c7466a917af7ec51593699&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160231&menuNo=200013",
+    "lat": 37.570507525011855,
+    "lng": 126.97052372473162,
+    "fetchedAt": "2026-11-17T14:57:12.637Z"
   },
   {
     "id": "auto-seoul-160189",
@@ -147,7 +207,67 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160189&menuNo=200008",
     "lat": 37.566370776634,
     "lng": 126.977918351844,
-    "fetchedAt": "2026-11-16T11:25:55.021Z"
+    "fetchedAt": "2026-11-17T14:57:12.638Z"
+  },
+  {
+    "id": "auto-seoul-160232",
+    "venueId": "",
+    "title": "[서울우리소리박물관] 기획전시 [다시, 아리랑] 연계 프로그램 - 듣고, 노래하고, 녹음하다",
+    "start": "2026-11-22",
+    "end": "2026-11-22",
+    "field": "교육/체험",
+    "placeName": "서울우리소리박물관 누마루",
+    "hoursText": "14:00",
+    "operatingHours": {
+      "scheduleType": "unknown",
+      "weekdays": {
+        "mon": {"isOpen":false,"intervals":[]},
+        "tue": {"isOpen":false,"intervals":[]},
+        "wed": {"isOpen":false,"intervals":[]},
+        "thu": {"isOpen":false,"intervals":[]},
+        "fri": {"isOpen":false,"intervals":[]},
+        "sat": {"isOpen":false,"intervals":[]},
+        "sun": {"isOpen":false,"intervals":[]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://museum.seoul.go.kr/sekm/front/edu/programView.do?currentPage=1&search_query=&e_id=144&locale=KO&typ=",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=ad75ce0829db47af853c8326baeb70cb&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160232&menuNo=200011",
+    "lat": 37.577157928122,
+    "lng": 126.989622047178,
+    "fetchedAt": "2026-11-17T14:57:12.638Z"
+  },
+  {
+    "id": "auto-seoul-160233",
+    "venueId": "",
+    "title": "[서울우리소리박물관] 2026 개관기념일 문화행사 [내일의 소리를 찾아서]",
+    "start": "2026-11-21",
+    "end": "2026-11-21",
+    "field": "국악",
+    "placeName": "서울우리소리박물관 / 서울돈화문국악당",
+    "hoursText": "11:00~12:00",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":true,"intervals":[{"open":"11:00","close":"12:00"}]},
+        "tue": {"isOpen":true,"intervals":[{"open":"11:00","close":"12:00"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"11:00","close":"12:00"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"11:00","close":"12:00"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"11:00","close":"12:00"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"11:00","close":"12:00"}]},
+        "sun": {"isOpen":true,"intervals":[{"open":"11:00","close":"12:00"}]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://museum.seoul.go.kr/sekm/front/edu/programView.do?currentPage=1&search_query=&e_id=145&locale=KO&typ=",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=347b2e893b814659acfb59fb4e6cc00f&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160233&menuNo=200008",
+    "lat": 37.5772502822,
+    "lng": 126.9907306641,
+    "fetchedAt": "2026-11-17T14:57:12.638Z"
   },
   {
     "id": "auto-seoul-160188",
@@ -177,7 +297,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160188&menuNo=200008",
     "lat": 37.566370776634,
     "lng": 126.977918351844,
-    "fetchedAt": "2026-11-16T11:25:55.021Z"
+    "fetchedAt": "2026-11-17T14:57:12.638Z"
   },
   {
     "id": "auto-seoul-160197",
@@ -207,7 +327,67 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160197&menuNo=200009",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.639Z"
+  },
+  {
+    "id": "auto-seoul-160230",
+    "venueId": "",
+    "title": "[서울역사박물관] 2026 제12회 유럽영화제 - 과거의 기억, 미래의 비전",
+    "start": "2026-11-20",
+    "end": "2026-12-06",
+    "field": "영화",
+    "placeName": "서울역사박물관 야주개홀",
+    "hoursText": "개막식: 17:30 / 매주 금: 16:00, 19:00 / 매주 토,일: 13:00, 16:00, 19:00",
+    "operatingHours": {
+      "scheduleType": "unknown",
+      "weekdays": {
+        "mon": {"isOpen":false,"intervals":[]},
+        "tue": {"isOpen":false,"intervals":[]},
+        "wed": {"isOpen":false,"intervals":[]},
+        "thu": {"isOpen":false,"intervals":[]},
+        "fri": {"isOpen":false,"intervals":[]},
+        "sat": {"isOpen":false,"intervals":[]},
+        "sun": {"isOpen":false,"intervals":[]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://museum.seoul.go.kr/www/board/NR_boardView.do?actionMethod=&sortName=&searchVal=&actionUri=&bbsCd=1018&endDt=&searchKey=TITLE___1002&sso=ok&regPwd=N&pageType=&sortOrder=&startDt=&rssYn=&currentPage=&seq=20261103105242973&ctgCd=&showSummaryYn=N",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=afd90fe492be4efbad268a911cab2a0b&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160230&menuNo=200013",
+    "lat": 37.570507525011855,
+    "lng": 126.97052372473162,
+    "fetchedAt": "2026-11-17T14:57:12.639Z"
+  },
+  {
+    "id": "auto-seoul-160209",
+    "venueId": "",
+    "title": "[운현궁] 2026 하우스뮤지엄 [월동의 규방-160년의 시간을 이은 위로] 홍준희 개인전",
+    "start": "2026-11-18",
+    "end": "2026-11-22",
+    "field": "전시/미술",
+    "placeName": "운현궁 노락당",
+    "hoursText": "10:00~17:00",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":true,"intervals":[{"open":"10:00","close":"17:00"}]},
+        "tue": {"isOpen":true,"intervals":[{"open":"10:00","close":"17:00"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"10:00","close":"17:00"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"10:00","close":"17:00"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"10:00","close":"17:00"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"10:00","close":"17:00"}]},
+        "sun": {"isOpen":true,"intervals":[{"open":"10:00","close":"17:00"}]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://www.unhyeongung.or.kr/sub/prpgram/exhibition_list.php?abmode=view&no=2024&group=basic&code=B35",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=19e0c91c98dd4514ac047e60bed46995&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160209&menuNo=200009",
+    "lat": 37.57607864675475,
+    "lng": 126.98708335796199,
+    "fetchedAt": "2026-11-17T14:57:12.639Z"
   },
   {
     "id": "auto-seoul-160187",
@@ -237,7 +417,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160187&menuNo=200008",
     "lat": 37.566370776634,
     "lng": 126.977918351844,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.639Z"
   },
   {
     "id": "auto-seoul-160152",
@@ -267,7 +447,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160152&menuNo=200009",
     "lat": 37.5707849313822,
     "lng": 126.986198735519,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.640Z"
   },
   {
     "id": "auto-seoul-160147",
@@ -302,7 +482,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160147&menuNo=200009",
     "lat": 37.559304933707146,
     "lng": 126.994440072131,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.640Z"
   },
   {
     "id": "auto-seoul-160208",
@@ -332,7 +512,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160208&menuNo=200009",
     "lat": 37.57607864675475,
     "lng": 126.98708335796199,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.640Z"
   },
   {
     "id": "auto-seoul-159959",
@@ -362,7 +542,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159959&menuNo=200013",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.640Z"
   },
   {
     "id": "auto-seoul-160193",
@@ -392,7 +572,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160193&menuNo=200009",
     "lat": 37.5825613346848,
     "lng": 126.980738496133,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160185",
@@ -422,7 +602,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160185&menuNo=200009",
     "lat": 37.5623817630809,
     "lng": 126.991642957434,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160142",
@@ -452,7 +632,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160142&menuNo=200009",
     "lat": 37.60603328383823,
     "lng": 126.96904312496109,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160136",
@@ -482,7 +662,37 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160136&menuNo=200009",
     "lat": 37.5833833879584,
     "lng": 126.982999426985,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
+  },
+  {
+    "id": "auto-seoul-160223",
+    "venueId": "",
+    "title": "전만성 개인전 [정지와 흐름의 공존]",
+    "start": "2026-11-11",
+    "end": "2026-11-22",
+    "field": "전시/미술",
+    "placeName": "CN갤러리",
+    "hoursText": "화-일요일 10:00~18:00",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": {"isOpen":false,"intervals":[]},
+        "tue": {"isOpen":true,"intervals":[{"open":"10:00","close":"18:00"}]},
+        "wed": {"isOpen":true,"intervals":[{"open":"10:00","close":"18:00"}]},
+        "thu": {"isOpen":true,"intervals":[{"open":"10:00","close":"18:00"}]},
+        "fri": {"isOpen":true,"intervals":[{"open":"10:00","close":"18:00"}]},
+        "sat": {"isOpen":true,"intervals":[{"open":"10:00","close":"18:00"}]},
+        "sun": {"isOpen":true,"intervals":[{"open":"10:00","close":"18:00"}]}
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://archivist.kr/exi?m=gov&i=1794436745",
+    "imageUrl": "https://culture.seoul.go.kr/cmmn/file/getImage.do?atchFileId=a6756e9d83f94306b69d951b613e09f0&thumb=Y",
+    "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160223&menuNo=200009",
+    "lat": 37.58003784134938,
+    "lng": 126.98194008394555,
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160094",
@@ -512,7 +722,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160094&menuNo=200009",
     "lat": 37.5772195722771,
     "lng": 127.009089447244,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160075",
@@ -526,13 +736,13 @@
     "operatingHours": {
       "scheduleType": "scheduled",
       "weekdays": {
-        "mon": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}]},
-        "tue": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}]},
-        "wed": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}]},
-        "thu": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}]},
-        "fri": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}]},
-        "sat": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}]},
-        "sun": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}]}
+        "mon": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}],"sessions":true,"note":"회차 운영"},
+        "tue": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}],"sessions":true,"note":"회차 운영"},
+        "wed": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}],"sessions":true,"note":"회차 운영"},
+        "thu": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}],"sessions":true,"note":"회차 운영"},
+        "fri": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}],"sessions":true,"note":"회차 운영"},
+        "sat": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}],"sessions":true,"note":"회차 운영"},
+        "sun": {"isOpen":true,"intervals":[{"open":"14:00","close":"15:30"}],"sessions":true,"note":"회차 운영"}
       },
       "holiday": null,
       "exceptions": []
@@ -542,7 +752,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160075&menuNo=200011",
     "lat": 37.5641060692766,
     "lng": 126.973699316136,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160085",
@@ -572,7 +782,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160085&menuNo=200009",
     "lat": 37.5766481740232,
     "lng": 126.983533363501,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160113",
@@ -602,7 +812,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160113&menuNo=200009",
     "lat": 37.57098891966223,
     "lng": 126.97791812044534,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160097",
@@ -632,7 +842,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160097&menuNo=200009",
     "lat": 37.559304933707146,
     "lng": 126.994440072131,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160059",
@@ -662,7 +872,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160059&menuNo=200010",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160002",
@@ -692,7 +902,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160002&menuNo=200011",
     "lat": 37.5730423068152,
     "lng": 126.963476480113,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-159756",
@@ -722,7 +932,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159756&menuNo=200009",
     "lat": 37.5641060692766,
     "lng": 126.973699316136,
-    "fetchedAt": "2026-11-16T11:25:55.022Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-160081",
@@ -752,7 +962,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=160081&menuNo=200009",
     "lat": 37.5766481740232,
     "lng": 126.983533363501,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.641Z"
   },
   {
     "id": "auto-seoul-159218",
@@ -796,7 +1006,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159218&menuNo=200009",
     "lat": 37.5766481740232,
     "lng": 126.983533363501,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-159624",
@@ -826,7 +1036,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159624&menuNo=200009",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-159276",
@@ -856,7 +1066,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159276&menuNo=200011",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-159582",
@@ -886,7 +1096,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159582&menuNo=200009",
     "lat": 37.57260128068914,
     "lng": 126.97577534746529,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-159460",
@@ -916,7 +1126,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=159460&menuNo=200009",
     "lat": 37.6078008399411,
     "lng": 126.97190179486,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-158657",
@@ -946,7 +1156,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=158657&menuNo=200009",
     "lat": 37.57189081127559,
     "lng": 126.98338815886143,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-158406",
@@ -976,7 +1186,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=158406&menuNo=200009",
     "lat": 37.577157928122,
     "lng": 126.989622047178,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-158419",
@@ -1006,7 +1216,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=158419&menuNo=200009",
     "lat": 37.582544875368,
     "lng": 126.973059283309,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-157807",
@@ -1036,7 +1246,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=157807&menuNo=200009",
     "lat": 37.5813191962491,
     "lng": 126.966818545949,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-157420",
@@ -1066,7 +1276,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=157420&menuNo=200009",
     "lat": 37.5766481740232,
     "lng": 126.983533363501,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-157284",
@@ -1096,7 +1306,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=157284&menuNo=200009",
     "lat": 37.5641060692766,
     "lng": 126.973699316136,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-156940",
@@ -1126,7 +1336,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=156940&menuNo=200011",
     "lat": 37.570507525011855,
     "lng": 126.97052372473162,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-156976",
@@ -1156,7 +1366,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=156976&menuNo=200011",
     "lat": 37.570507525011855,
     "lng": 126.97052372473162,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-156491",
@@ -1186,7 +1396,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=156491&menuNo=200009",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-158747",
@@ -1216,7 +1426,7 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=158747&menuNo=200011",
     "lat": 37.56735731522952,
     "lng": 127.00977973484339,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.642Z"
   },
   {
     "id": "auto-seoul-155699",
@@ -1246,6 +1456,6 @@
     "detailUrl": "https://culture.seoul.go.kr/culture/culture/cultureEvent/view.do?cultcode=155699&menuNo=200009",
     "lat": 37.5813191962491,
     "lng": 126.966818545949,
-    "fetchedAt": "2026-11-16T11:25:55.023Z"
+    "fetchedAt": "2026-11-17T14:57:12.643Z"
   }
 ]

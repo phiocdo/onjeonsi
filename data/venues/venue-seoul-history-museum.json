@@ -10,7 +10,6 @@
   "lng": 126.9705625,
   "representative": false,
   "hours": {
-    "mon": { "open": "09:00", "close": "18:00" },
     "tue": { "open": "09:00", "close": "21:00" },
     "wed": { "open": "09:00", "close": "18:00" },
     "thu": { "open": "09:00", "close": "21:00" },

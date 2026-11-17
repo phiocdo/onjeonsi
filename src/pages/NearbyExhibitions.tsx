@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import { useNavigate } from 'react-router-dom'
@@ -14,6 +14,7 @@ declare global {
   interface Window { kakao: any }
 }
 
+type Status = '가능' | '불가' | '확인 필요'
 type Judge = Pick<JudgeResult, 'result' | 'reasons'>
 type Entry = (typeof exhibitions)[number]
 type Item = { id: string; title: string; placeName: string; lat: number | null; lng: number | null; dist: number | null; in: boolean; judge: Judge }
@@ -22,23 +23,28 @@ type Spot = 'here' | 'home' | 'pick'
 const BASE: Coordinate = { lat: 37.5759, lng: 126.9768 }
 const RADII = [500, 1000, 2000]
 const ZOOM: Record<number, number> = { 500: 5, 1000: 6, 2000: 7 }
-const HINT = { color: '#ffffff' }
-const STATUS: Record<Judge['result'], string> = { possible: '가능', impossible: '불가', unknown: '확인 필요' }
+const HINT: CSSProperties = { color: '#ffffff' }
+const STATUS: Record<Judge['result'], Status> = { possible: '가능', impossible: '불가', unknown: '확인 필요' }
 const UNKNOWN: Judge = { result: 'unknown', reasons: ['휴관일·입장 마감 정보를 확인하지 못했습니다.'] }
 const DAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 const HOLIDAYS: string[] = Array.isArray(holidaysData) ? holidaysData : Array.isArray((holidaysData as any)?.holidays) ? (holidaysData as any).holidays.map((h: any) => (typeof h === 'string' ? h : h.date)) : []
 
-// 판정용 장소 객체 생성
-function VENUE(ex: Entry, today: string, day: Weekday): Venue {
-  const op = ex.operatingHours as ParsedOperatingHours | undefined
+// 현재 날짜와 시각 반환
+function NOW() {
+  const now = new Date()
+  return { date: now.toLocaleDateString('sv-SE'), time: now.toTimeString().slice(0, 5), day: DAYS[now.getDay()] }
+}
+
+// 운영 시간 및 휴관 정보 추출
+function HOURS(op: ParsedOperatingHours | undefined, today: string, day: Weekday) {
   const hours: Venue['hours'] = {}
   let lastEntry: string | undefined
   let closed: Venue['closed'] | undefined
-
   if (op?.scheduleType === 'always_open') {
     DAYS.forEach((d) => { hours[d] = { open: '00:00', close: '23:59' } })
-    lastEntry = '23:59'
-  } else if (op?.scheduleType === 'scheduled') {
+    return { hours, lastEntry: '23:59', closed }
+  }
+  if (op?.scheduleType === 'scheduled') {
     DAYS.forEach((d) => {
       const s = op.weekdays?.[d]
       if (s?.isOpen && s.intervals?.length) hours[d] = { open: s.intervals[0].open, close: s.intervals[s.intervals.length - 1].close }
@@ -55,11 +61,16 @@ function VENUE(ex: Entry, today: string, day: Weekday): Venue {
       }
     }
   }
-
-  return { id: ex.venueId || ex.id, name: ex.placeName ?? '장소 미상', aliases: [], gu: '종로구', type: '미술관', lat: ex.lat ?? 0, lng: ex.lng ?? 0, representative: false, hours: Object.keys(hours).length ? hours : undefined, closed, lastEntry, source: 'auto.json', verified: ex.fetchedAt ?? today }
+  return { hours: Object.keys(hours).length ? hours : undefined, lastEntry, closed }
 }
 
-// 전시 항목 변환 및 관람 가능 여부 판정
+// 판정용 장소 객체 생성
+function VENUE(ex: Entry, today: string, day: Weekday): Venue {
+  const { hours, lastEntry, closed } = HOURS(ex.operatingHours as ParsedOperatingHours | undefined, today, day)
+  return { id: ex.venueId || ex.id, name: ex.placeName ?? '장소 미상', aliases: [], gu: '종로구', type: '미술관', lat: ex.lat ?? 0, lng: ex.lng ?? 0, representative: false, hours, closed, lastEntry, source: 'auto.json', verified: ex.fetchedAt ?? today }
+}
+
+// 전시 항목 변환 및 관람 판정
 function ITEM(ex: Entry, dist: number | null, on: boolean, date: string, time: string, day: Weekday): Item {
   const placeName = ex.placeName ?? '장소 미상'
   if (!on) return { id: ex.id, title: ex.title, placeName, lat: ex.lat, lng: ex.lng, dist, in: false, judge: UNKNOWN }
@@ -85,19 +96,19 @@ function PIN(items: Item[]) {
   return best.judge.result
 }
 
-// 문자열 기반 고정 난수
+// 문자열 기반 고정 난수 생성
 function SEED(text: string, salt: number) {
   let h = salt
   for (const c of text) h = (h * 31 + c.charCodeAt(0)) % 9973
   return h / 9973
 }
 
-// 위치 없는 장소 배치
-function SCATTER(key: string) {
+// 위치 미상 장소 좌표 배치
+function SCATTER(key: string): CSSProperties {
   return { left: `${8 + SEED(key, 7) * 84}%`, top: `${16 + SEED(key, 13) * 76}%` }
 }
 
-// 법정동 조회
+// 좌표 기반 법정동 조회
 function DONG(pos: Coordinate, fallback: string, done: (name: string) => void) {
   const svc = window.kakao?.maps?.services
   if (!svc) { done(fallback); return }
@@ -107,17 +118,17 @@ function DONG(pos: Coordinate, fallback: string, done: (name: string) => void) {
   })
 }
 
-// 칩 선택 효과
-function LOOK(on: boolean) {
+// 선택 칩 스타일 반환
+function LOOK(on: boolean): CSSProperties {
   return on ? { backgroundColor: '#d8ff3e', color: '#111111', fontWeight: 800, boxShadow: '0 0 0 2px #111111', transform: 'translateY(-1px)' } : { backgroundColor: '#ffffff', color: '#111111' }
 }
 
-// 선택 가능 칩 버튼
+// 선택 가능 칩 버튼 렌더링
 function CHIP({ on, run, children }: { on: boolean; run: () => void; children: ReactNode }) {
   return <button type="button" className={on ? 'chip chosen' : 'chip'} style={LOOK(on)} aria-pressed={on} onClick={run}>{children}</button>
 }
 
-// 장소 말풍선 목록
+// 장소별 전시 말풍선 렌더링
 function INFO({ items, pick }: { items: Item[]; pick: (item: Item) => void }) {
   return (
     <div className="info-box">
@@ -130,6 +141,48 @@ function INFO({ items, pick }: { items: Item[]; pick: (item: Item) => void }) {
       ))}
     </div>
   )
+}
+
+// 지도 반경 및 전시 핀 렌더링
+function MARK(map: any, center: Coordinate, radius: number, spots: Item[][], go: (item: Item) => void) {
+  const layers: any[] = []
+  const pos = new window.kakao.maps.LatLng(center.lat, center.lng)
+  const dot = document.createElement('div')
+  dot.className = 'center-dot'
+
+  map.setCenter(pos)
+  map.setLevel(ZOOM[radius] ?? 6)
+  layers.push(new window.kakao.maps.Circle({ center: pos, radius, strokeWeight: 2, strokeColor: '#111111', strokeOpacity: 0.8, fillColor: '#d8ff3e', fillOpacity: 0.18, map }))
+  layers.push(new window.kakao.maps.CustomOverlay({ position: pos, content: dot, zIndex: 10, map }))
+
+  const info = new window.kakao.maps.InfoWindow({ removable: true })
+  const host = document.createElement('div')
+  const root = createRoot(host)
+  let openId: string | null = null
+
+  spots.forEach((items) => {
+    const state = PIN(items)
+    const position = new window.kakao.maps.LatLng(items[0].lat!, items[0].lng!)
+    const pin = document.createElement('div')
+    pin.className = `pin ${state}`
+    if (items.length > 1) pin.textContent = String(items.length)
+
+    layers.push(new window.kakao.maps.CustomOverlay({ position, content: pin, yAnchor: 0.5, clickable: true, zIndex: state === 'out' ? 2 : 5, map }))
+    ;['mousedown', 'touchstart'].forEach((t) => pin.addEventListener(t, (e) => e.stopPropagation()))
+
+    const spotId = items[0].id
+    pin.addEventListener('click', (e) => {
+      e.stopPropagation()
+      if (openId === spotId) { info.close(); openId = null; return }
+      flushSync(() => root.render(<INFO items={items} pick={go} />))
+      info.setContent(host)
+      info.setPosition(position)
+      info.open(map)
+      openId = spotId
+    })
+  })
+
+  return () => { info.close(); layers.forEach((o) => o.setMap(null)); setTimeout(() => root.unmount()) }
 }
 
 function NearbyExhibitions() {
@@ -151,15 +204,12 @@ function NearbyExhibitions() {
   const go = useCallback((item: Item) => navRef.current(`/overview/${item.id}`, { state: { judge: item.judge } }), [])
 
   const live = useMemo(() => {
-    const today = new Date().toLocaleDateString('sv-SE')
-    return exhibitions.filter((ex) => ex.start <= today && today <= ex.end)
+    const { date } = NOW()
+    return exhibitions.filter((ex) => ex.start <= date && date <= ex.end)
   }, [])
 
   const all = useMemo(() => {
-    const now = new Date()
-    const date = now.toLocaleDateString('sv-SE')
-    const time = now.toTimeString().slice(0, 5)
-    const day = DAYS[now.getDay()]
+    const { date, time, day } = NOW()
     const placed = live.filter((ex) => ex.lat != null && ex.lng != null)
     return sortByDistance(placed, center, (ex) => ({ lat: ex.lat!, lng: ex.lng! })).map((ex) => {
       const dist = calculateDistance(center, { lat: ex.lat!, lng: ex.lng! })
@@ -168,10 +218,7 @@ function NearbyExhibitions() {
   }, [live, center, radius])
 
   const lost = useMemo(() => {
-    const now = new Date()
-    const date = now.toLocaleDateString('sv-SE')
-    const time = now.toTimeString().slice(0, 5)
-    const day = DAYS[now.getDay()]
+    const { date, time, day } = NOW()
     return live.filter((ex) => ex.lat == null || ex.lng == null).map((ex) => ITEM(ex, null, true, date, time, day))
   }, [live])
 
@@ -181,20 +228,17 @@ function NearbyExhibitions() {
   const list = blind ? lost : near
 
   // 기준 좌표와 법정동 라벨 갱신
-  function MOVE(next: Coordinate, fallback: string, at: Spot) {
+  const MOVE = useCallback((next: Coordinate, fallback: string, at: Spot) => {
     setBlind(false)
     setSpot(at)
     setCenter(next)
     DONG(next, fallback, setLabel)
-  }
+  }, [])
 
   // 현재 위치 좌표 설정
   function LOCATE() {
     if (!navigator.geolocation) { alert('이 브라우저에서는 현재 위치를 쓸 수 없습니다.'); return }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => MOVE({ lat: pos.coords.latitude, lng: pos.coords.longitude }, '현재 위치', 'here'),
-      () => alert('위치 권한이 거부되었습니다.')
-    )
+    navigator.geolocation.getCurrentPosition((pos) => MOVE({ lat: pos.coords.latitude, lng: pos.coords.longitude }, '현재 위치', 'here'), () => alert('위치 권한이 거부되었습니다.'))
   }
 
   useEffect(() => {
@@ -206,47 +250,11 @@ function NearbyExhibitions() {
       mapRef.current = map
       setReady(true)
     })
-  }, [fail])
+  }, [fail, MOVE])
 
   useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-    const layers: any[] = []
-    const pos = new window.kakao.maps.LatLng(center.lat, center.lng)
-    map.setCenter(pos)
-    map.setLevel(ZOOM[radius] ?? 6)
-
-    layers.push(new window.kakao.maps.Circle({ center: pos, radius, strokeWeight: 2, strokeColor: '#111111', strokeOpacity: 0.8, fillColor: '#d8ff3e', fillOpacity: 0.18, map }))
-    layers.push(new window.kakao.maps.CustomOverlay({ position: pos, content: '<div class="center-dot"></div>', zIndex: 10, map }))
-
-    const info = new window.kakao.maps.InfoWindow({ removable: true })
-    const host = document.createElement('div')
-    const root = createRoot(host)
-    let openId: string | null = null
-
-    spots.forEach((items) => {
-      const state = PIN(items)
-      const position = new window.kakao.maps.LatLng(items[0].lat!, items[0].lng!)
-      const pin = document.createElement('div')
-      pin.className = `pin ${state}`
-      if (items.length > 1) pin.textContent = String(items.length)
-
-      layers.push(new window.kakao.maps.CustomOverlay({ position, content: pin, yAnchor: 0.5, clickable: true, zIndex: state === 'out' ? 2 : 5, map }))
-      ;['mousedown', 'touchstart'].forEach((t) => pin.addEventListener(t, (e) => e.stopPropagation()))
-
-      const spotId = items[0].id
-      pin.addEventListener('click', (e) => {
-        e.stopPropagation()
-        if (openId === spotId) { info.close(); openId = null; return }
-        flushSync(() => root.render(<INFO items={items} pick={go} />))
-        info.setContent(host)
-        info.setPosition(position)
-        info.open(map)
-        openId = spotId
-      })
-    })
-
-    return () => { info.close(); layers.forEach((o) => o.setMap(null)); setTimeout(() => root.unmount()) }
+    if (!mapRef.current) return
+    return MARK(mapRef.current, center, radius, spots, go)
   }, [ready, center, radius, spots, go])
 
   return (

@@ -84,6 +84,12 @@ function mergeSeasons(intervals: TimeInterval[], seasonIntervals: Set<TimeInterv
   return out;
 }
 
+// 구간 바로 뒤에 붙는 반복 회차 표시. "18:00 ~ 22:00, 매 정각마다", "10:00~17:00 매시 정각 입장"
+//   구간 안에서 정해진 시각에만 들어갈 수 있으므로 회차로 본다.
+//   "매 정각 도슨트" 처럼 해설 프로그램을 덧붙인 경우는 관람 자체가 회차인 것이 아니므로 뺀다
+const EVERY_SESSION =
+  /^[^/※]{0,6}(?:매\s*(?:시\s*)?정각|정시\s*마다|매시\s*(?:정각|00분)|매\s*\d{1,3}\s*분\s*(?:마다|간격))(?![^/※]{0,10}(?:도슨트|해설|투어|설명))/;
+
 // 구간 바로 앞에 붙는 회차 표시. "1회차", "2차시", "A타임", "1부:", "오전반("
 //   - 회차·차시·타임은 앞에 번호가 있을 때만 본다. "타임스퀘어", "회차별 상이" 는 회차가 아니다
 //   - normalize() 가 "오전"/"오후"를 지우므로 "오전반(" 은 여기 올 때 "반(" 만 남는다.
@@ -283,26 +289,44 @@ function applyExtensions(weekdays: Record<Weekday, DaySchedule>, source: string)
 function splitPeriodClauses(
   text: string,
   year: number,
-): { baseText: string; clauses: Array<{ from: string; clause: string }> } {
-  const clauses: Array<{ from: string; clause: string }> = [];
+): { baseText: string; clauses: Array<{ from: string; to?: string; clause: string }> } {
+  const clauses: Array<{ from: string; to?: string; clause: string }> = [];
   let baseText = text;
+  const ymd = (y: number, mo: number, d: number) =>
+    `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
   const pattern = /(?:(\d{4})\s*[.년]\s*)?(\d{1,2})\s*[.월]\s*(\d{1,2})\s*[.일]?\s*(?:\([월화수목금토일]\))?\s*부터/g;
+  // '부터' 바로 뒤에 끝 날짜가 오는 경우. "9.15.(화)부터 12.31.(목)까지 ..."
+  //   시각("21:00까지")은 ':' 라서 걸리지 않는다
+  const untilDate = /^\s*(?:(\d{4})\s*[.년]\s*)?(\d{1,2})\s*[.월]\s*(\d{1,2})\s*[.일]?\s*(?:\([월화수목금토일]\))?\s*까지/;
   for (const m of text.matchAll(pattern)) {
     const mo = Number(m[2]);
     const d = Number(m[3]);
     if (mo < 1 || mo > 12 || d < 1 || d > 31) continue;
+    const y = m[1] ? Number(m[1]) : year;
 
-    // '부터' 뒤부터 다음 규칙 경계까지가 그 기간의 설명이다
-    const clause = text.slice(m.index + m[0].length).split(/[/;]|※|\*+/)[0];
+    let rest = text.slice(m.index + m[0].length);
+    let head = m[0];
+    let to: string | undefined;
+    const u = untilDate.exec(rest);
+    if (u) {
+      const toMo = Number(u[2]);
+      const toD = Number(u[3]);
+      if (toMo >= 1 && toMo <= 12 && toD >= 1 && toD <= 31) {
+        // 연도가 없고 끝 달이 시작 달보다 앞이면 해를 넘긴 것이다 ("11.1.부터 2.28.까지")
+        const toY = u[1] ? Number(u[1]) : (toMo < mo ? y + 1 : y);
+        to = ymd(toY, toMo, toD);
+        head += u[0];
+        rest = rest.slice(u[0].length);
+      }
+    }
+
+    // '부터'(와 끝 날짜) 뒤부터 다음 규칙 경계까지가 그 기간의 설명이다
+    const clause = rest.split(/[/;]|※|\*+/)[0];
     if (!clause.trim()) continue;
 
-    const y = m[1] ? Number(m[1]) : year;
-    clauses.push({
-      from: `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
-      clause,
-    });
-    baseText = baseText.replace(m[0] + clause, ' ');
+    clauses.push(to ? { from: ymd(y, mo, d), to, clause } : { from: ymd(y, mo, d), clause });
+    baseText = baseText.replace(head + clause, ' ');
   }
 
   return { baseText, clauses };
@@ -366,7 +390,76 @@ function readLastAdmission(text: string, close: string): string | undefined {
     ?? /(\d{1,2}:\d{2})[^()\d]{0,10}(?:입장|매표|발권)\s*마감/.exec(text);
   if (explicit) return padTime(explicit[1]) ?? undefined;
 
+  // "17:30까지 입장가능", "입장은 17:30까지" 처럼 입장할 수 있는 마지막 시각을 적는 형태.
+  //   "21:00까지 운영" 같은 연장 문구와 헷갈리지 않도록 '입장'이 바로 붙어 있을 때만 본다.
+  //   폐관보다 늦으면 입장 마감이 아니라 다른 구간의 이야기이므로 버린다
+  const until =
+    /(\d{1,2}:\d{2})\s*까지\s*(?:만\s*)?입장\s*(?:가능|할\s*수\s*있)/.exec(text)
+    ?? /입장\s*(?:은|는|가능\s*시간\s*:?)?\s*(\d{1,2}:\d{2})\s*까지/.exec(text);
+  if (until) {
+    const t = padTime(until[1]);
+    const m = t ? toMinutes(t) : null;
+    if (t && m !== null && closeMinutes !== null && m <= closeMinutes) return t;
+  }
+
   return undefined;
+}
+
+/**
+ * 설날·추석 당일(양력). 음력이라 계산 대신 표로 둔다.
+ * 해가 바뀌면 여기에 다음 해를 더한다. 없는 해는 readHolidayClosures 가 null 을 돌려
+ * 공휴일 전체 휴관으로 처리된다.
+ */
+// 설날을 가리키는 말. "설치", "설명" 의 '설'은 아니다
+const SEOLLAL = /설날|구정|설(?=\s*(?:[·,]|및|연휴|당일|명절|$))/;
+
+const LUNAR_HOLIDAYS: Record<number, { seollal: string; chuseok: string }> = {
+  2025: { seollal: '2025-01-29', chuseok: '2025-10-06' },
+  2026: { seollal: '2026-02-17', chuseok: '2026-09-25' },
+  2027: { seollal: '2027-02-07', chuseok: '2027-09-15' },
+  2028: { seollal: '2028-01-27', chuseok: '2028-10-03' },
+};
+
+/**
+ * "설·추석 당일 휴관", "설날 및 추석 연휴 휴관" 에서 쉬는 날짜를 읽는다.
+ * - '당일'이 있으면 그 날만, 없으면 연휴 3일(전날·당일·다음날)
+ * - 전시가 해를 넘길 수 있어 올해와 다음 해를 같이 넣는다
+ * 표에 없는 해가 끼면 null (호출하는 쪽이 공휴일 전체 휴관으로 처리한다)
+ */
+function readHolidayClosures(near: string, year: number): string[] | null {
+  const kinds: Array<'seollal' | 'chuseok'> = [];
+  if (SEOLLAL.test(near) || /명절/.test(near)) kinds.push('seollal');
+  if (/추석|명절/.test(near)) kinds.push('chuseok');
+  const onlyTheDay = /당일/.test(near);
+
+  // 같은 문장에 적힌 양력 날짜도 닫는다. "1월 1일, 설날 및 추석 당일 휴관"
+  //   예전에는 공휴일 전체를 닫아 1월 1일이 저절로 닫혔으므로, 빼먹으면 틀린 "가능"이 된다
+  const solar: Array<[number, number]> = [];
+  for (const m of near.matchAll(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/g)) solar.push([Number(m[1]), Number(m[2])]);
+  if (/신정|새해\s*첫날/.test(near)) solar.push([1, 1]);
+
+  const out: string[] = [];
+  for (const y of [year, year + 1]) {
+    for (const [mo, d] of solar) {
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+        out.push(`${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+      }
+    }
+    const table = LUNAR_HOLIDAYS[y];
+    if (!table) return null;
+    for (const kind of kinds) {
+      const day = table[kind];
+      if (onlyTheDay) {
+        out.push(day);
+        continue;
+      }
+      const t = new Date(`${day}T00:00:00Z`).getTime();
+      for (const offset of [-1, 0, 1]) {
+        out.push(new Date(t + offset * 86_400_000).toISOString().slice(0, 10));
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -608,7 +701,7 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
         scope,
         interval,
         weeks: readWeeksOfMonth(scopeText) ?? readWeeksOfMonth(piece),
-        session: SESSION_LABEL.test(scopeText),
+        session: SESSION_LABEL.test(scopeText) || EVERY_SESSION.test(piece.slice(cursor)),
         season,
       });
     }
@@ -674,8 +767,21 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     for (const d of [...near.matchAll(/([월화수목금토일])\s*(?:요일)?/g)]) {
       weekdays[KO_TO_DAY[d[1]]] = emptyDay();
     }
-    // 음력 명절은 holidays.json 에 들어 있으니 공휴일 휴관으로 본다
-    if (/공휴일|국경일|설|추석|명절/.test(near)) holiday = { isOpen: false, intervals: [] };
+    if (/공휴일|국경일/.test(near)) {
+      holiday = { isOpen: false, intervals: [] };
+    } else if (SEOLLAL.test(near) || /추석|명절/.test(near)) {
+      // "설·추석 당일 휴관" 은 그 날만 쉰다는 뜻이다. 공휴일 전체를 닫으면
+      // 성탄절·어린이날 같은 다른 공휴일까지 "확실한 휴관"이 되어 버린다
+      const dates = readHolidayClosures(near, year);
+      if (dates) {
+        for (const date of dates) {
+          if (!exceptions.some(e => e.date === date)) exceptions.push({ date, schedule: emptyDay() });
+        }
+      } else {
+        // 명절 날짜를 모르는 해면 예전처럼 공휴일 전체를 닫는다. 틀린 "가능"보다 낫다
+        holiday = { isOpen: false, intervals: [] };
+      }
+    }
   }
 
   // (5) 연장 운영: (3)에서 넣어둔 구간의 close 만 바꿔치운다.
@@ -729,7 +835,7 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
   // (8) "N일부터" 절을 기본 일정 위에 얹어 periods 를 만든다.
   //    그 날짜 이후를 판정할 때는 weekdays 대신 이쪽을 봐야 한다
   const periods: NonNullable<ParsedOperatingHours['periods']> = [];
-  for (const { from, clause } of periodClauses) {
+  for (const { from, to, clause } of periodClauses) {
     const changed = Object.fromEntries(
       ORDER.map(d => [d, { ...weekdays[d], intervals: weekdays[d].intervals.map(iv => ({ ...iv })) }]),
     ) as Record<Weekday, DaySchedule>;
@@ -742,7 +848,7 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
 
     // 기본 일정과 다르지 않으면 넣지 않는다
     if (JSON.stringify(changed) === JSON.stringify(weekdays)) continue;
-    periods.push({ from, weekdays: changed });
+    periods.push(to ? { from, to, weekdays: changed } : { from, weekdays: changed });
   }
 
   const result: ParsedOperatingHours = { scheduleType: 'scheduled', weekdays, holiday, exceptions };

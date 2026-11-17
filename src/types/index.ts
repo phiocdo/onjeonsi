@@ -34,6 +34,14 @@ export interface DaySchedule {
   intervals: TimeInterval[]; // 휴관일이면 빈 배열
   requiresReservation?: boolean;
   note?: string; // "야간개관", "오픈식" 같은 짧은 메시지
+  /**
+   * 그 달의 몇째 주에만 하는 경우. [1, 3] 이면 1·3째주만 열고 나머지 주는 닫는다.
+   * 없으면 매주 한다는 뜻이다. "1, 3째주 토 ..." 같은 격주 프로그램에서 나온다.
+   *
+   * 판정하는 쪽에서 이 값을 보지 않으면 격주 프로그램을 매주 하는 것으로 읽어
+   * 쉬는 주에 "가능"이 나온다.
+   */
+  weeksOfMonth?: number[];
 }
 
 /**
@@ -46,6 +54,20 @@ export interface ParsedOperatingHours {
   weekdays: Record<Weekday, DaySchedule>;
   holiday: DaySchedule | null; // 공휴일 규칙이 따로 적힌 경우만. 언급이 없으면 null
   exceptions: Array<{ date: string; schedule: DaySchedule }>; // "11.17(화) 오픈식 14:00~16:00"처럼 특정 날짜만 다른 경우
+  /**
+   * 어느 날짜부터 요일별 일정이 바뀌는 경우.
+   *   "9.15.(화)부터 화,수,금,토,일 21:00까지"
+   *   "2024년 4월 12일(금)부터 매주 금요일은 21:00까지 야간개관합니다"
+   *
+   * 판정하려는 날짜가 `from` 이후(그리고 `to` 이전)면 위의 `weekdays` 대신
+   * 여기 있는 `weekdays` 를 쓴다. 날짜가 최근 순이 아니므로 호출하는 쪽에서
+   * 조건에 맞는 것 중 가장 늦은 `from` 을 골라야 한다.
+   */
+  periods?: Array<{
+    from?: string; // YYYY-MM-DD. 없으면 처음부터
+    to?: string; // YYYY-MM-DD. 없으면 끝까지
+    weekdays: Record<Weekday, DaySchedule>;
+  }>;
 }
 
 export interface Exhibition {

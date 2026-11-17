@@ -105,4 +105,7 @@ export interface JudgeResult {
   slackMinutes?: number;
   // 판정 근거: 시설 정보만(venue), 전시 운영시간만(exhibition), 둘을 합친 것(merged)
   basis?: 'venue' | 'exhibition' | 'merged';
+  // 그날 입장 마감 정보가 없어 폐관 시각을 입장 마감으로 보고 판정했으면 true.
+  // 입장 마감이 데이터에 있으면 넣지 않는다
+  lastEntryAssumed?: true;
 }

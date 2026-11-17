@@ -119,10 +119,17 @@ describe('judge 판정 본체', () => {
     expect(result.reasons).toEqual([REASONS.MISSING_HOURS]);
   });
 
-  it('10. lastEntry 없음 + 나머지 통과 -> unknown', () => {
+  it('10. lastEntry 없음 + 나머지 통과 -> 폐관 시각을 입장 마감으로 보고 possible (lastEntryAssumed)', () => {
     const result = judge(makeInput({ venue: { lastEntry: undefined } }));
-    expect(result.result).toBe('unknown');
-    expect(result.reasons).toEqual([REASONS.MISSING_LAST_ENTRY]);
+    expect(result).toEqual({
+      result: 'possible',
+      reasons: [],
+      entryTime: '14:00',
+      endTime: '15:00',
+      slackMinutes: 120,
+      basis: 'venue',
+      lastEntryAssumed: true,
+    });
   });
 
   it('11. 어긴 조건이 있고 lastEntry도 없음 -> impossible (사유에 누락 정보가 섞이지 않음)', () => {
@@ -200,10 +207,11 @@ describe('judge 입장 마감', () => {
     expect(result.entryTime).toBe('16:30');
   });
 
-  it('lastEntry도 lastEntryByDay 값도 없으면 MISSING_LAST_ENTRY', () => {
+  it('lastEntry도 lastEntryByDay 값도 없으면 폐관 기준으로 판정하고 lastEntryAssumed', () => {
     const result = judge(makeResolvedInput({ lastEntry: undefined, lastEntryByDay: { mon: '16:00' } }));
-    expect(result.result).toBe('unknown');
-    expect(result.reasons).toEqual([REASONS.MISSING_LAST_ENTRY]);
+    expect(result.result).toBe('possible');
+    expect(result.reasons).toEqual([]);
+    expect(result.lastEntryAssumed).toBe(true);
   });
 
   it('입장 마감(20:00)이 그날 폐관(18:00)보다 늦으면 폐관 시각으로 보정한다', () => {
@@ -273,5 +281,123 @@ describe('judge 지정 휴관일(closed.dates)', () => {
     const nextYear = judge(makeInput({ venue, exhibition: LONG_EXHIBITION, date: '2027-12-01' }));
     expect(nextYear.reasons).not.toContain(REASONS.CLOSED_DATE);
     expect(nextYear.result).toBe('possible');
+  });
+});
+
+describe('judge 입장 마감이 없을 때 폐관 시각 사용', () => {
+  it('입장 마감이 데이터에 있으면 lastEntryAssumed를 넣지 않는다', () => {
+    expect(judge(makeInput())).not.toHaveProperty('lastEntryAssumed');
+    const byDay = judge(makeResolvedInput({ lastEntry: undefined, lastEntryByDay: { tue: '17:00' } }));
+    expect(byDay.result).toBe('possible');
+    expect(byDay).not.toHaveProperty('lastEntryAssumed');
+  });
+
+  it('폐관 기준이면 입장 마감 사유 없이 폐관 전 관람 시간 부족만 낸다 (불가에는 lastEntryAssumed 없음)', () => {
+    const result = judge(
+      makeInput({ venue: { lastEntry: undefined }, stayStart: '17:30', stayEnd: '19:00' }),
+    );
+    expect(result).toEqual({
+      result: 'impossible',
+      reasons: [REASONS.NOT_ENOUGH_BEFORE_CLOSE],
+      basis: 'venue',
+    });
+    // 폐관 뒤 도착도 AFTER_LAST_ENTRY('18:00')를 내지 않는다
+    const late = judge(makeInput({ venue: { lastEntry: undefined }, stayStart: '18:30', stayEnd: '20:00' }));
+    expect(late.reasons).toEqual([REASONS.NOT_ENOUGH_BEFORE_CLOSE]);
+  });
+
+  it('폐관 정각에 관람이 끝나면 가능', () => {
+    const result = judge(makeInput({ venue: { lastEntry: undefined }, stayStart: '17:00', stayEnd: '19:00' }));
+    expect(result).toMatchObject({ result: 'possible', entryTime: '17:00', endTime: '18:00', slackMinutes: 0 });
+  });
+
+  it('입장 마감 값이 있는데 형식이 틀리면 지금처럼 MISSING_LAST_ENTRY', () => {
+    const result = judge(makeInput({ venue: { lastEntry: '5pm' } }));
+    expect(result).toEqual({ result: 'unknown', reasons: [REASONS.MISSING_LAST_ENTRY], basis: 'venue' });
+  });
+});
+
+describe('judge 구간이 여러 개인 날 (intervalsByDay)', () => {
+  // 화요일 10:00~12:00 / 13:00~18:00(입장 마감 17:00). 점심 휴관
+  const LUNCH = {
+    lastEntry: undefined,
+    hours: { tue: { open: '10:00', close: '18:00' } },
+    intervalsByDay: {
+      tue: [
+        { open: '10:00', close: '12:00' },
+        { open: '13:00', close: '18:00', lastEntry: '17:00' },
+      ],
+    },
+    visitMinutes: 60,
+  };
+
+  it('오전 구간에서 마칠 수 있으면 오전 구간 (입장 마감 없음 → lastEntryAssumed)', () => {
+    const result = judge(makeResolvedInput(LUNCH, { stayStart: '10:00', stayEnd: '12:00' }));
+    expect(result).toEqual({
+      result: 'possible',
+      reasons: [],
+      entryTime: '10:00',
+      endTime: '11:00',
+      slackMinutes: 60,
+      basis: 'venue',
+      lastEntryAssumed: true,
+    });
+  });
+
+  it('오전 구간에 안 들어가면 오후 구간 시작에 입장', () => {
+    const result = judge(makeResolvedInput(LUNCH, { stayStart: '11:30', stayEnd: '14:30' }));
+    expect(result).toEqual({
+      result: 'possible',
+      reasons: [],
+      entryTime: '13:00',
+      endTime: '14:00',
+      slackMinutes: 30,
+      basis: 'venue',
+    });
+  });
+
+  it('모두 안 되면 가장 가까웠던 구간의 사유 (오전: 30분 모자람, 오후: 75분 모자람)', () => {
+    const result = judge(makeResolvedInput(LUNCH, { stayStart: '11:30', stayEnd: '12:45' }));
+    expect(result).toEqual({
+      result: 'impossible',
+      reasons: [REASONS.NOT_ENOUGH_BEFORE_CLOSE],
+      basis: 'venue',
+    });
+  });
+
+  it('늦게 오면 오후 구간 기준 사유 (입장 마감 17:00)', () => {
+    const result = judge(makeResolvedInput(LUNCH, { stayStart: '17:30', stayEnd: '19:00' }));
+    expect(result).toEqual({
+      result: 'impossible',
+      reasons: [REASONS.AFTER_LAST_ENTRY('17:00'), REASONS.NOT_ENOUGH_BEFORE_CLOSE],
+      basis: 'venue',
+    });
+  });
+
+  it('구간에 입장 마감이 없으면 시설 lastEntry를 그 구간 끝까지로 줄여 쓴다', () => {
+    const result = judge(
+      makeResolvedInput({ ...LUNCH, lastEntry: '17:00' }, { stayStart: '11:30', stayEnd: '12:45' }),
+    );
+    expect(result.reasons).toEqual([REASONS.NOT_ENOUGH_BEFORE_CLOSE]);
+    expect(result).not.toHaveProperty('lastEntryAssumed');
+  });
+
+  it('휴관 규칙은 구간보다 먼저 본다', () => {
+    const result = judge(makeResolvedInput({ ...LUNCH, closed: { dates: ['2026-11-10'] } }));
+    expect(result.reasons).toEqual([REASONS.CLOSED_DATE]);
+  });
+
+  it('구간 시각 형식이 틀리면 MISSING_HOURS', () => {
+    const result = judge(
+      makeResolvedInput({ ...LUNCH, intervalsByDay: { tue: [{ open: '9:00', close: '12:00' }, { open: '13:00', close: '18:00' }] } }),
+    );
+    expect(result).toEqual({ result: 'unknown', reasons: [REASONS.MISSING_HOURS], basis: 'venue' });
+  });
+
+  it('다른 요일에만 intervalsByDay가 있으면 hours 하나로 판정 (지금과 같음)', () => {
+    const result = judge(
+      makeResolvedInput({ intervalsByDay: { mon: [{ open: '10:00', close: '11:00' }, { open: '12:00', close: '13:00' }] } }),
+    );
+    expect(result).toEqual(judge(makeInput()));
   });
 });

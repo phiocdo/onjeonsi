@@ -542,7 +542,8 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
       }
       // "1, 3째주 토 1회차 13:30-15:00 2회차 15:30-17:00" 처럼 한 조각에 회차가 이어지면
       // 앞 구간의 요일을 그대로 쓴다. "(동절기) 10:00~18:00" 같은 계절 안내는 해당하지 않는다
-      if (scope === null && scopeInPiece && /회차|차시|타임|부\s*$|반\s*$/.test(scopeText.trim())) {
+      // 회차·차시·타임은 SESSION_LABEL 과 같이 앞에 번호가 있을 때만 본다 ("타임스퀘어" 제외)
+      if (scope === null && scopeInPiece && /[0-9A-Za-z]\s*(?:회차|차시|타임)|부\s*$|반\s*$/.test(scopeText.trim())) {
         scope = scopeInPiece;
       }
       if (scope) {

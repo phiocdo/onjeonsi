@@ -240,6 +240,13 @@ describe('parseHours — 회차가 여러 개인 경우', () => {
     expect(parseHours('1타임 10:00~11:00', 2026).weekdays.mon.sessions).toBe(true);
   });
 
+  it('번호 없는 "타임"은 앞 구간의 요일을 물려받지 않는다', () => {
+    const t = '토 10:00~12:00 타임스퀘어 14:00~16:00';
+    expect(parseHours(t, 2026).weekdays.sat.intervals).toEqual([{ open: '10:00', close: '12:00' }]);
+    // 번호가 있으면 같은 요일의 다음 회차다
+    expect(parseHours('토 A타임 10:00~12:00 B타임 14:00~16:00', 2026).weekdays.sat.intervals).toHaveLength(2);
+  });
+
   it('회차 요일에는 연장 운영을 적용하지 않는다', () => {
     // 마지막 회차를 21:00 까지 늘리면 없는 회차를 만들게 된다
     const r = parseHours('1회차 10:00~12:00 / 2회차 14:00~16:00 ※ 금요일은 21:00까지', 2026);

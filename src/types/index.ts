@@ -103,4 +103,6 @@ export interface JudgeResult {
   entryTime?: string;
   endTime?: string;
   slackMinutes?: number;
+  // 판정 근거: 시설 정보만(venue), 전시 운영시간만(exhibition), 둘을 합친 것(merged)
+  basis?: 'venue' | 'exhibition' | 'merged';
 }

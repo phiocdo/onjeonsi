@@ -15,6 +15,8 @@
 | --- | --- |
 | `judge.ts` | 전시 하나를 날짜·머무는 시간으로 판정합니다. 엔진의 중심입니다. |
 | `isOpen.ts` | 시설이 그날 문을 여는지 봅니다. `judge`가 씁니다. |
+| `matchVenue.ts` | 전시의 장소 이름·좌표로 시설(`venueId`)을 찾습니다. |
+| `resolveSchedule.ts` | 시설 정보와 전시 운영 시간을 합쳐 판정에 쓸 시설 정보(`ResolvedVenue`)를 만듭니다. `judgeResolved`도 여기 있습니다. |
 | `time.ts` | `HH:MM`, `YYYY-MM-DD` 계산 도우미입니다. |
 | `reasons.ts` | 판정 사유 문구(`REASONS`)를 한곳에서 정의합니다. |
 | `constants.ts` | 기본값(`DEFAULT_VISIT_MINUTES = 60`)입니다. |
@@ -82,11 +84,11 @@ console.log(judge({ venue, exhibition, date: '2026-11-21', stayStart: '16:30', s
 
 // 실행 결과 (tsx로 확인)
 // 토요일, 09:30 도착 → 개관 시각 10:00으로 당겨 입장
-// { result: 'possible', reasons: [], entryTime: '10:00', endTime: '11:00', slackMinutes: 60 }
+// { result: 'possible', reasons: [], entryTime: '10:00', endTime: '11:00', slackMinutes: 60, basis: 'venue' }
 // 월요일
-// { result: 'impossible', reasons: [ '월요일 휴관입니다' ] }
+// { result: 'impossible', reasons: [ '월요일 휴관입니다' ], basis: 'venue' }
 // 토요일, 16:30 도착 → 입장 마감 17:00 전이고 폐관까지 30분 남음
-// { result: 'possible', reasons: [], entryTime: '16:30', endTime: '17:30', slackMinutes: 30 }
+// { result: 'possible', reasons: [], entryTime: '16:30', endTime: '17:30', slackMinutes: 30, basis: 'venue' }
 ```
 
 ### 내 동네 전시 목록
@@ -103,7 +105,7 @@ import { rankExhibitions } from './engine/sort'; // PR #25 병합 후
 
 const me = { lat: 37.5759, lng: 126.9768 };
 const RADIUS_M = 1000;
-const venues: Venue[] = [venue]; // 시설 JSON (지금 main에는 없음)
+const venues: Venue[] = [venue]; // 시설 JSON (data/venues/*.json)
 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
 
 // 1) 좌표가 있는 전시만 거리를 붙이고 반경으로 거른다 (auto.json에 lat: null이 있다)
@@ -158,9 +160,9 @@ const candidates = findStartCandidates(
 
 ### 실제 데이터 상태
 
-지금 main에는 시설 JSON이 없습니다. 전시(`auto.json`)의 `venueId`도 모두 빈 문자열입니다.
-그래서 실제 데이터로는 아직 판정할 수 없습니다.
-시설 JSON을 작성하고 전시와 시설을 `venueId`로 연결한 뒤에 동작합니다.
+시설 JSON은 `data/venues/`에 있습니다(6개).
+하지만 전시(`auto.json`)의 `venueId`가 모두 빈 문자열이라 전시와 시설이 아직 연결되지 않습니다.
+그래서 실제 데이터로는 아직 판정할 수 없습니다. 전시와 시설을 `venueId`로 연결한 뒤에 동작합니다.
 
 ## 4. 함수별 사용법
 
@@ -171,11 +173,50 @@ export type JudgeFn = (input: JudgeInput) => JudgeResult;
 export const judge: JudgeFn;
 ```
 
+```ts
+export type ResolvedVenue = Venue & {
+  lastEntryByDay?: Partial<Record<Weekday, string>>;
+  basis?: 'venue' | 'exhibition' | 'merged';
+};
+```
+
 - 입력 `JudgeInput`: `venue`, `exhibition`, `date`, `stayStart`, `stayEnd`, `holidays`.
 - `Exhibition`에서는 `start`, `end`만 읽습니다.
 - `Venue`에서는 `hours`, `closed`, `lastEntry`, `visitMinutes`를 읽습니다.
+- `venue`에 `ResolvedVenue`를 넘기면 `lastEntryByDay`, `basis`도 읽습니다. `Venue` 타입 자체에는 이 필드가 없습니다.
+  - `lastEntryByDay`: 요일별 입장 마감. 그 요일 값이 있으면 `lastEntry` 대신 씁니다.
+  - `basis`: 시설 정보가 어디서 왔는지. 결과의 `basis`로 그대로 나갑니다.
 - 관람 시간은 `venue.visitMinutes ?? DEFAULT_VISIT_MINUTES`(60)입니다. 0은 0분으로 봅니다.
-- 출력 `JudgeResult`: `result`, `reasons`, 그리고 가능일 때만 `entryTime`, `endTime`, `slackMinutes`.
+- 출력 `JudgeResult`: `result`, `reasons`, `basis`, 그리고 가능일 때만 `entryTime`, `endTime`, `slackMinutes`.
+  - `basis`는 모든 결과에 들어갑니다. `venue.basis`가 없으면 `'venue'`입니다.
+
+### resolveSchedule, judgeResolved (`resolveSchedule.ts`)
+
+```ts
+export function resolveSchedule(
+  venue: Venue | null,
+  hours: ParsedOperatingHours | undefined, // 보통 exhibition.operatingHours
+  options = { useExhibitionHours: false },
+): { venue: ResolvedVenue | null; basis: 'venue' | 'exhibition' | 'merged' | null; mismatches: Mismatch[] };
+
+export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: ResolveResult): JudgeResult;
+```
+
+```ts
+const resolved = resolveSchedule(venue ?? null, ex.operatingHours, { useExhibitionHours: true });
+const result = judgeResolved({ exhibition: ex, date, stayStart, stayEnd, holidays }, resolved);
+// resolved.venue가 null이면 { result: 'unknown', reasons: [MISSING_VENUE] }
+```
+
+- 전시 쪽은 "믿을 수 있는 요일"만 씁니다: `scheduleType`이 `'scheduled'`이고, 그 요일이 `isOpen: true`, 구간이 정확히 하나, `open < close`. 나머지 요일은 "모름"입니다(`isOpen: false`도 "모름").
+- 결과
+  - 시설만 있음, 플래그 off, 또는 믿을 요일 없음: 시설 그대로, `basis: 'venue'`.
+  - 시설 없음 + 플래그 on: 믿을 요일만 `hours`로, `lastAdmission`(폐관 이하)을 `lastEntryByDay`로. `closed`는 넣지 않습니다. `basis: 'exhibition'`.
+  - 둘 다 + 플래그 on: 휴관 규칙은 시설 것. 요일별로 겹치는 시간(늦은 개관 ~ 이른 폐관), 겹치지 않으면 그 요일은 뺌, 전시가 "모름"이면 시설 시간. 시설에 없는 요일은 넣지 않습니다. `lastEntryByDay = min(시설 lastEntry, 전시 lastAdmission, 그날 폐관)`. `basis: 'merged'`.
+  - 그 밖: `venue: null`, `basis: null`.
+- `mismatches`: 시설과 전시가 둘 다 있으면 플래그와 상관없이 계산합니다(시설 데이터 점검용). `{ weekday, kind: 'closed' | 'open' | 'close' | 'lastEntry', venueValue, exhibitionValue }`.
+- 입력 `venue`, `hours`는 바꾸지 않습니다.
+- 시설 없이 만든 `venue`(`basis: 'exhibition'`)는 판정용입니다. `id`, `name`, 좌표 등은 빈 값이라 화면에 쓰지 않습니다.
 
 ### isOpen (`isOpen.ts`)
 
@@ -263,7 +304,8 @@ export function findStartCandidates(
   - 겹치거나 맞닿은 구간은 하나로 합칩니다. 끝은 늦은 쪽입니다.
   - 떨어진 구간은 따로 처리합니다.
 - 각 구간에서 시작 시각을 30분 단위로 올립니다(10:10 → 10:30).
-- 출발 시각 + 관람 시간 <= 구간 끝인 동안 30분씩 `judge`에 묻습니다. `stayEnd`는 구간 끝입니다.
+- 출발 시각 + 관람 시간 <= 구간 끝이고 출발 시각 < 구간 끝인 동안 30분씩 `judge`에 묻습니다. `stayEnd`는 구간 끝입니다.
+  - 출발 시각 < 구간 끝은 관람 시간이 0분일 때만 차이가 납니다. 출발 = 구간 끝이면 `judge`가 `INVALID_INPUT`을 내므로 묻지 않습니다.
 - 출력 `StartCandidates` (모두 이른 시각 순)
   - `possible: string[]`: 실제 입장 시각입니다(`entryTime`, 개관 전 출발이면 개관 시각으로 당겨진 값). 중복 없이 최대 `limit`개.
   - `unknown: string[]`: 확인 필요인 출발 시각.
@@ -284,18 +326,30 @@ export function findStartCandidates(
 4. 그 요일의 `hours`가 없으면 `unknown`.
 5. 나머지는 `open`. 그 요일의 `open`, `close`와 시설의 `lastEntry`를 돌려줍니다.
 
+### 입력 검사
+
+다른 조건보다 먼저 봅니다. 하나라도 틀리면 바로 `{ result: 'unknown', reasons: [INVALID_INPUT], basis }`를 돌려줍니다.
+
+- `date`가 `YYYY-MM-DD` 형식이고 달력에 실제 있는 날짜인지. `2026-02-30`은 거부합니다.
+- `stayStart`, `stayEnd`가 `HH:MM`(`toMinutes`로 읽힘)인지. `9:00`, `24:00`은 거부합니다.
+- `stayEnd`가 `stayStart`보다 늦은지. 같아도 거부합니다.
+
 ### 필수 조건
 
-기호: `s` = 실제 입장 시각, `d` = 관람 시간.
+기호: `s` = 실제 입장 시각, `d` = 관람 시간, `le` = 실제로 쓰는 입장 마감.
 
 - `s = max(stayStart, open)`
 - `d = visitMinutes ?? 60`
+- `le = min(lastEntryByDay[그날 요일] ?? lastEntry, close)`
+  - 요일별 입장 마감이 있으면 그 값, 없으면 시설 전체 `lastEntry`.
+  - 입장 마감이 그날 폐관보다 늦게 적혀 있으면 폐관 시각까지만 입장할 수 있다고 봅니다.
+    예: `lastEntry` 20:00, 그날 폐관 18:00 → `le` = 18:00.
 
 5개를 모두 만족해야 가능입니다.
 
 1. 전시 기간 안: `exhibition.start <= date <= exhibition.end`
 2. 운영일: `isOpen`이 `open`
-3. `s <= lastEntry`
+3. `s <= le`
 4. `s + d <= close`
 5. `s + d <= stayEnd`
 
@@ -304,6 +358,7 @@ export function findStartCandidates(
 - `entryTime` = `s`
 - `endTime` = `s + d`
 - `slackMinutes` = `min(close, stayEnd) - (s + d)`
+- `basis` = `venue.basis ?? 'venue'` (모든 결과)
 
 ### 사유 처리
 
@@ -311,8 +366,10 @@ export function findStartCandidates(
 - 휴관이거나 운영 여부를 모르면 시간 조건(3-5)은 검사하지 않습니다.
 - 불가 사유가 하나라도 있으면 `impossible`입니다. 정보 없음 사유는 버립니다.
 - 불가 사유 없이 정보 없음 사유만 있으면 `unknown`입니다.
-- `lastEntry`만 없고(또는 형식 오류) 다른 조건을 다 만족하면 `unknown`(`MISSING_LAST_ENTRY`)입니다.
-- 시각 형식 오류는 `MISSING_HOURS`로 `unknown`입니다(8장 참고).
+- 그날 쓸 입장 마감이 없고(또는 형식 오류) 다른 조건을 다 만족하면 `unknown`(`MISSING_LAST_ENTRY`)입니다.
+- `AFTER_LAST_ENTRY` 문구에는 보정한 입장 마감(`le`)이 들어갑니다.
+- 입력(`date`, `stayStart`, `stayEnd`) 오류는 `INVALID_INPUT`입니다.
+- 시설 데이터(`hours`)의 시각 형식 오류는 `MISSING_HOURS`로 `unknown`입니다.
 
 ## 6. 데이터 규칙
 
@@ -331,7 +388,7 @@ export function findStartCandidates(
 
 - `holidays`는 호출하는 쪽에서 `data/holidays/holidays.json`을 읽어 넘깁니다. 엔진은 파일을 읽지 않습니다.
 - 좌표는 `Number.isFinite`로 확인한 뒤 씁니다. `auto.json`에 `lat: null`이 있습니다.
-- `lastEntry`는 시설 전체에 하나입니다. 요일별로 다르게 둘 수 없습니다.
+- 시설 JSON의 `lastEntry`는 시설 전체에 하나입니다. 요일별 입장 마감(`lastEntryByDay`)은 `resolveSchedule`이 만듭니다.
 - 작성 규칙은 팀 Notion의 'JSON 데이터 작성 가이드'를 참고합니다.
 
 ## 7. 사유 문구 (`REASONS`)
@@ -339,17 +396,18 @@ export function findStartCandidates(
 | 키 | 문구 | 쓰이는 곳 |
 | --- | --- | --- |
 | `OUT_OF_PERIOD` | 전시 기간이 아닙니다 | 전시 기간 밖 |
-| `CLOSED_DATE` | 임시 휴관일입니다 | 지정 휴관일 |
+| `CLOSED_DATE` | 휴관일로 지정된 날입니다 | 지정 휴관일 |
 | `CLOSED_WEEKDAY(weekdayLabel)` | `{요일}요일 휴관입니다` | 정기 휴관 요일 |
-| `CLOSED_HOLIDAY` | 공휴일 휴관입니다 | 공휴일 다음 날 대체 휴관 |
-| `AFTER_LAST_ENTRY(lastEntry)` | `입장 마감({lastEntry}) 이후입니다` | `s > lastEntry` |
+| `CLOSED_HOLIDAY` | 공휴일 다음 날이라 휴관입니다 | 공휴일 다음 날 대체 휴관 |
+| `AFTER_LAST_ENTRY(lastEntry)` | `입장 마감({lastEntry}) 이후입니다` | `s > le` (`le`는 5장 참고) |
 | `NOT_ENOUGH_BEFORE_CLOSE` | 폐관 전까지 관람 시간이 부족합니다 | `s + d > close` |
 | `NOT_ENOUGH_STAY` | 머물 수 있는 시간 안에 관람을 마칠 수 없습니다 | `s + d > stayEnd` |
-| `MISSING_HOURS` | 운영 시간 정보가 없습니다 | 요일별 `hours` 없음, 시각 형식 오류 |
-| `MISSING_LAST_ENTRY` | 입장 마감 정보가 없습니다 | `lastEntry` 없음 또는 형식 오류 |
+| `MISSING_HOURS` | 운영 시간 정보가 없습니다 | 요일별 `hours` 없음, 시설 시각 형식 오류 |
+| `MISSING_LAST_ENTRY` | 입장 마감 정보가 없습니다 | 그날 쓸 입장 마감 없음 또는 형식 오류 |
+| `MISSING_VENUE` | 시설 정보가 없습니다 | 전시에 연결된 시설이 없을 때 (`judge`는 아직 쓰지 않음) |
+| `INVALID_INPUT` | 입력한 날짜나 시간이 올바르지 않습니다 | 입력 검사 실패 (5장 참고) |
 | `NOT_IMPLEMENTED` | 판정 로직 구현 전입니다 | 쓰지 않음 |
 
-- `CLOSED_HOLIDAY`는 '공휴일 다음 날 대체 휴관'에 쓰입니다. 문구가 '공휴일 휴관입니다'라 실제와 맞지 않습니다. 수정 예정입니다.
 - `NOT_IMPLEMENTED`는 스텁 시절 값입니다. `judge`에서 쓰지 않습니다.
 
 ## 8. 알려진 한계
@@ -357,9 +415,8 @@ export function findStartCandidates(
 - 휴관 요일은 하나만 지정할 수 있습니다(`closed.weekday`).
 - 연휴가 이어질 때 대체 휴관 처리가 단순합니다. 전날 하루만 봅니다. 실제 시설 규칙 확인이 필요합니다.
 - 자정을 넘는 운영과 `24:00`은 지원하지 않습니다.
-- 입력 형식 오류가 `MISSING_HOURS`(운영 시간 정보 없음)로 표시됩니다. `INVALID_INPUT`으로 분리할 예정입니다.
-- `stayEnd < stayStart`인지 검사하지 않습니다. 이때는 보통 `NOT_ENOUGH_STAY`로 불가가 됩니다.
-- 전시별 운영 시간(`hoursText`)은 무시합니다. 전시가 시설보다 일찍 닫아도 반영되지 않습니다.
+- `resolveSchedule`의 `useExhibitionHours`가 꺼져 있으면(기본값) 전시 운영 시간을 판정에 쓰지 않습니다.
+  켜면 믿을 수 있는 요일만 씁니다(4장 참고). 해석기가 '모름'과 '휴관'을 구분하게 되면 켤 예정입니다.
 - `stats`의 `medianMinutes`는 아직 판정의 관람 시간(`visitMinutes`)과 연결되지 않았습니다.
 - TypeScript 6부터 `strict`가 기본으로 켜집니다(`tsconfig`에 따로 적지 않음). 선택 필드(`lastEntry`, `hours` 등)는 `undefined`인지 확인해야 컴파일됩니다.
 

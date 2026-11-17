@@ -16,6 +16,14 @@ JSON 데이터 파일의 형식을 정의한 JSON Schema(draft-07) 파일입니�
 - 제안 5개(`judge-scenarios`, `personal-records-export`, `shared-reviews-seed`, `categories`, `popular-venues`): 11/19 타입 합의 뒤 추가합니다.
 - PR #22의 `operatingHours`, `imageUrl`, `detailUrl`: PR #22가 병합될 때 exhibitions 스키마에 추가합니다.
 
+## 제안 스키마 메모
+
+- `judge-scenarios`: 정답 근거 필드는 `evidence`입니다(`JudgeResult.basis`와 이름이 겹치지 않도록 `basis`에서 바꿈).
+  `expectedReasons`는 `REASONS` 키로 적고, `NOT_IMPLEMENTED`·`MISSING_VENUE`는 쓰지 않습니다(시나리오는 실제 시설을 전제로 함).
+  `INVALID_INPUT`은 `unknown`일 때만, 다른 사유 없이 혼자 씁니다.
+- `venue-links`(`data/venue-links.json`): `matchVenue`가 이름·좌표로 연결하지 못하거나 틀리게 연결할 때만
+  `placeName` 원문을 키로 `venueId`(연결하지 않을 곳은 `null`)를 적습니다. 이미 올바르게 연결되는 곳은 적지 않습니다.
+
 ## 스키마로 잡지 못하는 것
 
 - id 중복, 날짜 오름차순, 시작일이 종료일보다 이른지는 검사하지 못합니다.

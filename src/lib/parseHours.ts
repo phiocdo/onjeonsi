@@ -35,6 +35,14 @@ const KO_TO_DAY: Record<string, Weekday> = {
 const WEEKDAYS_ONLY: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
 const WEEKEND_ONLY: Weekday[] = ['sat', 'sun'];
 
+// DaySchedule.note 에 넣는 메시지
+const SESSION_NOTE = '회차 운영';
+const EXTENSION_NOTE = '연장 운영';
+// 구간 바로 앞에 붙는 회차 표시. "1회차", "2차시", "A타임", "1부:", "오전반("
+//   normalize() 가 "오전"/"오후"를 지우므로 "오전반(" 은 여기 올 때 "반(" 만 남는다.
+//   '반'·'부' 앞에 한글이 오면("주말부") 회차가 아니다
+const SESSION_LABEL = /회차|차시|타임|(?:^|[^가-힣])[반부]\s*[(:：]?\s*$/;
+
 function emptyDay(): DaySchedule {
   return { isOpen: false, intervals: [] };
 }
@@ -210,7 +218,10 @@ function applyExtensions(weekdays: Record<Weekday, DaySchedule>, source: string)
       weekdays[day] = {
         ...cur,
         intervals: [...cur.intervals.slice(0, -1), { ...last, close }],
-        note: '연장 운영',
+        // 회차 note 가 이미 있으면 지우지 않고 잇는다. periods 에서 두 번 불려도 한 번만 붙는다
+        note: !cur.note ? EXTENSION_NOTE
+          : cur.note.includes(EXTENSION_NOTE) ? cur.note
+          : `${cur.note} · ${EXTENSION_NOTE}`,
       };
     }
   }
@@ -479,7 +490,14 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
 
   // 시간 구간을 하나씩 훑고, 앞 구간이 끝난 지점부터 이번 구간 앞까지를 요일 지정으로 읽는다.
   // 쉼표로 쪼개면 "토,일" 같은 요일 목록이 같이 끊겨서 이 방식으로 바꿨다.
-  type Assignment = { scope: Weekday[] | null; interval: TimeInterval; weeks: number[] | null };
+  // session: 구간 바로 앞에 "1회차", "오전반" 같은 말이 붙어 있었는지.
+  //   회차는 아무 때나 들어가는 상시 관람이 아니라 시작 시각에 맞춰 가야 하므로 note 로 알린다
+  type Assignment = {
+    scope: Weekday[] | null;
+    interval: TimeInterval;
+    weeks: number[] | null;
+    session: boolean;
+  };
   const assignments: Assignment[] = [];
 
   // 앞 조각이 요일만 적고 끝났으면 다음 조각의 지정으로 쓴다
@@ -531,7 +549,12 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
         lastScope = scope;
         scopeInPiece = scope;
       }
-      assignments.push({ scope, interval, weeks: readWeeksOfMonth(scopeText) ?? readWeeksOfMonth(piece) });
+      assignments.push({
+        scope,
+        interval,
+        weeks: readWeeksOfMonth(scopeText) ?? readWeeksOfMonth(piece),
+        session: SESSION_LABEL.test(scopeText),
+      });
     }
   }
 
@@ -561,6 +584,8 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
   }
   // 요일 지정이 없는데 "1, 3째주" 가 적혀 있으면 모든 요일에 적용한다
   const sharedWeeks = assignments.find(a => a.scope === null && a.weeks)?.weeks ?? null;
+  // 회차로 적힌 구간. 객체를 그대로 쓰므로 중복 제거 뒤에도 같은 객체로 찾을 수 있다
+  const sessionIntervals = new Set(assignments.filter(a => a.session).map(a => a.interval));
 
   for (const day of ORDER) {
     const intervals = perDay.get(day) ?? shared;
@@ -570,9 +595,12 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     );
     if (!unique.length) continue;
     const weeks = weeksPerDay.get(day) ?? (perDay.has(day) ? null : sharedWeeks);
-    weekdays[day] = weeks
-      ? { isOpen: true, intervals: unique, weeksOfMonth: weeks }
-      : { isOpen: true, intervals: unique };
+    const schedule: DaySchedule = { isOpen: true, intervals: unique };
+    if (weeks) schedule.weeksOfMonth = weeks;
+    // 그 요일의 구간이 전부 회차일 때만 붙인다.
+    //   "화-일 10:00~18:00 / 토 1회차 14:00~15:00" 의 토요일은 상시 관람도 되므로 붙이지 않는다
+    if (unique.every(iv => sessionIntervals.has(iv))) schedule.note = SESSION_NOTE;
+    weekdays[day] = schedule;
   }
 
   // (4) 휴관 선언을 반영해 (3)에서 열어둔 요일을 다시 닫는다

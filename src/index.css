@@ -87,8 +87,7 @@
     grid-template-columns: 1fr;
   }
 
-  section > h1,
-  .nearby-head h1 {
+  section > h1 {
     font-size: 34px;
   }
 
@@ -737,13 +736,13 @@ textarea:focus-visible {
 
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 24px;
 }
 
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   column-gap: 24px;
   row-gap: 42px;
 }
@@ -1449,8 +1448,7 @@ label {
   background: var(--point);
 }
 
-section > h1,
-.nearby-head h1 {
+section > h1 {
   margin: 0;
   font-size: clamp(32px, 4vw, 52px);
   line-height: 1.15;

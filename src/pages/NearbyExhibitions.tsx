@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
-import { useNavigate } from 'react-router-dom'
 import exhibitions from '../../data/exhibitions/auto.json'
 import holidaysData from '../../data/holidays/holidays.json'
 import { calculateDistance, sortByDistance, type Coordinate } from '../engine/distance'
 import { matchVenue } from '../engine/matchVenue'
 import { judgeResolved, resolveSchedule } from '../engine/resolveSchedule'
 import type { Exhibition, JudgeResult, ParsedOperatingHours, Venue } from '../types'
-import ExhibitCard from '../components/ExhibitCard'
+import OneExhibit, { OPEN } from '../components/OneExhibit'
 import './NearbyExhibitions.css'
 
 declare global {
@@ -17,7 +16,7 @@ declare global {
 
 type Status = '가능' | '불가' | '확인 필요'
 type Entry = (typeof exhibitions)[number]
-type Item = { id: string; title: string; placeName: string; lat: number | null; lng: number | null; dist: number | null; in: boolean; judge: JudgeResult }
+type Item = { id: string; title: string; placeName: string; poster?: string; lat: number | null; lng: number | null; dist: number | null; in: boolean; judge: JudgeResult }
 type Spot = 'here' | 'home' | 'pick'
 
 const BASE: Coordinate = { lat: 37.5759, lng: 126.9768 }
@@ -58,7 +57,7 @@ function ITEM(ex: Entry, venue: Venue | undefined, pos: Coordinate | null, dist:
   const exhibition: Exhibition = { ...(ex as unknown as Exhibition), venueId: venue?.id ?? ex.venueId, placeName, lat: pos?.lat, lng: pos?.lng, operatingHours: hours }
   const resolved = resolveSchedule(venue ?? null, hours, { useExhibitionHours: true })
   const res = judgeResolved({ exhibition, date, stayStart: time, stayEnd: '23:59', holidays: HOLIDAYS }, resolved)
-  return { id: ex.id, title: ex.title, placeName, lat: pos?.lat ?? null, lng: pos?.lng ?? null, dist, in: inside, judge: res }
+  return { id: ex.id, title: ex.title, placeName, poster: ex.imageUrl || undefined, lat: pos?.lat ?? null, lng: pos?.lng ?? null, dist, in: inside, judge: res }
 }
 
 // 판정 결과 요약 문구 생성
@@ -175,8 +174,6 @@ function MARK(map: any, center: Coordinate, radius: number, spots: Item[][], go:
 }
 
 function NearbyExhibitions() {
-  const nav = useNavigate()
-  const navRef = useRef(nav)
   const boxRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
   const [ready, setReady] = useState(false)
@@ -188,8 +185,7 @@ function NearbyExhibitions() {
   const [blind, setBlind] = useState(false)
   const [pop, setPop] = useState<string | null>(null)
 
-  useEffect(() => { navRef.current = nav }, [nav])
-  const go = useCallback((item: Item) => navRef.current(`/overview/${item.id}`, { state: { judge: item.judge } }), [])
+  const go = useCallback((item: Item) => OPEN(item.id, item.judge), [])
   const { date, time } = useMemo(() => NOW(), [])
 
   const rows = useMemo(() => exhibitions.filter((ex) => ex.start <= date && date <= ex.end).map((ex) => {
@@ -212,7 +208,7 @@ function NearbyExhibitions() {
   const lostSpots = useMemo(() => GROUP(lost), [lost])
   const list = blind ? lost : near
 
-  // 기준 좌표와 법정동 갱신
+  // 기준 좌표 및 법정동 갱신
   const MOVE = useCallback((next: Coordinate, fallback: string, at: Spot) => {
     setBlind(false)
     setSpot(at)
@@ -287,7 +283,7 @@ function NearbyExhibitions() {
       {list.length ? (
         <div className="card-grid">
           {list.map((ex) => (
-            <ExhibitCard key={ex.id} to={`/overview/${ex.id}`} state={{ judge: ex.judge }} title={ex.title} venue={ex.placeName} status={STATUS[ex.judge.result]} lines={[ex.dist == null ? '위치 정보 없음' : `${ex.dist}m`, LINE(ex.judge, time)]} />
+            <OneExhibit key={ex.id} id={ex.id} judge={ex.judge} title={ex.title} venue={ex.placeName} status={STATUS[ex.judge.result]} poster={ex.poster} lines={[ex.dist == null ? '위치 정보 없음' : `${ex.dist}m`, LINE(ex.judge, time)]} />
           ))}
         </div>
       ) : (

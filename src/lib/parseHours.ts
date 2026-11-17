@@ -38,6 +38,52 @@ const WEEKEND_ONLY: Weekday[] = ['sat', 'sun'];
 // DaySchedule.note 에 넣는 메시지
 const SESSION_NOTE = '회차 운영';
 const EXTENSION_NOTE = '연장 운영';
+// 구간 앞에 붙는 계절 표시. "하절기", "동절기(11~2월)", "여름철"
+//   "겨울방학 프로그램" 같은 행사 이름까지 잡지 않도록 '철'·'기'가 붙은 말만 본다
+const SEASON_LABEL = /하절기|동절기|하계|동계|여름철|겨울철/;
+
+/**
+ * 한 요일에 계절별 시간이 겹쳐 들어 있으면 겹치는 시간 하나로 줄인다.
+ *   하절기 10:00~19:00, 동절기 10:00~18:00 -> 10:00~18:00
+ *   (평일) 10:00~18:00, 동절기 10:00~17:00  -> 10:00~17:00   (계절 표시가 한쪽에만 있는 경우)
+ *
+ * 문구에 몇 월이 어느 계절인지 없는 경우가 많고, 있어도 기관마다 다르다.
+ * 판정 날짜가 어느 계절인지 모르면서 긴 쪽을 쓰면 동절기 18~19시에 틀린 "가능"이 나온다.
+ * 겹치는 시간만 쓰면 하절기 18~19시를 "불가"로 잘못 말할 수는 있어도 틀린 "가능"은 나오지 않는다.
+ *
+ * 계절 구간과 시간이 겹치는 구간만 합친다. 겹치지 않는 구간(다른 회차 등)은 그대로 둔다.
+ */
+function mergeSeasons(intervals: TimeInterval[], seasonIntervals: Set<TimeInterval>): TimeInterval[] {
+  const seasonal = intervals.filter(iv => seasonIntervals.has(iv));
+  if (!seasonal.length || intervals.length < 2) return intervals;
+
+  const range = (iv: TimeInterval) => [toMinutes(iv.open) ?? 0, toMinutes(iv.close) ?? 0];
+  const overlaps = (x: TimeInterval, y: TimeInterval) => {
+    const [a1, b1] = range(x);
+    const [a2, b2] = range(y);
+    return a1 < b2 && a2 < b1;
+  };
+  const group = intervals.filter(iv => seasonIntervals.has(iv) || seasonal.some(s => overlaps(s, iv)));
+  if (group.length < 2) return intervals;
+
+  const open = Math.max(...group.map(iv => range(iv)[0]));
+  const close = Math.min(...group.map(iv => range(iv)[1]));
+  const merged: TimeInterval = { open: fromMinutes(open), close: fromMinutes(close) };
+  const admissions = group
+    .map(iv => (iv.lastAdmission ? toMinutes(iv.lastAdmission) : null))
+    .filter((m): m is number => m !== null);
+  if (admissions.length) merged.lastAdmission = fromMinutes(Math.min(close, ...admissions));
+
+  // 원래 자리(그룹의 첫 구간 위치)에 넣어 구간 순서를 지킨다.
+  // 계절끼리 겹치지 않으면(open >= close) 어느 시간도 확실하지 않으므로 그룹을 모두 뺀다
+  const out: TimeInterval[] = [];
+  for (const iv of intervals) {
+    if (!group.includes(iv)) out.push(iv);
+    else if (iv === group[0] && open < close) out.push(merged);
+  }
+  return out;
+}
+
 // 구간 바로 앞에 붙는 회차 표시. "1회차", "2차시", "A타임", "1부:", "오전반("
 //   - 회차·차시·타임은 앞에 번호가 있을 때만 본다. "타임스퀘어", "회차별 상이" 는 회차가 아니다
 //   - normalize() 가 "오전"/"오후"를 지우므로 "오전반(" 은 여기 올 때 "반(" 만 남는다.
@@ -497,6 +543,8 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     interval: TimeInterval;
     weeks: number[] | null;
     session: boolean;
+    // 구간 앞에 "하절기", "동절기" 같은 계절 표시가 있었는지
+    season: boolean;
   };
   const assignments: Assignment[] = [];
 
@@ -546,6 +594,12 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
       if (scope === null && scopeInPiece && /[0-9A-Za-z]\s*(?:회차|차시|타임)|부\s*$|반\s*$/.test(scopeText.trim())) {
         scope = scopeInPiece;
       }
+      // "주말(하절기) 10:00~19:00 (동절기) 10:00~18:00" 의 동절기는 앞 구간(주말)의 다른 계절 시간이다.
+      // 요일을 물려받아 같은 요일에 넣고, 아래에서 두 계절이 겹치는 시간만 남긴다
+      const season = SEASON_LABEL.test(scopeText);
+      if (scope === null && season) {
+        scope = scopeInPiece ?? lastScope;
+      }
       if (scope) {
         lastScope = scope;
         scopeInPiece = scope;
@@ -555,6 +609,7 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
         interval,
         weeks: readWeeksOfMonth(scopeText) ?? readWeeksOfMonth(piece),
         session: SESSION_LABEL.test(scopeText),
+        season,
       });
     }
   }
@@ -587,12 +642,16 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
   const sharedWeeks = assignments.find(a => a.scope === null && a.weeks)?.weeks ?? null;
   // 회차로 적힌 구간. 객체를 그대로 쓰므로 중복 제거 뒤에도 같은 객체로 찾을 수 있다
   const sessionIntervals = new Set(assignments.filter(a => a.session).map(a => a.interval));
+  const seasonIntervals = new Set(assignments.filter(a => a.season).map(a => a.interval));
 
   for (const day of ORDER) {
     const intervals = perDay.get(day) ?? shared;
     // 같은 구간이 두 번 적힌 경우("1회차 14:00~15:30 / 2회차 14:00~15:30")는 하나로 둔다
-    const unique = intervals.filter(
-      (iv, i) => intervals.findIndex(other => JSON.stringify(other) === JSON.stringify(iv)) === i,
+    const unique = mergeSeasons(
+      intervals.filter(
+        (iv, i) => intervals.findIndex(other => JSON.stringify(other) === JSON.stringify(iv)) === i,
+      ),
+      seasonIntervals,
     );
     if (!unique.length) continue;
     const weeks = weeksPerDay.get(day) ?? (perDay.has(day) ? null : sharedWeeks);

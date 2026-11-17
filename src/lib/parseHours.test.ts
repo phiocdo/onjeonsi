@@ -189,12 +189,46 @@ describe('parseHours — 회차가 여러 개인 경우', () => {
     ]);
   });
 
-  it('시각 말고 다른 말이 붙은 조각은 앞 요일을 물려받지 않는다', () => {
-    // "(동절기) 10:00~18:00" 은 주말의 다음 회차가 아니라 계절별 안내다
+  it('계절 안내는 다음 회차가 아니라 같은 요일의 다른 계절 시간으로 본다', () => {
+    // "(동절기) 10:00~18:00" 은 주말의 다음 회차가 아니다. 예전에는 버려서 동절기에도 19:00 까지로 읽었다
     const t = '평일 10:00 ~ 20:00 / 주말(하절기) 10:00 ~ 19:00 (동절기) 10:00 ~ 18:00';
     expect(span(t, 'mon')).toBe('10:00-20:00');
-    expect(span(t, 'sat')).toBe('10:00-19:00');
     expect(parseHours(t, 2026).weekdays.sat.intervals).toHaveLength(1);
+  });
+});
+
+describe('parseHours — 계절별 시간', () => {
+  it('계절마다 시간이 다르면 겹치는 시간만 쓴다', () => {
+    // 어느 계절인지 모르고 긴 쪽을 쓰면 동절기 18~19시에 틀린 "가능"이 나온다
+    const t = '평일 10:00 ~ 20:00 / 주말(하절기) 10:00 ~ 19:00 (동절기) 10:00 ~ 18:00';
+    expect(span(t, 'sat')).toBe('10:00-18:00');
+    expect(span(t, 'sun')).toBe('10:00-18:00');
+    expect(span('하절기 09:00~18:00 / 동절기 09:00~17:00', 'mon')).toBe('09:00-17:00');
+  });
+
+  it('여는 시각이 다르면 늦게 여는 쪽을 쓴다', () => {
+    expect(span('하절기 09:00~18:00 / 동절기 10:00~18:00', 'mon')).toBe('10:00-18:00');
+  });
+
+  it('계절 표시가 한쪽에만 있어도 같은 요일 시간과 합친다', () => {
+    const r = parseHours('화-일 10:00~18:00 / 동절기 10:00~17:00', 2026);
+    expect(r.weekdays.sat.intervals).toEqual([{ open: '10:00', close: '17:00' }]);
+    expect(r.weekdays.mon.isOpen).toBe(false);
+  });
+
+  it('입장 마감은 합친 시간에 맞춘다', () => {
+    const r = parseHours('하절기(3~10월) 10:00~19:00, 동절기(11~2월) 10:00~18:00 ※ 입장마감 30분 전', 2026);
+    expect(r.weekdays.mon.intervals).toEqual([{ open: '10:00', close: '18:00', lastAdmission: '17:30' }]);
+  });
+
+  it('계절이 아닌 말("겨울방학")은 계절로 보지 않는다', () => {
+    const r = parseHours('평일 10:00~18:00 / 겨울방학 프로그램 14:00~16:00', 2026);
+    expect(r.weekdays.mon.intervals).toEqual([{ open: '10:00', close: '18:00' }]);
+  });
+
+  it('회차와 중간 휴관은 계절 처리에 영향받지 않는다', () => {
+    expect(parseHours('1회차 10:00~12:00 / 2회차 14:00~16:00', 2026).weekdays.mon.intervals).toHaveLength(2);
+    expect(parseHours('10:00~18:00 (※ 12~13시 휴관)', 2026).weekdays.mon.intervals).toHaveLength(2);
   });
 
   it('회차로 적힌 요일에는 note 를 붙인다', () => {

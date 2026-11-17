@@ -39,9 +39,10 @@ const WEEKEND_ONLY: Weekday[] = ['sat', 'sun'];
 const SESSION_NOTE = '회차 운영';
 const EXTENSION_NOTE = '연장 운영';
 // 구간 바로 앞에 붙는 회차 표시. "1회차", "2차시", "A타임", "1부:", "오전반("
-//   normalize() 가 "오전"/"오후"를 지우므로 "오전반(" 은 여기 올 때 "반(" 만 남는다.
-//   '반'·'부' 앞에 한글이 오면("주말부") 회차가 아니다
-const SESSION_LABEL = /회차|차시|타임|(?:^|[^가-힣])[반부]\s*[(:：]?\s*$/;
+//   - 회차·차시·타임은 앞에 번호가 있을 때만 본다. "타임스퀘어", "회차별 상이" 는 회차가 아니다
+//   - normalize() 가 "오전"/"오후"를 지우므로 "오전반(" 은 여기 올 때 "반(" 만 남는다.
+//     '반'·'부' 앞에 한글이 오면("주말부") 회차가 아니다
+const SESSION_LABEL = /[0-9A-Za-z]\s*(?:회차|차시|타임)|(?:^|[^가-힣])[반부]\s*[(:：]?\s*$/;
 
 function emptyDay(): DaySchedule {
   return { isOpen: false, intervals: [] };
@@ -213,15 +214,14 @@ function applyExtensions(weekdays: Record<Weekday, DaySchedule>, source: string)
     for (const day of days) {
       const cur = weekdays[day];
       if (!cur.isOpen || !cur.intervals.length) continue;
+      // 회차는 시작 시각이 정해져 있어서 마지막 회차를 늘리면 없는 회차를 만들게 된다
+      if (cur.sessions) continue;
       const last = cur.intervals[cur.intervals.length - 1];
       if ((toMinutes(close) ?? 0) <= (toMinutes(last.open) ?? 0)) continue;
       weekdays[day] = {
         ...cur,
         intervals: [...cur.intervals.slice(0, -1), { ...last, close }],
-        // 회차 note 가 이미 있으면 지우지 않고 잇는다. periods 에서 두 번 불려도 한 번만 붙는다
-        note: !cur.note ? EXTENSION_NOTE
-          : cur.note.includes(EXTENSION_NOTE) ? cur.note
-          : `${cur.note} · ${EXTENSION_NOTE}`,
+        note: EXTENSION_NOTE,
       };
     }
   }
@@ -599,7 +599,10 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     if (weeks) schedule.weeksOfMonth = weeks;
     // 그 요일의 구간이 전부 회차일 때만 붙인다.
     //   "화-일 10:00~18:00 / 토 1회차 14:00~15:00" 의 토요일은 상시 관람도 되므로 붙이지 않는다
-    if (unique.every(iv => sessionIntervals.has(iv))) schedule.note = SESSION_NOTE;
+    if (unique.every(iv => sessionIntervals.has(iv))) {
+      schedule.sessions = true;
+      schedule.note = SESSION_NOTE;
+    }
     weekdays[day] = schedule;
   }
 

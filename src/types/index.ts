@@ -33,7 +33,15 @@ export interface DaySchedule {
   isOpen: boolean;
   intervals: TimeInterval[]; // 휴관일이면 빈 배열
   requiresReservation?: boolean;
-  note?: string; // "야간개관", "오픈식" 같은 짧은 메시지
+  note?: string; // "야간개관", "오픈식" 같은 짧은 메시지. 화면 표시용이라 판정에 쓰지 않는다
+  /**
+   * 회차로만 운영하는 날이면 true. "1회차 14:00~15:20 / 2회차 16:00~17:20" 같은 경우다.
+   * 이때 intervals 는 관람 가능한 시간대가 아니라 각 회차의 시작~끝이다.
+   * 상시 관람 구간이 하나라도 섞인 날은 붙지 않는다.
+   *
+   * 판정할 때 note 문자열 대신 이 값을 본다.
+   */
+  sessions?: boolean;
   /**
    * 그 달의 몇째 주에만 하는 경우. [1, 3] 이면 1·3째주만 열고 나머지 주는 닫는다.
    * 없으면 매주 한다는 뜻이다. "1, 3째주 토 ..." 같은 격주 프로그램에서 나온다.

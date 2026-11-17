@@ -221,10 +221,33 @@ describe('parseHours — 회차가 여러 개인 경우', () => {
     expect(r.weekdays.sat.note).toBeUndefined();
   });
 
-  it('회차에 연장 운영이 겹치면 note 를 잇는다', () => {
+  it('회차 요일에는 sessions 를 붙여 판정이 note 문자열을 보지 않게 한다', () => {
+    const r = parseHours('1회차 14:00~15:20 / 2회차 16:00~17:20', 2026);
+    expect(r.weekdays.mon.sessions).toBe(true);
+    expect(parseHours('10:00~18:00', 2026).weekdays.mon.sessions).toBeUndefined();
+    expect(parseHours('화-일 10:00~18:00 / 토 1회차 14:00~15:00', 2026).weekdays.sat.sessions)
+      .toBeUndefined();
+  });
+
+  it('번호 없이 회차·타임이 들어간 말은 회차로 보지 않는다', () => {
+    // "타임스퀘어" 같은 장소 이름을 회차로 보면 상시 관람 전시가 판정에서 빠진다
+    for (const t of ['타임스퀘어 10:00~22:00', '회차별 상이 10:00~18:00', '라이프타임 10:00~18:00']) {
+      const mon = parseHours(t, 2026).weekdays.mon;
+      expect(mon.sessions, t).toBeUndefined();
+      expect(mon.note, t).toBeUndefined();
+    }
+    expect(parseHours('A타임 10:00~11:00 / B타임 14:00~15:00', 2026).weekdays.mon.sessions).toBe(true);
+    expect(parseHours('1타임 10:00~11:00', 2026).weekdays.mon.sessions).toBe(true);
+  });
+
+  it('회차 요일에는 연장 운영을 적용하지 않는다', () => {
+    // 마지막 회차를 21:00 까지 늘리면 없는 회차를 만들게 된다
     const r = parseHours('1회차 10:00~12:00 / 2회차 14:00~16:00 ※ 금요일은 21:00까지', 2026);
-    expect(r.weekdays.fri.note).toBe('회차 운영 · 연장 운영');
-    expect(r.weekdays.mon.note).toBe('회차 운영');
+    expect(r.weekdays.fri.intervals).toEqual([
+      { open: '10:00', close: '12:00' },
+      { open: '14:00', close: '16:00' },
+    ]);
+    expect(r.weekdays.fri.note).toBe('회차 운영');
   });
 
   it('요일이 지정된 구간은 지정 없는 구간을 덮어쓴다', () => {

@@ -217,7 +217,7 @@ const result = judgeResolved({ exhibition: ex, date, stayStart, stayEnd, holiday
 // resolved.venue가 null이면 { result: 'unknown', reasons: [MISSING_VENUE] }
 ```
 
-- 전시 쪽은 "믿을 수 있는 요일"만 씁니다: `scheduleType`이 `'scheduled'`이고, 그 요일이 `isOpen: true`, 구간이 하나 이상, 각 구간 `open < close`, 구간끼리 겹치지 않음, 회차 요일이 아님(`isSessionDay`). 나머지 요일은 "모름"입니다(`isOpen: false`도 "모름").
+- 전시 쪽은 "믿을 수 있는 요일"만 씁니다: `scheduleType`이 `'scheduled'`이고, 그 요일이 `isOpen: true`, 구간이 하나 이상, 각 구간 `open < close`, 구간끼리 겹치지 않음, 회차 요일이 아님(`isSessionDay`, `sessions: true`). 나머지 요일은 "모름"입니다(`isOpen: false`도 "모름").
 - `resolveSchedule`은 날짜를 모르므로 기본 요일 일정(`weekdays`)만 봅니다. 날짜별 일정은 `judgeResolved`가 적용합니다.
 - 결과
   - 시설만 있음, 플래그 off, 또는 믿을 요일 없음: 시설 그대로, `basis: 'venue'`.
@@ -234,6 +234,11 @@ const result = judgeResolved({ exhibition: ex, date, stayStart, stayEnd, holiday
   - 플래그 on: 판정 날짜의 일정(`scheduleForDate`)을 다시 골라 그 요일만 바꿔 판정합니다. 전시 일정은 `input.exhibition.operatingHours`, 없으면 `source.hours`입니다.
     - 그날 일정을 믿을 수 있으면 그 일정으로, "모름"이면 지금처럼 믿지 않는 요일로 다룹니다.
     - 확실히 쉬는 날(날짜 예외가 휴관, 공휴일 규칙이 휴관, 몇째 주에 해당하지 않음)은 그 날짜를 `closed.dates`에 넣어 `CLOSED_DATE`로 막습니다. 시설도 그날 쉬면 시설 사유를 그대로 둡니다.
+    - 회차 요일 규칙: 그날 고른 일정이 회차(`sessions: true`, 쉬는 주 제외)면
+      - 결과가 불가면 그대로 둡니다(어긴 조건이 정보 부족보다 우선).
+      - 가능·확인 필요면 확인 필요 + `SESSION_DAY` 하나로 바꿉니다. `basis`는 남기고 `entryTime` 등은 뺍니다. 입력 오류(`INVALID_INPUT`)는 그대로 둡니다.
+      - 시설이 없어 `MISSING_VENUE`가 될 때도 `SESSION_DAY`로 바꿉니다. 회차 요일이 아니면 `MISSING_VENUE` / `MISSING_HOURS`를 그대로 둡니다.
+      - 플래그 off에서는 적용하지 않습니다.
 - 입력 `venue`, `hours`는 바꾸지 않습니다.
 - 시설 없이 만든 `venue`(`basis: 'exhibition'`)는 판정용입니다. `id`, `name`, 좌표 등은 빈 값이라 화면에 쓰지 않습니다.
 
@@ -259,7 +264,7 @@ const day = scheduleForDate(ex.operatingHours, '2026-11-21', holidays);
   4. 그 날짜가 공휴일이고 `holiday`가 `null`이 아니면 `holiday` 일정
   5. 고른 요일 일정에 `weeksOfMonth`가 있고 그날의 주가 없으면 휴관(`isOpen: false, intervals: []`)
 - 몇째 주(`weekOfMonth`)는 1~7일이 1째 주, 8~14일이 2째 주인 방식입니다. "1, 3째주 토"를 그 달 첫째·셋째 토요일로 읽습니다(달력 주 방식 아님).
-- `isSessionDay`: 회차로 운영하는 요일인지. `sessions` 필드가 있으면 그것만, 없으면 `note`에 `'회차'`가 있는지 봅니다. 회차 요일은 "모름"으로 둡니다.
+- `isSessionDay`: 회차로 운영하는 요일인지. `sessions === true`인지만 봅니다(`note`는 화면 표시용이라 보지 않습니다). 회차 요일은 "모름"으로 두고, 플래그 on의 `judgeResolved`는 그날이 회차면 `SESSION_DAY`로 확인 필요를 냅니다(위 참고).
 - 입력은 바꾸지 않습니다. 돌려준 객체는 입력의 것일 수 있으니 고치지 않습니다.
 
 ### isOpen (`isOpen.ts`)
@@ -466,6 +471,7 @@ export function findStartCandidates(
 | `MISSING_HOURS` | 운영 시간 정보가 없습니다 | 요일별 `hours` 없음, 시설·구간(`intervalsByDay`) 시각 형식 오류 |
 | `MISSING_LAST_ENTRY` | 입장 마감 정보가 없습니다 | 그날 쓸 입장 마감의 형식 오류 (없으면 폐관 시각을 씀) |
 | `MISSING_VENUE` | 시설 정보가 없습니다 | 전시에 연결된 시설이 없을 때 (`judge`는 아직 쓰지 않음) |
+| `SESSION_DAY` | 회차제로 운영돼 입장 가능 시간을 확인해야 합니다 | 플래그 on의 `judgeResolved`에서 판정 날짜가 회차 요일일 때. 가능·확인 필요(`MISSING_VENUE` 포함)를 이 사유 하나로 바꿈. 불가는 그대로 (4장 참고) |
 | `INVALID_INPUT` | 입력한 날짜나 시간이 올바르지 않습니다 | 입력 검사 실패 (5장 참고) |
 | `NOT_IMPLEMENTED` | 판정 로직 구현 전입니다 | 쓰지 않음 |
 
@@ -483,8 +489,9 @@ export function findStartCandidates(
 - 입장 마감이 없으면 폐관 시각을 입장 마감으로 봅니다. 실제 입장 마감이 폐관 30분 전인 곳은 폐관 직전 도착이 "가능"으로 나올 수 있습니다.
   화면은 `lastEntryAssumed`를 보고 "입장 마감 확인 필요" 같은 안내를 붙이는 것이 좋습니다.
   해석기가 읽지 못하는 표현(예: "17:30까지 입장가능")도 같은 경로로 폐관 기준이 됩니다.
-- 회차 판단은 `note`의 `'회차'`(PR #41)에 기대고 있습니다. #41 전 데이터에는 이 note가 없어 회차 구간을 상시 관람 구간으로 읽습니다.
-  #41에서 `sessions` 필드가 생기면 `isSessionDay`만 고치면 됩니다.
+- 회차 판단은 해석기가 붙이는 `sessions: true`에만 기댑니다. 그 요일 구간이 **모두** 회차일 때만 붙으므로, 상시 관람 구간이 섞인 날은 회차로 보지 않습니다.
+  해석기가 회차 표시를 놓치면(예: 계절 구간을 합친 경우) 상시 관람으로 읽습니다.
+  회차 요일 규칙(`SESSION_DAY`)은 플래그 on에서만 적용되므로 기본값(off)에서는 판정이 바뀌지 않습니다.
 - 몇째 주는 1~7일 방식입니다. "첫째 주"를 달력의 첫 줄로 세는 시설이면 다르게 나옵니다.
 - 구간이 여러 개인 날의 불가 사유는 가장 가까웠던 구간 하나의 것입니다. 다른 구간의 사유는 나오지 않습니다.
 - `stats`의 `medianMinutes`는 아직 판정의 관람 시간(`visitMinutes`)과 연결되지 않았습니다.
@@ -535,6 +542,11 @@ export function findStartCandidates(
 | S21 | 점심 휴관(구간 여러 개) 가능 | 10~12 / 13~18, 수 11:30~14:30 | 가능, 오후 13:00 입장, 여유 30 |
 | S22 | 점심 휴관 불가 | 같은 시설, 수 11:30~12:45 | 불가, `NOT_ENOUGH_BEFORE_CLOSE` 하나 |
 | S23 | 시설 없음 | `judgeResolved` + `resolveSchedule(null, …)` | 확인 필요, `MISSING_VENUE` |
+| S24 | 회차 요일, 조건 만족 | 플래그 on, 전시 수 회차(`sessions: true`)·목 10~18, 수 13:00~16:00 / 목 13:00~16:00 | 확인 필요, `SESSION_DAY` 하나(`basis: 'merged'`) / 가능 |
+| S25 | 회차 요일, 어긴 조건 | 같은 전시, 수 13:00~13:59 / 수 13:00~14:00 | 불가, `NOT_ENOUGH_STAY` 하나(그대로) / 확인 필요, `SESSION_DAY` |
+| S26 | 시설 없음 + 회차 요일 | 시설 없음, 전시 수 회차만, 수 13:00~16:00 / 목 13:00~16:00 | 확인 필요, `SESSION_DAY` / 확인 필요, `MISSING_VENUE` |
+| S27 | 격주(`weeksOfMonth`) 쉬는 주 | 플래그 on, 전시 토요일 1·3째 주만(`weeksOfMonth: [1, 3]`), 토 2026-11-14(2째 주) / 2026-11-21(3째 주), 13:00~16:00 | 불가, `CLOSED_DATE`(`basis: 'merged'`) / 가능 |
+| S28 | 명절 당일 휴관(`exceptions`) | 플래그 on, 전시 2027-02-07(설날 당일) 휴관 예외, `holiday: null`, 공휴일 2027-02-06~09, 2027-02-07 / 2027-02-08(월, 공휴일이라 시설 개관), 13:00~16:00 | 불가, `CLOSED_DATE`(`basis: 'merged'`) / 가능 |
 
 ## 10. 테스트 실행
 

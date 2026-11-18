@@ -22,16 +22,11 @@ export function weekOfMonth(date: string): number {
 
 /**
  * 회차로 운영하는 요일인지. 회차는 시작 시각에 맞춰 가야 해서 아무 때나 들어가는 판정을 할 수 없다.
- * - DaySchedule에 sessions가 있으면 그것만 본다(PR #41에서 생길 예정. 아직 타입에 없다)
- * - 없으면 note에 '회차'가 들어 있는지 본다
- * #41이 머지되면 이 함수만 sessions를 보도록 바꾼다.
+ * DaySchedule.sessions(해석기가 그 요일 구간이 모두 회차일 때 붙이는 값)가 true인지만 본다.
+ * note('회차 운영')는 화면 표시용이라 보지 않는다.
  */
 export function isSessionDay(day: DaySchedule): boolean {
-  const sessions = (day as DaySchedule & { sessions?: unknown }).sessions;
-  if (sessions !== undefined && sessions !== null) {
-    return Array.isArray(sessions) ? sessions.length > 0 : Boolean(sessions);
-  }
-  return day.note?.includes('회차') ?? false;
+  return day.sessions === true;
 }
 
 /**

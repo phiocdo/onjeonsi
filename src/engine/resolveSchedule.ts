@@ -320,12 +320,35 @@ function trustForDate(hours: ParsedOperatingHours, date: string, holidays: strin
   return map;
 }
 
+/** 판정 날짜에 고른 전시 일정이 회차 운영인지. 쉬는 날(몇째 주 규칙으로 닫은 날 포함)은 회차가 아니다. */
+function isSessionDate(hours: ParsedOperatingHours, date: string, holidays: string[]): boolean {
+  const picked = pickDaySchedule(hours, date, holidays);
+  return picked !== null && !picked.offWeek && picked.schedule.isOpen && isSessionDay(picked.schedule);
+}
+
+/**
+ * 회차 요일 규칙. 판정 날짜가 회차로 운영하는 날이면
+ * - 불가는 그대로 둔다(어긴 조건이 정보 부족보다 우선)
+ * - 입력 오류(INVALID_INPUT)도 그대로 둔다
+ * - 가능·확인 필요는 확인 필요 + SESSION_DAY 하나로 바꾼다. basis는 남긴다
+ */
+function applySessionDay(result: JudgeResult): JudgeResult {
+  if (result.result === 'impossible') return result;
+  if (result.result === 'unknown' && result.reasons.includes(REASONS.INVALID_INPUT)) return result;
+  const out: JudgeResult = { result: 'unknown', reasons: [REASONS.SESSION_DAY] };
+  if (result.basis !== undefined) out.basis = result.basis;
+  return out;
+}
+
 /**
  * resolveSchedule 결과로 판정한다. 시설 정보가 없으면 확인 필요(MISSING_VENUE).
  *
  * useExhibitionHours가 true였으면 그날 일정(scheduleForDate: 날짜 예외, periods, 공휴일, 몇째 주)을
  * 다시 골라 적용한다. 전시 일정은 input.exhibition.operatingHours를 쓰고, 없으면 resolveSchedule에
  * 넘긴 hours를 쓴다. 플래그가 false면 resolved.venue로 그대로 판정한다.
+ *
+ * 플래그가 true이고 그날 일정이 회차(sessions: true)면 회차 요일 규칙(applySessionDay)을 적용한다.
+ * 시설이 없어 MISSING_VENUE가 될 때도 SESSION_DAY로 바꾼다. 플래그가 false면 적용하지 않는다.
  */
 export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: ResolveResult): JudgeResult {
   const src = resolved.source;
@@ -333,8 +356,9 @@ export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: Resolv
   if (src && src.options.useExhibitionHours && hours?.scheduleType === 'scheduled' && isValidDate(input.date)) {
     const trusted = trustForDate(hours, input.date, input.holidays);
     const built = build(src.venue, trusted, src.options);
+    const sessionDate = isSessionDate(hours, input.date, input.holidays);
     if (built.venue === null) {
-      return { result: 'unknown', reasons: [REASONS.MISSING_VENUE] };
+      return { result: 'unknown', reasons: [sessionDate ? REASONS.SESSION_DAY : REASONS.MISSING_VENUE] };
     }
     let venue = built.venue;
     // 전시가 그날 확실히 쉬면 지정 휴관일로 막는다. 시설이 이미 쉬는 날이면 시설 사유를 그대로 둔다
@@ -344,7 +368,8 @@ export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: Resolv
         closed: { ...venue.closed, dates: [...(venue.closed?.dates ?? []), input.date] },
       };
     }
-    return judge({ ...input, venue });
+    const result = judge({ ...input, venue });
+    return sessionDate ? applySessionDay(result) : result;
   }
 
   if (resolved.venue === null) {

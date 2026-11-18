@@ -304,18 +304,24 @@ describe('resolveSchedule: 입력을 바꾸지 않는다', () => {
 });
 
 describe('resolveSchedule: 회차·겹치는 구간은 모름', () => {
-  it('note에 회차가 있는 요일은 구간 수와 상관없이 믿지 않는다', () => {
+  it('sessions: true인 요일은 구간 수와 상관없이 믿지 않는다', () => {
     const hours = makeHours({
-      tue: { ...open('14:00', '15:20'), note: '회차 운영' },
+      tue: { ...open('14:00', '15:20'), sessions: true, note: '회차 운영' },
       wed: {
         isOpen: true,
         intervals: [{ open: '14:00', close: '15:20' }, { open: '16:00', close: '17:20' }],
+        sessions: true,
         note: '회차 운영',
       },
+      // note만 있고 sessions가 없으면 회차로 보지 않는다
+      thu: { ...open('10:00', '18:00'), note: '회차 운영' },
       sat: open('10:00', '18:00'),
     });
     const r = resolveSchedule(null, hours, ON);
-    expect(r.venue?.hours).toEqual({ sat: { open: '10:00', close: '18:00' } });
+    expect(r.venue?.hours).toEqual({
+      thu: { open: '10:00', close: '18:00' },
+      sat: { open: '10:00', close: '18:00' },
+    });
     expect(r.venue?.intervalsByDay).toBeUndefined();
   });
 
@@ -498,5 +504,99 @@ describe('judgeResolved: 판정 날짜의 일정 (scheduleForDate)', () => {
     const hours = makeHours({ sat: open('10:00', '18:00') });
     expect(runEx(resolveSchedule(null, hours, ON), withHours(hours), '2026-02-30', '14:00', '17:00').reasons)
       .toEqual([REASONS.INVALID_INPUT]);
+  });
+});
+
+describe('judgeResolved: 회차 요일 (SESSION_DAY)', () => {
+  const SAT_14 = '2026-11-14'; // 둘째 토요일
+  const withHours = (operatingHours: ParsedOperatingHours): Exhibition => ({ ...exhibition, operatingHours });
+  const runEx = (resolved: ReturnType<typeof resolveSchedule>, ex: Exhibition, date: string, stayStart: string, stayEnd: string) =>
+    judgeResolved({ exhibition: ex, date, stayStart, stayEnd, holidays: [] }, resolved);
+
+  // 토요일은 회차, 화요일은 상시 관람
+  const session = (o: string, c: string): DaySchedule => ({ ...open(o, c), sessions: true, note: '회차 운영' });
+  const hours = makeHours({ tue: open('10:00', '18:00'), sat: session('14:00', '15:20'), mon: session('14:00', '15:20') });
+  const ex = withHours(hours);
+
+  it('해석기 결과(sessions: true)로도 같은 규칙이 적용된다', () => {
+    const parsed = parseHours('1회차 14:00~15:20 / 2회차 16:00~17:20', 2026);
+    expect(parsed.weekdays.sat.sessions).toBe(true);
+    // 모든 요일이 회차라 믿을 요일이 없다 → 시설 그대로(basis: 'venue')로 판정한 뒤 회차 규칙
+    expect(runEx(resolveSchedule(craftMuseum(), parsed, ON), withHours(parsed), SAT, '13:00', '18:00')).toEqual({
+      result: 'unknown', reasons: [REASONS.SESSION_DAY], basis: 'venue',
+    });
+  });
+
+  describe('① 기존 결과가 불가면 그대로 둔다', () => {
+    it('시설 정기 휴관(월)과 폐관 전 시간 부족은 불가 사유 그대로', () => {
+      const r = resolveSchedule(craftMuseum(), hours, ON);
+      expect(runEx(r, ex, MON, '14:00', '17:00')).toEqual({
+        result: 'impossible', reasons: [REASONS.CLOSED_WEEKDAY('월')], basis: 'merged',
+      });
+      // 시설 토 10:00~19:00, 관람 90분 → 18:00 입장은 폐관 전에 못 끝낸다
+      expect(runEx(r, ex, SAT, '18:00', '20:00')).toEqual({
+        result: 'impossible', reasons: [REASONS.NOT_ENOUGH_BEFORE_CLOSE], basis: 'merged',
+      });
+    });
+
+    it('짝: 회차가 쉬는 주(weeksOfMonth)는 회차 요일이 아니라 CLOSED_DATE', () => {
+      const weekly = makeHours({ tue: open('10:00', '18:00'), sat: { ...session('14:00', '15:20'), weeksOfMonth: [1, 3] } });
+      const r = resolveSchedule(craftMuseum(), weekly, ON);
+      expect(runEx(r, withHours(weekly), SAT_14, '14:00', '17:00')).toEqual({
+        result: 'impossible', reasons: [REASONS.CLOSED_DATE], basis: 'merged',
+      });
+      expect(runEx(r, withHours(weekly), SAT, '14:00', '17:00').reasons).toEqual([REASONS.SESSION_DAY]);
+    });
+  });
+
+  describe('② 가능·확인 필요는 확인 필요 + SESSION_DAY 하나로', () => {
+    it('가능 → SESSION_DAY (merged). 짝: 회차가 아닌 화요일은 그대로 가능', () => {
+      const r = resolveSchedule(craftMuseum(), hours, ON);
+      expect(runEx(r, ex, SAT, '14:00', '17:00')).toEqual({
+        result: 'unknown', reasons: [REASONS.SESSION_DAY], basis: 'merged',
+      });
+      expect(runEx(r, ex, TUE, '14:00', '17:00')).toMatchObject({ result: 'possible', entryTime: '14:00' });
+    });
+
+    it('확인 필요(MISSING_HOURS) → SESSION_DAY (exhibition). 짝: 회차가 아닌 모르는 요일은 MISSING_HOURS', () => {
+      const r = resolveSchedule(null, hours, ON);
+      expect(runEx(r, ex, SAT, '14:00', '17:00')).toEqual({
+        result: 'unknown', reasons: [REASONS.SESSION_DAY], basis: 'exhibition',
+      });
+      // 수요일은 isOpen: false("모름")이고 회차도 아니다
+      expect(runEx(r, ex, '2026-11-18', '14:00', '17:00')).toEqual({
+        result: 'unknown', reasons: [REASONS.MISSING_HOURS], basis: 'exhibition',
+      });
+    });
+
+    it('입력 오류(INVALID_INPUT)는 그대로 둔다', () => {
+      const r = resolveSchedule(craftMuseum(), hours, ON);
+      expect(runEx(r, ex, SAT, '17:00', '14:00').reasons).toEqual([REASONS.INVALID_INPUT]);
+    });
+  });
+
+  describe('③ 시설이 없을 때 MISSING_VENUE', () => {
+    // 믿을 수 있는 요일이 하나도 없어 venue가 null이 되는 전시 (모든 여는 요일이 회차)
+    const onlySessions = makeHours({ sat: session('14:00', '15:20') });
+
+    it('회차 요일이면 SESSION_DAY. 짝: 회차 요일이 아니면 MISSING_VENUE 그대로', () => {
+      const r = resolveSchedule(null, onlySessions, ON);
+      expect(r.venue).toBeNull();
+      expect(runEx(r, withHours(onlySessions), SAT, '14:00', '17:00')).toEqual({
+        result: 'unknown', reasons: [REASONS.SESSION_DAY],
+      });
+      expect(runEx(r, withHours(onlySessions), TUE, '14:00', '17:00')).toEqual({
+        result: 'unknown', reasons: [REASONS.MISSING_VENUE],
+      });
+    });
+  });
+
+  it('플래그 off면 적용하지 않는다 (지금과 같은 결과)', () => {
+    expect(runEx(resolveSchedule(craftMuseum(), hours, OFF), ex, SAT, '14:00', '17:00')).toMatchObject({
+      result: 'possible', basis: 'venue',
+    });
+    expect(runEx(resolveSchedule(null, hours, OFF), ex, SAT, '14:00', '17:00')).toEqual({
+      result: 'unknown', reasons: [REASONS.MISSING_VENUE],
+    });
   });
 });

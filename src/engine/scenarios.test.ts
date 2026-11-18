@@ -8,10 +8,12 @@
  * 각 시나리오는 조건 하나만 어기도록 시설·시각을 골라 사유가 정확히 하나 나오게 한다
  * (S19 여러 조건 동시 위반은 예외).
  *
- * 달력 (2026-11): 16 월, 17 화, 18 수, 21 토, 23 월, 24 화
+ * 달력 (2026-11): 14 토(2째 주), 16 월, 17 화, 18 수, 21 토(3째 주), 23 월, 24 화
+ * 달력 (2027-02): 7 일(설날 당일), 8 월(설 연휴)
+ * 몇째 주는 1~7일이 1째 주, 8~14일이 2째 주인 방식이다(weekOfMonth).
  */
 import { describe, it, expect } from 'vitest';
-import type { Exhibition, JudgeInput, Venue } from '../types';
+import type { DaySchedule, Exhibition, JudgeInput, ParsedOperatingHours, Venue } from '../types';
 import { judge, type ResolvedVenue } from './judge';
 import { judgeResolved, resolveSchedule } from './resolveSchedule';
 import { REASONS } from './reasons';
@@ -373,6 +375,111 @@ describe('F-05 판정 시나리오', () => {
     expect(judgeResolved(rest, resolveSchedule(null, undefined, { useExhibitionHours: true }))).toEqual({
       result: 'unknown',
       reasons: [REASONS.MISSING_VENUE],
+    });
+  });
+
+  describe('추가: 회차 요일 (judgeResolved, useExhibitionHours: true)', () => {
+    const ON = { useExhibitionHours: true };
+    const THU = '2026-11-19';
+    const closed: DaySchedule = { isOpen: false, intervals: [] };
+    const sessionDay: DaySchedule = { isOpen: true, intervals: [{ open: '14:00', close: '15:20' }], sessions: true };
+    /** 수요일만 회차. withThu면 목요일은 상시 관람 10:00~18:00 */
+    const hoursOf = (withThu: boolean): ParsedOperatingHours => ({
+      scheduleType: 'scheduled',
+      weekdays: {
+        mon: closed, tue: closed, wed: sessionDay,
+        thu: withThu ? { isOpen: true, intervals: [OPEN_10_18] } : closed,
+        fri: closed, sat: closed, sun: closed,
+      },
+      holiday: null,
+      exceptions: [],
+    });
+    const resolvedRun = (venue: Venue | null, hours: ParsedOperatingHours, date: string, stayStart: string, stayEnd: string) => {
+      const exhibition = { ...BASE_EXHIBITION, operatingHours: hours };
+      return judgeResolved(
+        { exhibition, date, stayStart, stayEnd, holidays: HOLIDAYS },
+        resolveSchedule(venue, hours, ON),
+      );
+    };
+
+    it('S24 회차 요일 + 조건 만족 → 확인 필요, SESSION_DAY 하나 / 회차 아닌 목요일은 가능', () => {
+      expect(resolvedRun(BASE_VENUE, hoursOf(true), WED, '13:00', '16:00')).toEqual({
+        result: 'unknown', reasons: [REASONS.SESSION_DAY], basis: 'merged',
+      });
+      expect(resolvedRun(BASE_VENUE, hoursOf(true), THU, '13:00', '16:00')).toMatchObject({
+        result: 'possible', entryTime: '13:00', basis: 'merged',
+      });
+    });
+
+    it('S25 회차 요일 + 어긴 조건 → 불가 그대로 (NOT_ENOUGH_STAY 하나) / 조건을 지키면 SESSION_DAY', () => {
+      expect(resolvedRun(BASE_VENUE, hoursOf(true), WED, '13:00', '13:59')).toEqual({
+        result: 'impossible', reasons: [REASONS.NOT_ENOUGH_STAY], basis: 'merged',
+      });
+      expect(resolvedRun(BASE_VENUE, hoursOf(true), WED, '13:00', '14:00').reasons).toEqual([REASONS.SESSION_DAY]);
+    });
+
+    it('S26 시설 없음 + 회차 요일 → SESSION_DAY / 회차 아닌 날은 MISSING_VENUE', () => {
+      expect(resolvedRun(null, hoursOf(false), WED, '13:00', '16:00')).toEqual({
+        result: 'unknown', reasons: [REASONS.SESSION_DAY],
+      });
+      expect(resolvedRun(null, hoursOf(false), THU, '13:00', '16:00')).toEqual({
+        result: 'unknown', reasons: [REASONS.MISSING_VENUE],
+      });
+    });
+  });
+
+  describe('추가: 전시 날짜별 일정 (judgeResolved, useExhibitionHours: true)', () => {
+    const ON = { useExhibitionHours: true };
+    const open: DaySchedule = { isOpen: true, intervals: [OPEN_10_18] };
+    const everyDay = { mon: open, tue: open, wed: open, thu: open, fri: open, sat: open, sun: open };
+    const resolvedRun = (
+      hours: ParsedOperatingHours,
+      date: string,
+      stayStart: string,
+      stayEnd: string,
+      opts: { exhibition?: Exhibition; holidays?: string[] } = {},
+    ) => {
+      const exhibition = { ...(opts.exhibition ?? BASE_EXHIBITION), operatingHours: hours };
+      return judgeResolved(
+        { exhibition, date, stayStart, stayEnd, holidays: opts.holidays ?? HOLIDAYS },
+        resolveSchedule(BASE_VENUE, hours, ON),
+      );
+    };
+
+    it('S27 격주(weeksOfMonth) 쉬는 주 → 불가, CLOSED_DATE / 운영하는 주 같은 요일은 가능', () => {
+      // 토요일은 1·3째 주에만 연다. 2026-11-14는 2째 주(8~14일), 2026-11-21은 3째 주(15~21일)
+      const hours: ParsedOperatingHours = {
+        scheduleType: 'scheduled',
+        weekdays: { ...everyDay, sat: { ...open, weeksOfMonth: [1, 3] } },
+        holiday: null,
+        exceptions: [],
+      };
+      expect(resolvedRun(hours, '2026-11-14', '13:00', '16:00')).toEqual({
+        result: 'impossible', reasons: [REASONS.CLOSED_DATE], basis: 'merged',
+      });
+      expect(resolvedRun(hours, '2026-11-21', '13:00', '16:00')).toMatchObject({
+        result: 'possible', entryTime: '13:00', basis: 'merged',
+      });
+    });
+
+    it('S28 명절 당일 휴관(exceptions) → 불가, CLOSED_DATE / 다음 날 같은 시각은 가능', () => {
+      // 2027-02-07(일)은 설날 당일. holidays.json의 2027 설 연휴 2027-02-06 ~ 02-09(02-09는 대체공휴일)
+      const SEOLLAL_HOLIDAYS = ['2027-02-06', '2027-02-07', '2027-02-08', '2027-02-09'];
+      const exhibition = { ...BASE_EXHIBITION, end: '2027-02-28' };
+      // 공휴일 규칙(holiday)은 null로 두어, 막는 것이 exceptions뿐인지 본다
+      const hours: ParsedOperatingHours = {
+        scheduleType: 'scheduled',
+        weekdays: everyDay,
+        holiday: null,
+        exceptions: [{ date: '2027-02-07', schedule: { isOpen: false, intervals: [] } }],
+      };
+      expect(resolvedRun(hours, '2027-02-07', '13:00', '16:00', { exhibition, holidays: SEOLLAL_HOLIDAYS })).toEqual({
+        result: 'impossible', reasons: [REASONS.CLOSED_DATE], basis: 'merged',
+      });
+      // 02-08(월): 기준 시설은 월요일 휴관이지만 공휴일이라 연다(S04와 같은 규칙). 예외 날짜가 아니므로 가능
+      expect(resolvedRun(hours, '2027-02-08', '13:00', '16:00', { exhibition, holidays: SEOLLAL_HOLIDAYS })).toMatchObject({
+        result: 'possible', entryTime: '13:00', basis: 'merged',
+      });
     });
   });
 });

@@ -1,93 +1,99 @@
-
-import { useMemo, useState } from 'react'
-import type { ChangeEvent } from 'react'
-import { exhibitById, exhibits, formatMinutes } from '../mock/exhibits'
+import { useMemo, useState, type ChangeEvent, type CSSProperties } from 'react'
+import { DEFAULT_VISIT_MINUTES } from '../engine/constants'
+import { basisLabel, displayVenueName, getCatalog, getHolidays, judgeEntry, todayInSeoul, type CatalogEntry } from '../lib/catalog'
+import type { Weekday } from '../types'
 
 type Range = { start: string; end: string }
-type Exhibit = (typeof exhibits)[number]
+type SlotResult = { possible: string[]; unavailable: { range: string; reason: string }[] }
 
-type Result = {
-  possible: string[]
-  unavailable: { range: string; reason: string }[]
-}
+const DAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+const GAP = 30
+const INFO: CSSProperties = { fontSize: 13, margin: '6px 0 0', opacity: 0.78 }
 
-// 시간 변환
-const A = (value: string) => {
+// 시각 문자열 to 분 변환
+function MINS(value: string) {
   const [h, m] = value.split(':').map(Number)
-  return h * 60 + m
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null
 }
 
-// 관람 가능 시간 계산
-const B = (target: Exhibit | null, ranges: Range[]): Result => {
-  if (!target) return { possible: [], unavailable: [] }
+// 분 단위 문자열 변환
+function CLOCK(total: number) {
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
 
-  const [open, close] = target.open
+// 선택 전시 날짜별 운영 안내 문구
+function GUIDE(entry: CatalogEntry, date: string) {
+  const { exhibition, venue } = entry
+  const wd = DAYS[new Date(`${date}T00:00:00+09:00`).getDay()]
+  const slot = venue?.hours?.[wd]
+  const stay = venue?.visitMinutes ?? DEFAULT_VISIT_MINUTES
+  if (slot) return `운영 시간 ${slot.open}–${slot.close} · 예상 관람 ${stay}분`
+  if (exhibition.hoursText) return `${exhibition.hoursText} · 예상 관람 ${stay}분`
+  return `시설 정보 확인 필요 · 예상 관람 ${stay}분`
+}
+
+// 시간대별 추천 시각과 불가 사유 계산
+function CHECK(entry: CatalogEntry | null, date: string, ranges: Range[], holidays: string[]): SlotResult {
+  if (!entry) return { possible: [], unavailable: [] }
   const possible: string[] = []
-  const unavailable: Result['unavailable'] = []
+  const unavailable: SlotResult['unavailable'] = []
 
   ranges.forEach((range) => {
-    const start = A(range.start)
-    const end = A(range.end)
+    const start = MINS(range.start)
+    const end = MINS(range.end)
     const label = `${range.start}–${range.end}`
 
-    if (end <= start) {
+    if (start === null || end === null || end <= start) {
       unavailable.push({ range: label, reason: '종료 시간이 시작 시간보다 빠르거나 같아요.' })
       return
     }
 
-    const from = Math.max(start, open)
-    const to = Math.min(end, close)
-
-    if (to <= from) {
-      unavailable.push({ range: label, reason: `운영 시간(${formatMinutes(open)}–${formatMinutes(close)})과 겹치지 않아요.` })
+    const whole = judgeEntry(entry, { date, stayStart: range.start, stayEnd: range.end }, holidays)
+    const tail = basisLabel(whole.basis) ? ` (${basisLabel(whole.basis)})` : ''
+    if (whole.result !== 'possible') {
+      unavailable.push({ range: label, reason: `${whole.reasons[0] ?? '관람 조건을 확인할 수 없어요.'}${tail}` })
       return
     }
 
     const slots: string[] = []
-
-    for (let time = Math.ceil(from / 30) * 30; time + target.duration <= to; time += 30) {
-      slots.push(formatMinutes(time))
+    for (let t = Math.ceil(start / GAP) * GAP; t < end; t += GAP) {
+      const res = judgeEntry(entry, { date, stayStart: CLOCK(t), stayEnd: range.end }, holidays)
+      if (res.result === 'possible' && res.entryTime) slots.push(res.entryTime)
     }
 
-    if (slots.length) {
-      possible.push(...slots)
-    } else {
-      unavailable.push({ range: label, reason: `운영 시간 안에서 관람 예상 시간 ${target.duration}분을 확보할 수 없어요.` })
-    }
+    if (slots.length) possible.push(...slots)
+    else unavailable.push({ range: label, reason: `${whole.reasons[0] ?? '운영 시간 안에 관람 시간을 확보할 수 없어요.'}${tail}` })
   })
 
   return { possible: [...new Set(possible)].sort().slice(0, 3), unavailable }
 }
 
-export default function WhenToGo() {
-  const [exhibitId, setExhibitId] = useState(String(exhibits[0]?.id ?? ''))
-  const [timeRanges, setTimeRanges] = useState<Range[]>([
-    { start: '10:00', end: '13:00' },
-    { start: '14:00', end: '18:00' },
-  ])
+function WhenToGo() {
+  const catalog = useMemo(() => getCatalog(), [])
+  const holidays = useMemo(() => getHolidays(), [])
+  const [date, setDate] = useState(() => todayInSeoul())
+  const [exhibitId, setExhibitId] = useState(() => catalog[0]?.exhibition.id ?? '')
+  const [ranges, setRanges] = useState<Range[]>([{ start: '10:00', end: '13:00' }, { start: '14:00', end: '18:00' }])
 
-  const TARGET = exhibitById(Number(exhibitId)) ?? exhibits[0] ?? null
+  const target = useMemo(() => catalog.find((e) => e.exhibition.id === exhibitId) ?? catalog[0] ?? null, [catalog, exhibitId])
+  const result = useMemo(() => CHECK(target, date, ranges, holidays), [target, date, ranges, holidays])
 
-  // 결과 계산 함수
-  const C = () => B(TARGET, timeRanges)
-
-  // 전시 선택 함수
-  const D = (event: ChangeEvent<HTMLSelectElement>) => setExhibitId(event.target.value)
-
-  // 시간대 추가 함수
-  const E = () => setTimeRanges([...timeRanges, { start: '10:00', end: '12:00' }])
-
-  // 시간대 삭제 함수
-  const F = (index: number) => setTimeRanges(timeRanges.filter((_, i) => i !== index))
-
-  // 시간대 변경 함수
-  const G = (index: number, key: 'start' | 'end', event: ChangeEvent<HTMLInputElement>) => {
-    setTimeRanges(timeRanges.map((range, i) => i === index ? { ...range, [key]: event.target.value } : range))
+  // 시간대 항목 추가
+  function ADD() {
+    setRanges((prev) => [...prev, { start: '10:00', end: '12:00' }])
   }
 
-  const RESULT = useMemo(C, [TARGET, timeRanges])
+  // 시간대 항목 삭제
+  function DROP(index: number) {
+    setRanges((prev) => prev.filter((_, i) => i !== index))
+  }
 
-  if (!TARGET) {
+  // 시간대 시각 수정
+  function EDIT(index: number, key: 'start' | 'end', event: ChangeEvent<HTMLInputElement>) {
+    setRanges((prev) => prev.map((r, i) => (i === index ? { ...r, [key]: event.target.value } : r)))
+  }
+
+  if (!target) {
     return (
       <section className="when-page">
         <h1>언제 갈까</h1>
@@ -102,33 +108,33 @@ export default function WhenToGo() {
 
       <div className="when-form">
         <label>
+          방문 날짜
+          <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+        </label>
+
+        <label>
           전시 선택
-          <select value={exhibitId} onChange={D}>
-            {exhibits.map((item) => (
-              <option key={item.id} value={item.id}>{item.name} · {item.venue}</option>
+          <select value={target.exhibition.id} onChange={(e) => setExhibitId(e.target.value)}>
+            {catalog.map((item) => (
+              <option key={item.exhibition.id} value={item.exhibition.id}>{item.exhibition.title} · {displayVenueName(item) || '장소 미상'}</option>
             ))}
           </select>
         </label>
 
-        <p className="when-info">
-          운영 시간 {formatMinutes(TARGET.open[0])}–{formatMinutes(TARGET.open[1])} · 예상 관람 {TARGET.duration}분
-        </p>
+        <p className="when-info" style={INFO}>{GUIDE(target, date)}</p>
 
         <div className="range-heading">
           <h3>머물 수 있는 시간대</h3>
-          <button type="button" className="text-button" onClick={E}>+ 시간대 추가</button>
+          <button type="button" className="text-button" onClick={ADD}>+ 시간대 추가</button>
         </div>
 
-        {timeRanges.map((range, index) => (
+        {ranges.map((range, index) => (
           <div className="time-range" key={index}>
             <span>시간대 {index + 1}</span>
-            <input type="time" value={range.start} onChange={G.bind(null, index, 'start')} />
+            <input type="time" value={range.start} onChange={(e) => EDIT(index, 'start', e)} />
             <span>—</span>
-            <input type="time" value={range.end} onChange={G.bind(null, index, 'end')} />
-
-            {timeRanges.length > 1 && (
-              <button type="button" className="remove-time" onClick={() => F(index)}>삭제</button>
-            )}
+            <input type="time" value={range.end} onChange={(e) => EDIT(index, 'end', e)} />
+            {ranges.length > 1 && <button type="button" className="remove-time" onClick={() => DROP(index)}>삭제</button>}
           </div>
         ))}
       </div>
@@ -136,10 +142,9 @@ export default function WhenToGo() {
       <div className="time-results">
         <div className="result-section">
           <h2>가능한 시각 <span>최대 3개 · 이른 순</span></h2>
-
-          {RESULT.possible.length ? (
+          {result.possible.length ? (
             <div className="candidate-list">
-              {RESULT.possible.map((time) => (
+              {result.possible.map((time) => (
                 <div className="candidate" key={time}>{time}</div>
               ))}
             </div>
@@ -150,9 +155,8 @@ export default function WhenToGo() {
 
         <div className="result-section">
           <h2>불가능한 시간대</h2>
-
-          {RESULT.unavailable.length ? (
-            RESULT.unavailable.map((item, index) => (
+          {result.unavailable.length ? (
+            result.unavailable.map((item, index) => (
               <div className="unavailable-item" key={index}>
                 <strong>{item.range}</strong>
                 <span>{item.reason}</span>
@@ -166,3 +170,5 @@ export default function WhenToGo() {
     </section>
   )
 }
+
+export default WhenToGo

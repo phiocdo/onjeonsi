@@ -500,3 +500,54 @@ describe('judgeResolved: 판정 날짜의 일정 (scheduleForDate)', () => {
       .toEqual([REASONS.INVALID_INPUT]);
   });
 });
+
+describe('resolveSchedule: 입장 마감 = 폐관 − N분 (lastEntryBeforeClose)', () => {
+  // 공예박물관 모양에서 입장 마감만 "폐관 1시간 전"으로 바꾼다. 화 10:00~18:00 → 17:00
+  const venue = craftMuseum({ lastEntry: undefined, lastEntryBeforeClose: 60 });
+
+  it('플래그 off: 시설 그대로 넘기고 judge가 폐관 − N으로 판정', () => {
+    const r = resolveSchedule(venue, undefined, OFF);
+    expect(r.venue?.lastEntryBeforeClose).toBe(60);
+    expect(run(r, TUE, '17:01', '20:00').reasons).toContain(REASONS.AFTER_LAST_ENTRY('17:00'));
+  });
+
+  it('merged: 시설 폐관(18:00) − 60분과 전시 lastAdmission 중 이른 값', () => {
+    const r = resolveSchedule(venue, makeHours({ tue: open('10:00', '20:00') }), ON);
+    expect(r.venue?.lastEntryByDay?.tue).toBe('17:00');
+    const r2 = resolveSchedule(venue, makeHours({ tue: open('10:00', '20:00', '16:30') }), ON);
+    expect(r2.venue?.lastEntryByDay?.tue).toBe('16:30');
+  });
+
+  it('merged: N은 겹친 구간 끝이 아니라 시설 폐관 기준. 구간 끝보다 늦으면 구간 끝으로 줄인다', () => {
+    // 전시 10:00~17:30 → 겹친 구간 10:00~17:30, 입장 마감 min(18:00 − 60, 17:30) = 17:00
+    const r = resolveSchedule(venue, makeHours({ tue: open('10:00', '17:30') }), ON);
+    expect(r.venue?.lastEntryByDay?.tue).toBe('17:00');
+    // 금 10:00~21:00 → 20:00, 전시 10:00~19:00이면 구간 끝 19:00
+    const r2 = resolveSchedule(venue, makeHours({ fri: open('10:00', '19:00') }), ON);
+    expect(r2.venue?.lastEntryByDay?.fri).toBe('19:00');
+  });
+
+  it('mismatches: 시설 값은 그 요일 폐관 − N', () => {
+    const same = resolveSchedule(venue, makeHours({ tue: open('10:00', '18:00', '17:00') }), ON);
+    expect(same.mismatches.filter((m) => m.kind === 'lastEntry')).toEqual([]);
+    const diff = resolveSchedule(venue, makeHours({ tue: open('10:00', '18:00', '17:30') }), ON);
+    expect(diff.mismatches).toContainEqual({
+      weekday: 'tue', kind: 'lastEntry', venueValue: '17:00', exhibitionValue: '17:30',
+    });
+  });
+
+  it('merged + holidayAs: 공휴일에는 그날 전시 일정을 판정에 쓸 요일(일) 키에 넣는다', () => {
+    // 시설: 화 10:00~18:00, 일 10:00~19:00 → 공휴일이면 일요일 시간. 전시: 화 10:00~17:00
+    // 공휴일 화요일 = 시설 일(10~19) ∩ 전시 화(10~17) = 10:00~17:00
+    const holidayVenue = craftMuseum({ holidayAs: 'sun' });
+    const hours = makeHours({ tue: open('10:00', '17:00') });
+    const r = resolveSchedule(holidayVenue, hours, ON);
+    const ex: Exhibition = { ...exhibition, operatingHours: hours };
+    const res = judgeResolved({ exhibition: ex, date: TUE, stayStart: '16:00', stayEnd: '20:00', holidays: [TUE] }, r);
+    // 16:00 + 90분 = 17:30 > 17:00. 전시 일정을 실제 요일(화) 키에 넣으면 일요일은 시설 시간(19:00)이라 가능이 나온다
+    expect(res).toEqual({ result: 'impossible', reasons: [REASONS.NOT_ENOUGH_BEFORE_CLOSE], basis: 'merged' });
+    // 공휴일이 아니면 화요일 그대로(10~17)
+    expect(judgeResolved({ exhibition: ex, date: TUE, stayStart: '15:00', stayEnd: '20:00', holidays: [] }, r))
+      .toMatchObject({ result: 'possible', entryTime: '15:00', endTime: '16:30' });
+  });
+});

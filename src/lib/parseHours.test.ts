@@ -226,6 +226,20 @@ describe('parseHours — 계절별 시간', () => {
     expect(r.weekdays.mon.intervals).toEqual([{ open: '10:00', close: '18:00' }]);
   });
 
+  it('계절 구간을 합쳐도 회차 표시(sessions)는 유지한다', () => {
+    // 합친 구간은 새 객체라서, 회차 여부를 따로 넘겨주지 않으면 sessions 가 빠진다
+    const r = parseHours('하절기 1회차 10:00~12:00 / 동절기 1회차 10:00~11:30', 2026);
+    expect(r.weekdays.mon.intervals).toEqual([{ open: '10:00', close: '11:30' }]);
+    expect(r.weekdays.mon.sessions).toBe(true);
+    expect(r.weekdays.mon.note).toBe('회차 운영');
+  });
+
+  it('합친 계절 구간 중 하나라도 상시 관람이면 sessions 를 붙이지 않는다', () => {
+    const r = parseHours('하절기 10:00~19:00 / 동절기 1회차 10:00~18:00', 2026);
+    expect(r.weekdays.mon.intervals).toEqual([{ open: '10:00', close: '18:00' }]);
+    expect(r.weekdays.mon.sessions).toBeUndefined();
+  });
+
   it('회차와 중간 휴관은 계절 처리에 영향받지 않는다', () => {
     expect(parseHours('1회차 10:00~12:00 / 2회차 14:00~16:00', 2026).weekdays.mon.intervals).toHaveLength(2);
     expect(parseHours('10:00~18:00 (※ 12~13시 휴관)', 2026).weekdays.mon.intervals).toHaveLength(2);

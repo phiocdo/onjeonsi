@@ -52,8 +52,15 @@ const SEASON_LABEL = /하절기|동절기|하계|동계|여름철|겨울철/;
  * 겹치는 시간만 쓰면 하절기 18~19시를 "불가"로 잘못 말할 수는 있어도 틀린 "가능"은 나오지 않는다.
  *
  * 계절 구간과 시간이 겹치는 구간만 합친다. 겹치지 않는 구간(다른 회차 등)은 그대로 둔다.
+ *
+ * 합친 구간은 새 객체라 sessionIntervals 로 찾을 수 없다. 합친 구간이 전부 회차였으면
+ * 새 구간도 sessionIntervals 에 넣어 그 요일의 sessions 가 빠지지 않게 한다.
  */
-function mergeSeasons(intervals: TimeInterval[], seasonIntervals: Set<TimeInterval>): TimeInterval[] {
+function mergeSeasons(
+  intervals: TimeInterval[],
+  seasonIntervals: Set<TimeInterval>,
+  sessionIntervals: Set<TimeInterval>,
+): TimeInterval[] {
   const seasonal = intervals.filter(iv => seasonIntervals.has(iv));
   if (!seasonal.length || intervals.length < 2) return intervals;
 
@@ -73,6 +80,8 @@ function mergeSeasons(intervals: TimeInterval[], seasonIntervals: Set<TimeInterv
     .map(iv => (iv.lastAdmission ? toMinutes(iv.lastAdmission) : null))
     .filter((m): m is number => m !== null);
   if (admissions.length) merged.lastAdmission = fromMinutes(Math.min(close, ...admissions));
+  // 상시 관람 구간이 하나라도 섞였으면 회차로 보지 않는다
+  if (group.every(iv => sessionIntervals.has(iv))) sessionIntervals.add(merged);
 
   // 원래 자리(그룹의 첫 구간 위치)에 넣어 구간 순서를 지킨다.
   // 계절끼리 겹치지 않으면(open >= close) 어느 시간도 확실하지 않으므로 그룹을 모두 뺀다
@@ -652,6 +661,7 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
         (iv, i) => intervals.findIndex(other => JSON.stringify(other) === JSON.stringify(iv)) === i,
       ),
       seasonIntervals,
+      sessionIntervals,
     );
     if (!unique.length) continue;
     const weeks = weeksPerDay.get(day) ?? (perDay.has(day) ? null : sharedWeeks);

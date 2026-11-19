@@ -21,7 +21,7 @@ describe('getRatingSummary 단계', () => {
       count: 3,
       averageRating: 4.3,
       medianMinutes: 60,
-      label: '이 전시 3명',
+      label: '이 전시 기록 3건',
     });
   });
 
@@ -29,7 +29,7 @@ describe('getRatingSummary 단계', () => {
     const shared = [rec('e1', 'v1', 5, 60), rec('e2', 'v1', 3, 40), rec('e3', 'v1', 4, 50)];
     const s = getRatingSummary('e1', 'v1', { shared });
     expect(s.level).toBe('venue');
-    expect(s.label).toBe('이 시설 3명');
+    expect(s.label).toBe('이 시설 기록 3건');
     expect(s.averageRating).toBe(4);
     expect(s.medianMinutes).toBe(50);
   });

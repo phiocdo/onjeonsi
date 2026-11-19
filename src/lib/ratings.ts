@@ -31,7 +31,7 @@ export interface RatingSummary {
   // 소수 첫째 자리. level이 'none'이면 null
   averageRating: number | null;
   medianMinutes: number | null;
-  // "이 전시 12명" / "이 시설 28명" / "예시 기록" / "기록 부족"
+  // "이 전시 기록 12건" / "이 시설 기록 28건" / "예시 기록" / "기록 부족"
   label: string;
 }
 
@@ -85,7 +85,11 @@ export function fromArchiveEntry(e: ArchiveEntryInput): RatingRecord {
 function summarize(level: Exclude<RatingLevel, 'none'>, records: RatingRecord[]): RatingSummary {
   const { count, averageRating, medianMinutes } = summarizeReviews(records);
   const label =
-    level === 'exhibition' ? `이 전시 ${count}명` : level === 'venue' ? `이 시설 ${count}명` : '예시 기록';
+    level === 'exhibition'
+      ? `이 전시 기록 ${count}건`
+      : level === 'venue'
+        ? `이 시설 기록 ${count}건`
+        : '예시 기록';
   return { level, count, averageRating, medianMinutes, label };
 }
 

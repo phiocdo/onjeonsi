@@ -130,17 +130,21 @@ describe('scheduleForDate', () => {
 });
 
 describe('isSessionDay', () => {
-  it('note에 회차가 있으면 회차', () => {
-    expect(isSessionDay({ ...open('14:00', '15:20'), note: '회차 운영' })).toBe(true);
-    expect(isSessionDay({ ...open('14:00', '15:20'), note: '회차 운영 · 연장 운영' })).toBe(true);
-    expect(isSessionDay({ ...open('10:00', '21:00'), note: '연장 운영' })).toBe(false);
+  it('sessions: true면 회차', () => {
+    expect(isSessionDay({ ...open('14:00', '15:20'), sessions: true })).toBe(true);
+    expect(isSessionDay({ ...open('14:00', '15:20'), sessions: true, note: '회차 운영' })).toBe(true);
+    expect(isSessionDay({ ...open('14:00', '15:20'), sessions: false })).toBe(false);
     expect(isSessionDay(open('10:00', '18:00'))).toBe(false);
   });
 
-  it('sessions가 있으면 note보다 sessions를 본다', () => {
-    const withSessions = (sessions: unknown, note?: string) =>
-      ({ ...open('14:00', '15:20'), sessions, note }) as DaySchedule;
-    expect(isSessionDay(withSessions([{ start: '14:00' }]))).toBe(true);
-    expect(isSessionDay(withSessions([], '회차 운영'))).toBe(false);
+  it('note는 보지 않는다 (sessions 없이 note만 있으면 회차 아님)', () => {
+    expect(isSessionDay({ ...open('14:00', '15:20'), note: '회차 운영' })).toBe(false);
+  });
+
+  it('해석기 결과: 모든 구간이 회차인 요일만 회차', () => {
+    const all = parseHours('1회차 14:00~15:20 / 2회차 16:00~17:20', 2026);
+    expect(isSessionDay(all.weekdays.tue)).toBe(true);
+    const mixed = parseHours('화-일 10:00~18:00 / 토 1회차 14:00~15:00', 2026);
+    expect(isSessionDay(mixed.weekdays.sat)).toBe(false);
   });
 });

@@ -117,7 +117,8 @@ export function recommendPopular(candidates: Candidate[], opts: PopularOptions):
  * 맞춤 전시: 내가 별점 4 이상 준 기록의 분야(없으면 interests)와 같은 분야의 'possible' 전시를 가까운 순으로.
  * - 이미 본 전시(seenIds와 myRecords의 전시)는 뺀다. field가 없는 내 기록은 분야 계산에서 빼고 본 전시로만 쓴다.
  * - 분야가 없는 후보는 맞춤 대상에서 뺀다(인기 채우기에는 들어갈 수 있다).
- * - 모자라면 인기 전시로 채우고(reason "근처 인기 전시") filledWithPopular를 true로 한다.
+ * - 모자라면 recommendPopular 결과로 채우고 filledWithPopular를 true로 한다.
+ *   채운 항목의 reason·source는 recommendPopular가 준 그대로다("별점 4.5 (…)" 또는 "근처 인기 전시", source 'popular').
  */
 export function recommendPersonal(candidates: Candidate[], opts: PersonalOptions): PersonalResult {
   const limit = Math.max(0, opts.limit ?? 5);
@@ -153,7 +154,7 @@ export function recommendPersonal(candidates: Candidate[], opts: PersonalOptions
     });
     if (fill.length > 0) {
       filledWithPopular = true;
-      for (const f of fill) items.push({ id: f.id, reason: POPULAR_REASON, source: 'popular' });
+      items.push(...fill);
     }
   }
 

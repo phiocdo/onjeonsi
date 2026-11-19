@@ -21,7 +21,7 @@ const rated = (avg: number, count: number): RatingSummary => ({
   count,
   averageRating: avg,
   medianMinutes: 60,
-  label: `이 전시 ${count}명`,
+  label: `이 전시 기록 ${count}건`,
 });
 
 const ratingFrom = (table: Record<string, RatingSummary>) => (c: Candidate) => table[c.id] ?? NONE;
@@ -42,8 +42,8 @@ describe('recommendPopular', () => {
     const ratingOf = ratingFrom({ a: rated(4.0, 5), b: rated(4.5, 3), c: rated(4.0, 10), d: rated(4.0, 5) });
     const out = recommendPopular(cs, { ratingOf, popularVenueIds: [] });
     expect(ids(out)).toEqual(['b', 'c', 'd', 'a']);
-    expect(out[0]).toEqual({ id: 'b', reason: '별점 4.5 (이 전시 3명)', source: 'popular' });
-    expect(out[1].reason).toBe('별점 4.0 (이 전시 10명)');
+    expect(out[0]).toEqual({ id: 'b', reason: '별점 4.5 (이 전시 기록 3건)', source: 'popular' });
+    expect(out[1].reason).toBe('별점 4.0 (이 전시 기록 10건)');
   });
 
   it('별점 근거가 먼저, 나머지는 인기 시설 순 → 가까운 순, 목록에 없는 시설은 뒤', () => {
@@ -173,10 +173,35 @@ describe('recommendPersonal', () => {
     });
     expect(out.items).toEqual([
       { id: 'm', reason: '내가 높게 평가한 회화 분야', source: 'personal' },
-      { id: 'q', reason: '근처 인기 전시', source: 'popular' },
+      { id: 'q', reason: '별점 4.8 (이 전시 기록 9건)', source: 'popular' },
       { id: 'p', reason: '근처 인기 전시', source: 'popular' },
     ]);
     expect(out.filledWithPopular).toBe(true);
+  });
+
+  it('인기 전시로 채울 때 recommendPopular의 reason·source를 그대로 쓴다', () => {
+    const cs = [
+      cand('mine', 10, { field: '회화' }),
+      cand('star', 900, { field: '사진' }),
+      cand('plain', 20, { field: '조각' }),
+    ];
+    const opts = {
+      ...base,
+      ratingOf: ratingFrom({ star: rated(4.2, 7) }),
+      myRecords: [],
+      interests: ['회화'],
+      limit: 3,
+    };
+    const out = recommendPersonal(cs, opts);
+    const popular = recommendPopular(cs, {
+      ratingOf: opts.ratingOf,
+      popularVenueIds: [],
+      excludeIds: ['mine'],
+      limit: 2,
+    });
+    expect(out.items.slice(1)).toEqual(popular);
+    expect(out.items[1]).toEqual({ id: 'star', reason: '별점 4.2 (이 전시 기록 7건)', source: 'popular' });
+    expect(out.items[2]).toEqual({ id: 'plain', reason: '근처 인기 전시', source: 'popular' });
   });
 
   it('분야가 없는 후보는 맞춤에서 빠지지만 인기 채우기에는 들어간다', () => {

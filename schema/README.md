@@ -18,7 +18,6 @@ JSON 데이터 파일의 형식을 정의한 JSON Schema(draft-07) 파일입니�
 
 - 제안 스키마 5개(`judge-scenarios`, `personal-records-export`, `shared-reviews-seed`, `popular-venues`, `venue-links`):
   파일은 PR #33으로 들어왔고, 타입이 확정되면 검사에 추가합니다.
-- PR #22의 `operatingHours`, `imageUrl`, `detailUrl`: PR #22가 병합될 때 exhibitions 스키마에 추가합니다.
 
 ## 제안 스키마 메모
 
@@ -31,8 +30,10 @@ JSON 데이터 파일의 형식을 정의한 JSON Schema(draft-07) 파일입니�
 ## 스키마로 잡지 못하는 것
 
 - id 중복, 날짜 오름차순, 시작일이 종료일보다 이른지는 검사하지 못합니다.
+- 운영시간 구간의 `open`이 `close`보다 이른지도 검사하지 못합니다.
 - 없는 날짜(예: `2026-02-30`)도 형식만 맞으면 통과합니다.
-- 모르는 키는 허용하므로 그 값은 검사하지 않습니다.
+- 전시 파일 최상위의 모르는 키는 허용하므로 그 값은 검사하지 않습니다(수집 필드가 늘어도 배포가 멈추지 않게).
+  해석기가 만드는 `operatingHours` 안쪽은 정해진 키만 허용합니다.
 
 ## 알려진 차이
 

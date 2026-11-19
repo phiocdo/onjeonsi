@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "전시 목록 (data/exhibitions/auto.json)",
-  "description": "수집 스크립트가 만드는 파일이라 모르는 키는 허용한다. 선택 항목은 null도 허용한다 (수집 데이터에 null이 있다). 실제 auto.json으로 먼저 검사해 보고 어긋나는 곳은 스키마나 수집 스크립트를 고친다. 파일 전체가 배열이라고 가정했다. id가 겹치는지는 스키마로 검사하지 못한다.",
+  "description": "수집 스크립트가 만드는 파일이라 최상위의 모르는 키는 허용한다(필드가 늘어도 배포가 멈추지 않게). 해석기가 만드는 operatingHours 안쪽은 정해진 키만 허용한다. 선택 항목은 null도 허용한다. 파일 전체가 배열이라고 가정했다. 스키마로 검사하지 못하는 것: id가 겹치는지, open이 close보다 이른지, start가 end보다 이른지.",
   "type": "array",
   "items": {
     "type": "object",
@@ -10,7 +10,8 @@
       "venueId",
       "title",
       "start",
-      "end"
+      "end",
+      "operatingHours"
     ],
     "properties": {
       "id": {
@@ -61,47 +62,81 @@
             "type": "null"
           }
         ],
-        "description": "API 운영 시간 원문. 판정에 쓰지 않는다"
+        "description": "API 운영 시간 원문. 판정은 operatingHours를 쓴다"
+      },
+      "operatingHours": {
+        "$ref": "#/definitions/operatingHours"
       },
       "lat": {
         "anyOf": [
           {
-            "type": "number"
+            "type": "number",
+            "minimum": 37.4,
+            "maximum": 37.7
           },
           {
             "type": "null"
           }
-        ]
+        ],
+        "description": "위도. 서울 범위 밖이면 수집 스크립트가 null로 둔다 (venue 스키마와 같은 범위)"
       },
       "lng": {
         "anyOf": [
           {
-            "type": "number"
+            "type": "number",
+            "minimum": 126.7,
+            "maximum": 127.3
           },
           {
             "type": "null"
           }
-        ]
+        ],
+        "description": "경도"
       },
       "link": {
         "anyOf": [
           {
-            "type": "string"
+            "$ref": "#/definitions/url"
           },
           {
             "type": "null"
           }
-        ]
+        ],
+        "description": "기관 홈페이지 (서울시 API ORG_LINK). 수집 스크립트가 앞뒤 공백을 지운다. 주소 안의 공백은 API 원문이라 허용한다"
+      },
+      "imageUrl": {
+        "anyOf": [
+          {
+            "$ref": "#/definitions/url"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "대표 이미지 (MAIN_IMG)"
+      },
+      "detailUrl": {
+        "anyOf": [
+          {
+            "$ref": "#/definitions/url"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "서울문화포털 상세 페이지 (HMPG_ADDR)"
       },
       "fetchedAt": {
         "anyOf": [
           {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
           },
           {
             "type": "null"
           }
-        ]
+        ],
+        "description": "수집 시각 (ISO, UTC)"
       }
     }
   },
@@ -110,6 +145,206 @@
       "type": "string",
       "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
       "description": "YYYY-MM-DD"
+    },
+    "url": {
+      "type": "string",
+      "pattern": "^(https?://\\S.*)?$",
+      "description": "http(s) 주소. 값이 없으면 빈 문자열"
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+      "description": "HH:MM (00:00~23:59). 해석기가 24:00은 23:59로 바꾼다"
+    },
+    "interval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "open",
+        "close"
+      ],
+      "properties": {
+        "open": {
+          "$ref": "#/definitions/time"
+        },
+        "close": {
+          "$ref": "#/definitions/time"
+        },
+        "lastAdmission": {
+          "$ref": "#/definitions/time"
+        }
+      },
+      "description": "open이 close보다 이른지는 스키마로 검사하지 못한다"
+    },
+    "daySchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "isOpen",
+        "intervals"
+      ],
+      "properties": {
+        "isOpen": {
+          "type": "boolean"
+        },
+        "intervals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/interval"
+          }
+        },
+        "requiresReservation": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "description": "화면 표시용 짧은 메시지 (예: 회차 운영, 연장 운영)"
+        },
+        "sessions": {
+          "type": "boolean",
+          "description": "그 요일 구간이 모두 회차일 때만 true"
+        },
+        "weeksOfMonth": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "isOpen": {
+            "const": false
+          }
+        },
+        "required": [
+          "isOpen"
+        ]
+      },
+      "then": {
+        "properties": {
+          "intervals": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      },
+      "description": "닫힌 날(isOpen: false)은 구간이 비어 있어야 한다"
+    },
+    "weekdays": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri",
+        "sat",
+        "sun"
+      ],
+      "properties": {
+        "mon": {
+          "$ref": "#/definitions/daySchedule"
+        },
+        "tue": {
+          "$ref": "#/definitions/daySchedule"
+        },
+        "wed": {
+          "$ref": "#/definitions/daySchedule"
+        },
+        "thu": {
+          "$ref": "#/definitions/daySchedule"
+        },
+        "fri": {
+          "$ref": "#/definitions/daySchedule"
+        },
+        "sat": {
+          "$ref": "#/definitions/daySchedule"
+        },
+        "sun": {
+          "$ref": "#/definitions/daySchedule"
+        }
+      }
+    },
+    "operatingHours": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scheduleType",
+        "weekdays",
+        "holiday",
+        "exceptions"
+      ],
+      "description": "hoursText를 해석기(src/lib/parseHours.ts)가 푼 것. 해석기가 만드는 값이라 정해지지 않은 키는 거부한다",
+      "properties": {
+        "scheduleType": {
+          "type": "string",
+          "enum": [
+            "scheduled",
+            "always_open",
+            "unknown"
+          ]
+        },
+        "weekdays": {
+          "$ref": "#/definitions/weekdays"
+        },
+        "holiday": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/daySchedule"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "date",
+              "schedule"
+            ],
+            "properties": {
+              "date": {
+                "$ref": "#/definitions/date"
+              },
+              "schedule": {
+                "$ref": "#/definitions/daySchedule"
+              }
+            }
+          }
+        },
+        "periods": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "weekdays"
+            ],
+            "properties": {
+              "from": {
+                "$ref": "#/definitions/date"
+              },
+              "to": {
+                "$ref": "#/definitions/date"
+              },
+              "weekdays": {
+                "$ref": "#/definitions/weekdays"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

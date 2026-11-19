@@ -894,16 +894,21 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     }
   }
 
-  // (7) 끝 시각만 적혀 있던 날짜 예외를 그 요일의 여는 시각으로 채운다
-  //    "11.5.(목) 22:00까지" -> 목요일이 11:00 에 열면 11:00~22:00
+  // (7) 끝 시각만 적혀 있던 날짜 예외를 그 요일 일정으로 채운다. (5) 연장 운영과 같은 규칙이다
+  //    "11.5.(목) 22:00까지" -> 목요일이 11:00~19:00 이면 11:00~22:00
+  //    - 그 요일 구간은 그대로 두고 마지막 구간의 close 만 늘린다.
+  //      첫 여는 시각~끝 시각 한 구간으로 만들면 중간에 쉬는 시간도 "가능"이 된다
+  //    - 회차 요일이면 예외를 만들지 않는다. 날짜 예외는 요일 일정보다 먼저 쓰이므로,
+  //      회차 표시가 없는 구간을 넣으면 그날만 회차가 아닌 날이 되어 틀린 "가능"이 나온다
   for (const { date, weekday, close } of pendingUntil) {
     const base = weekdays[weekday];
-    const open = base.isOpen && base.intervals.length ? base.intervals[0].open : null;
-    if (!open) continue;
-    const a = toMinutes(open);
+    if (!base.isOpen || !base.intervals.length || base.sessions) continue;
+    const last = base.intervals[base.intervals.length - 1];
+    const a = toMinutes(last.open);
     const b = toMinutes(close);
     if (a === null || b === null || a >= b) continue;
-    exceptions.push({ date, schedule: { isOpen: true, intervals: [{ open, close }] } });
+    const intervals = [...base.intervals.slice(0, -1).map(iv => ({ ...iv })), { ...last, close }];
+    exceptions.push({ date, schedule: { isOpen: true, intervals } });
   }
 
   if (/사전\s*예약|예약\s*필[수요]/.test(text)) {

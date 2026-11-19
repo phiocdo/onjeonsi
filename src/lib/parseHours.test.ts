@@ -508,6 +508,30 @@ describe('parseHours — 특정 날짜 예외', () => {
     ]);
   });
 
+  it('회차 요일에는 끝 시각만 적힌 날짜 예외를 만들지 않는다', () => {
+    // 첫 회차 시작~22:00 을 한 구간으로 만들면 그날만 회차가 아닌 날이 되어 틀린 "가능"이 나온다
+    const r = parseHours('1회차 14:00~15:20 / 2회차 16:00~17:20 / 심야 11.5.(목) 22:00까지', 2026);
+    expect(r.exceptions).toEqual([]);
+    expect(r.weekdays.thu.sessions).toBe(true);
+  });
+
+  it('구간이 나뉜 요일은 마지막 구간만 늘린다', () => {
+    // 첫 여는 시각~22:00 한 구간으로 만들면 중간에 쉬는 시간도 "가능"이 된다
+    const r = parseHours('목 10:00~12:00 / 목 14:00~18:00 / 심야 11.5.(목) 22:00까지', 2026);
+    expect(r.exceptions).toEqual([
+      {
+        date: '2026-11-05',
+        schedule: {
+          isOpen: true,
+          intervals: [
+            { open: '10:00', close: '12:00' },
+            { open: '14:00', close: '22:00' },
+          ],
+        },
+      },
+    ]);
+  });
+
   it('"N월 N일(요일)" 형식도 읽는다', () => {
     const r = parseHours('10:30~12:00 (90분) *10월 11일(토)은 휴관', 2026);
     expect(r.exceptions).toEqual([

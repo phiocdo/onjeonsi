@@ -508,6 +508,59 @@ describe('parseHours — 특정 날짜 예외', () => {
     ]);
   });
 
+  it('회차 요일에는 끝 시각만 적힌 날짜 예외를 만들지 않는다', () => {
+    // 첫 회차 시작~22:00 을 한 구간으로 만들면 그날만 회차가 아닌 날이 되어 틀린 "가능"이 나온다
+    const r = parseHours('1회차 14:00~15:20 / 2회차 16:00~17:20 / 심야 11.5.(목) 22:00까지', 2026);
+    expect(r.exceptions).toEqual([]);
+    expect(r.weekdays.thu.sessions).toBe(true);
+  });
+
+  it('구간이 나뉜 요일은 마지막 구간만 늘린다', () => {
+    // 첫 여는 시각~22:00 한 구간으로 만들면 중간에 쉬는 시간도 "가능"이 된다
+    const r = parseHours('목 10:00~12:00 / 목 14:00~18:00 / 심야 11.5.(목) 22:00까지', 2026);
+    expect(r.exceptions).toEqual([
+      {
+        date: '2026-11-05',
+        schedule: {
+          isOpen: true,
+          intervals: [
+            { open: '10:00', close: '12:00' },
+            { open: '14:00', close: '22:00' },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it('날짜 예외로 늘린 구간은 입장 마감도 같은 간격만큼 옮긴다', () => {
+    // 17:30 을 그대로 두면 22:00까지 여는 날에도 17:30 뒤 방문이 불가로 나온다
+    const r = parseHours('화-일 10:00~18:00 (17:30까지 입장가능) / 11.5.(목) 22:00까지', 2026);
+    expect(r.exceptions).toEqual([
+      {
+        date: '2026-11-05',
+        schedule: { isOpen: true, intervals: [{ open: '10:00', close: '22:00', lastAdmission: '21:30' }] },
+      },
+    ]);
+  });
+
+  it('평소보다 일찍 닫는 날은 입장 마감도 앞당긴다', () => {
+    const r = parseHours('화-일 10:00~18:00 (17:30까지 입장가능) / 11.5.(목) 16:00까지', 2026);
+    expect(r.exceptions[0].schedule.intervals).toEqual([{ open: '10:00', close: '16:00', lastAdmission: '15:30' }]);
+  });
+
+  it('쉬는 요일의 날짜에는 끝 시각만으로 예외를 만들지 않는다', () => {
+    // 그날 여는 시각을 모르므로 지어내지 않는다
+    const r = parseHours('화-일 10:00~18:00 (17:30까지 입장가능) / 11.2.(월) 22:00까지', 2026);
+    expect(r.exceptions).toEqual([]);
+    expect(r.weekdays.mon.isOpen).toBe(false);
+  });
+
+  it('요일 연장 운영도 입장 마감을 같이 옮긴다', () => {
+    const r = parseHours('화-일 10:00~18:00 (17:30까지 입장가능), 금 21:00까지 야간개관', 2026);
+    expect(r.weekdays.fri.intervals).toEqual([{ open: '10:00', close: '21:00', lastAdmission: '20:30' }]);
+    expect(r.weekdays.thu.intervals).toEqual([{ open: '10:00', close: '18:00', lastAdmission: '17:30' }]);
+  });
+
   it('"N월 N일(요일)" 형식도 읽는다', () => {
     const r = parseHours('10:30~12:00 (90분) *10월 11일(토)은 휴관', 2026);
     expect(r.exceptions).toEqual([

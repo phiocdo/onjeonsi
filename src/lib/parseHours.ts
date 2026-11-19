@@ -325,6 +325,35 @@ function readWeeksOfMonth(scope: string): number[] | null {
 }
 
 /**
+ * 그 요일 마지막 구간의 close 를 옮긴 구간 목록을 돌려준다. 옮길 수 없으면 null.
+ * 연장 운영(applyExtensions)과 끝 시각만 적힌 날짜 예외가 같이 쓴다.
+ *
+ * - 입장 마감(lastAdmission)도 close 와 같은 간격만큼 옮긴다. 원래 값을 그대로 두면
+ *   "17:30까지 입장" 인 곳이 22:00까지 열어도 17:30 뒤 방문이 불가로 나온다.
+ *     10:00~18:00 (입장 17:30), 22:00까지 -> 10:00~22:00 (입장 21:30)
+ *     10:00~18:00 (입장 17:30), 16:00까지 -> 10:00~16:00 (입장 15:30)
+ *   옮긴 값은 그 구간의 open~close 안으로 맞춘다.
+ * - 쉬는 날, 회차 요일은 옮기지 않는다. 회차는 시작 시각이 정해져 있어서
+ *   마지막 회차를 늘리면 없는 회차를 만들게 된다.
+ * - close 가 마지막 구간의 open 보다 늦지 않으면 옮기지 않는다.
+ */
+function moveLastClose(day: DaySchedule, close: string): TimeInterval[] | null {
+  if (!day.isOpen || !day.intervals.length || day.sessions) return null;
+  const last = day.intervals[day.intervals.length - 1];
+  const open = toMinutes(last.open);
+  const oldClose = toMinutes(last.close);
+  const newClose = toMinutes(close);
+  if (open === null || oldClose === null || newClose === null || newClose <= open) return null;
+
+  const moved: TimeInterval = { ...last, close };
+  const la = last.lastAdmission ? toMinutes(last.lastAdmission) : null;
+  if (la !== null) {
+    moved.lastAdmission = fromMinutes(Math.min(newClose, Math.max(open, la + newClose - oldClose)));
+  }
+  return [...day.intervals.slice(0, -1).map(iv => ({ ...iv })), moved];
+}
+
+/**
  * 연장 운영을 반영한다. 이미 넣어둔 구간의 close 만 바꿔치운다.
  *   "금요일은 21:00까지"           조사가 끼는 경우
  *   "화,수,금,토,일 21:00까지"      요일이 여러 개인 경우
@@ -339,17 +368,9 @@ function applyExtensions(weekdays: Record<Weekday, DaySchedule>, source: string)
     const listed = m[1].replace(/요일/g, '');
     const days = [...new Set([...listed.matchAll(/[월화수목금토일]/g)].map(d => KO_TO_DAY[d[0]]))];
     for (const day of days) {
-      const cur = weekdays[day];
-      if (!cur.isOpen || !cur.intervals.length) continue;
-      // 회차는 시작 시각이 정해져 있어서 마지막 회차를 늘리면 없는 회차를 만들게 된다
-      if (cur.sessions) continue;
-      const last = cur.intervals[cur.intervals.length - 1];
-      if ((toMinutes(close) ?? 0) <= (toMinutes(last.open) ?? 0)) continue;
-      weekdays[day] = {
-        ...cur,
-        intervals: [...cur.intervals.slice(0, -1), { ...last, close }],
-        note: EXTENSION_NOTE,
-      };
+      const intervals = moveLastClose(weekdays[day], close);
+      if (!intervals) continue;
+      weekdays[day] = { ...weekdays[day], intervals, note: EXTENSION_NOTE };
     }
   }
 }
@@ -894,16 +915,17 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     }
   }
 
-  // (7) 끝 시각만 적혀 있던 날짜 예외를 그 요일의 여는 시각으로 채운다
-  //    "11.5.(목) 22:00까지" -> 목요일이 11:00 에 열면 11:00~22:00
+  // (7) 끝 시각만 적혀 있던 날짜 예외를 그 요일 일정으로 채운다. (5) 연장 운영과 같은 moveLastClose 를 쓴다
+  //    "11.5.(목) 22:00까지" -> 목요일이 11:00~19:00 이면 11:00~22:00
+  //    - 그 요일 구간은 그대로 두고 마지막 구간의 close 만 옮긴다.
+  //      첫 여는 시각~끝 시각 한 구간으로 만들면 중간에 쉬는 시간도 "가능"이 된다
+  //    - 회차 요일이면 예외를 만들지 않는다. 날짜 예외는 요일 일정보다 먼저 쓰이므로,
+  //      회차 표시가 없는 구간을 넣으면 그날만 회차가 아닌 날이 되어 틀린 "가능"이 나온다
+  //    - 쉬는 요일("11.2.(월) 22:00까지")도 여는 시각을 모르므로 예외를 만들지 않는다
   for (const { date, weekday, close } of pendingUntil) {
-    const base = weekdays[weekday];
-    const open = base.isOpen && base.intervals.length ? base.intervals[0].open : null;
-    if (!open) continue;
-    const a = toMinutes(open);
-    const b = toMinutes(close);
-    if (a === null || b === null || a >= b) continue;
-    exceptions.push({ date, schedule: { isOpen: true, intervals: [{ open, close }] } });
+    const intervals = moveLastClose(weekdays[weekday], close);
+    if (!intervals) continue;
+    exceptions.push({ date, schedule: { isOpen: true, intervals } });
   }
 
   if (/사전\s*예약|예약\s*필[수요]/.test(text)) {

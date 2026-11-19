@@ -103,6 +103,36 @@ describe('parseHours — 휴관', () => {
     expect(openDays('10:00~18:00 ※ 토일 휴관')).toEqual(['mon', 'tue', 'wed', 'thu', 'fri']);
   });
 
+  it('휴관 목록이 길어도 앞쪽 요일을 놓치지 않는다', () => {
+    // 휴관 바로 앞 20자만 보면 "매주 월요일"이 잘려 나가 월요일에 틀린 "가능"이 나온다
+    const notMon = ['tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    expect(openDays('10:00~18:00 (매주 월요일, 매년 1월 1일 및 설·추석 당일 휴관)')).toEqual(notMon);
+    expect(openDays('10:00~18:00 ※ 매주 월요일, 1월 1일, 설날 및 추석 당일 휴관')).toEqual(notMon);
+    // 명절도 그대로 읽는다
+    const r = parseHours('10:00~18:00 (매주 월요일, 매년 1월 1일 및 설·추석 당일 휴관)', 2026);
+    expect(r.exceptions.map(e => e.date)).toContain('2026-09-25');
+  });
+
+  it('긴 휴관 목록을 덧붙일 때 앞의 다른 안내까지 끌어오지 않는다', () => {
+    // 휴관 목록 낱말이 아닌 말("도슨트", "야간개관", 괄호 닫힘)이 나오면 거기서 멈춘다
+    const notMon = ['tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    expect(openDays('10:00~18:00 (토, 일 도슨트), 매주 월요일, 1월 1일 및 설·추석 당일 휴관')).toEqual(notMon);
+    expect(openDays('10:00~18:00 (야간개관: 금, 토), 매주 월요일, 1월 1일 및 설·추석 당일 휴관')).toEqual(notMon);
+  });
+
+  it('20자 안의 휴관 대상은 예전처럼 닫는다', () => {
+    // 덧붙이기만 하고 20자 창은 줄이지 않는다. 줄이면 닫히던 요일을 놓친다
+    expect(openDays('10:00~18:00 (17:30 입장마감) 매주 월요일, 공휴일 휴관')).not.toContain('mon');
+    expect(openDays('10:00~18:00 (월요일, 개관기념일, 공휴일 휴관)')).not.toContain('mon');
+    expect(openDays('10:00~18:00 (일/월 휴관)')).toEqual(['tue', 'wed', 'thu', 'fri', 'sat']);
+  });
+
+  it('휴관 요일 뒤에 괄호 설명이 붙어도 그 요일을 닫는다', () => {
+    const notMon = ['tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    expect(openDays('10:00~18:00, 매주 월요일(공휴일인 경우 다음날) 휴관')).toEqual(notMon);
+    expect(openDays('10:00~18:00 매주 월요일(단, 공휴일 개관) 휴관')).toEqual(notMon);
+  });
+
   it('띄어 쓰지 않은 휴관 요일도 놓치지 않는다', () => {
     // 앞 글자가 한글이라고 모두 건너뛰면 휴관 요일을 놓쳐 틀린 "가능"이 나온다
     const notMon = ['tue', 'wed', 'thu', 'fri', 'sat', 'sun'];

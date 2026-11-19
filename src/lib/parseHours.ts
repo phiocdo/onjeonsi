@@ -105,6 +105,43 @@ const EVERY_SESSION =
 //     '반'·'부' 앞에 한글이 오면("주말부") 회차가 아니다
 const SESSION_LABEL = /[0-9A-Za-z]\s*(?:회차|차시|타임)|(?:^|[^가-힣])[반부]\s*[(:：]?\s*$/;
 
+// 휴관 목록에 들어가는 낱말만으로 이루어진 조각. "매주 월요일", "매년 1월 1일 및 설·추석 당일"
+//   괄호 닫힘이나 "도슨트", "야간개관" 같은 다른 말이 섞이면 휴관 목록이 아니다
+const CLOSURE_ITEM = new RegExp(
+  '^(?:\\s|·|매주|매월|매달|매년|격주|[첫둘셋넷]째|다섯째|마지막|\\d+\\s*째|주|' +
+    '\\d+\\s*[월일]|[월화수목금토일](?:요일)?|' +
+    '법정\\s*공휴일|대체\\s*공휴일|공휴일|국경일|신정|구정|설날|설|추석|명절|당일|연휴|전날|다음\\s*날|및)+$',
+);
+// 휴관 목록이 시작되는 경계. "(매주 월요일, ...", "※ 매주 월요일, ...", "(토, 일 도슨트), 매주 월요일, ..."
+const CLAUSE_START = /[()（）※/*\n]/;
+
+/**
+ * "휴관" 앞의 20자보다 앞으로 이어진 휴관 목록을 찾아 돌려준다. 없으면 빈 문자열.
+ *   "(매주 월요일, 매년 1월 1일 및 설·추석 당일" -> "매주 월요일"
+ *   (20자만 보면 "매주 월요일"이 잘려 월요일에 틀린 "가능"이 나온다)
+ *
+ * 쉼표 앞 조각을 뒤에서부터 보되, 목록이 시각 바로 뒤나 '(', '※' 같은 경계까지
+ * 휴관 목록 낱말로만 끊김 없이 이어질 때만 인정한다. 중간에 다른 말이 있으면
+ * 다른 안내("도슨트: 토, 일")의 쉼표 목록일 수 있으므로 하나도 덧붙이지 않는다.
+ */
+function readLongClosureList(before: string): string {
+  const segments = before.split(',');
+  segments.pop();
+  const extra: string[] = [];
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const parts = segments[i].split(CLAUSE_START);
+    const tail = parts[parts.length - 1];
+    if (!CLOSURE_ITEM.test(tail.trim())) {
+      // 경계 바로 뒤가 비었으면 목록이 거기서 시작한 것이다.
+      //   시각 바로 뒤("10:00~18:00, 토, 일, 월 휴관" 의 맨 앞), 괄호 닫힘 뒤("...도슨트), 매주 월요일")
+      return tail.trim() === '' && (parts.length > 1 || i === 0) ? extra.join(',') : '';
+    }
+    extra.unshift(tail);
+    if (parts.length > 1 || i === 0) return extra.join(',');
+  }
+  return extra.join(',');
+}
+
 /**
  * 휴관 문구 앞부분에서 닫는 요일을 읽는다. "일, 월, 공휴일 휴관" -> 일·월
  *
@@ -802,8 +839,12 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
   let holiday: DaySchedule | null = null;
   for (const m of text.matchAll(/(.*?)(?:휴관|휴무)/gs)) {
     // 시간 구간 앞쪽은 운영시간 설명이므로 제외하고, 마지막 시각 뒤부터만 본다
-    const near = m[1].replace(/[\s\S]*\d{1,2}:\d{2}/, '').slice(-20);
-    for (const day of readClosedWeekdays(near)) {
+    const before = m[1].replace(/[\s\S]*\d{1,2}:\d{2}/, '');
+    const near = before.slice(-20);
+    // 요일은 20자 밖으로 이어진 긴 휴관 목록까지 본다.
+    // 공휴일·명절은 20자만 본다. 앞 목록의 "당일"이 섞이면 뒤의 "연휴" 3일이 1일로 줄어든다
+    const longList = readLongClosureList(before);
+    for (const day of readClosedWeekdays(longList ? `${longList},${near}` : near)) {
       weekdays[day] = emptyDay();
     }
     if (/공휴일|국경일/.test(near)) {

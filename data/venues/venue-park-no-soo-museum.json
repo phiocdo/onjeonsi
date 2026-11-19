@@ -1,0 +1,32 @@
+{
+  "id": "venue-park-no-soo-museum",
+  "name": "종로구립 박노수미술관",
+  "aliases": [
+    "박노수미술관"
+  ],
+  "gu": "종로구",
+  "type": "미술관",
+  "lat": 37.5813191962491,
+  "lng": 126.966818545949,
+  "representative": false,
+  "hours": {
+    "tue": { "open": "10:00", "close": "18:00" },
+    "wed": { "open": "10:00", "close": "18:00" },
+    "thu": { "open": "10:00", "close": "18:00" },
+    "fri": { "open": "10:00", "close": "18:00" },
+    "sat": { "open": "10:00", "close": "18:00" },
+    "sun": { "open": "10:00", "close": "18:00" }
+  },
+  "closed": {
+    "weekday": "mon",
+    "dates": [
+      "01-01",
+      "2027-02-07"
+    ]
+  },
+  "lastEntry": "17:30",
+  "visitMinutes": 60,
+  "entry": "유료 (어른 3,000원 / 청소년 1,800원 / 어린이 1,200원)",
+  "source": "https://www.mcst.go.kr/kor/s_culture/culture/cultureView.jsp?pSeq=64943",
+  "verified": "2026-11-19"
+}

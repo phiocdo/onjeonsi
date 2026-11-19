@@ -196,7 +196,7 @@ function NearbyExhibitions() {
   const [pop, setPop] = useState<string | null>(null)
   const [date, setDate] = useState(init.date)
   const [time, setTime] = useState(init.time)
-  const [stay, setStay] = useState(60)
+  const [stay, setStay] = useState(120)
 
   const go = useCallback((item: Item) => OPEN(item.id, item.judge), [])
 

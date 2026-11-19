@@ -56,6 +56,23 @@ function toCoord(value: string): number | null {
   return num;
 }
 
+// 서울 범위. schema/exhibitions.schema.json, venue.schema.json 과 같은 값이다
+const SEOUL_LAT = [37.4, 37.7];
+const SEOUL_LNG = [126.7, 127.3];
+
+/**
+ * 위도·경도를 한 쌍으로 읽는다. 하나라도 없거나 서울 범위 밖이면 둘 다 null.
+ *
+ * 범위 밖 좌표(위도·경도가 뒤바뀐 값 등)를 그대로 두면 지도에 엉뚱한 핀이 찍히고,
+ * 스키마 검사에 걸려 그날 배포가 멈춘다. 좌표가 없는 전시와 똑같이 "위치 미상"으로 둔다.
+ */
+function toLatLng(latText: string, lngText: string): { lat: number | null; lng: number | null } {
+  const lat = toCoord(latText);
+  const lng = toCoord(lngText);
+  const inRange = (v: number | null, [lo, hi]: number[]) => v !== null && v >= lo && v <= hi;
+  return inRange(lat, SEOUL_LAT) && inRange(lng, SEOUL_LNG) ? { lat, lng } : { lat: null, lng: null };
+}
+
 // 요일별 일정은 한 줄에 하나씩 붙여서 저장한다.
 const DS_MARK = '__DS__';
 
@@ -206,11 +223,11 @@ async function fetchExhibitions() {
         placeName,
         hoursText,
         operatingHours,
-        link: item.ORG_LINK || '',
+        // 앞뒤 공백이 붙어 오는 링크가 있다(" https://..."). 주소 안의 공백은 API 원문이라 둔다
+        link: (item.ORG_LINK || '').trim(),
         imageUrl: item.MAIN_IMG || '',
         detailUrl,
-        lat: toCoord(item.LAT),
-        lng: toCoord(item.LOT),
+        ...toLatLng(item.LAT, item.LOT),
         fetchedAt: new Date().toISOString()
       };
     });

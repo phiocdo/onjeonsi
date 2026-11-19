@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "개인 기록 내보내기 파일",
+  "description": "개인 기록 내보내기 파일 (사용자가 내려받는 JSON, 저장소에는 두지 않는다), 상태: 제안. 기록 필드 이름은 아카이브 화면(src/pages/Archive.tsx, src/mock/useArchive.ts)을 따르고 타입은 src/types/records.ts의 VisitRecord와 같다. 화면은 localStorage의 onjeonsi:archive:records(기록)와 onjeonsi:archive:interests(관심 분야)에 저장한다. 스키마로 잡지 못하는 것: 기록 id가 겹치는지, exhibitId가 실제 전시인지.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "exportedAt",
+    "records",
+    "interests"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "파일 형식 버전"
+    },
+    "exportedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+      "description": "내보낸 시각, ISO 8601 날짜시간 (예: 2026-11-16T09:30:00.000Z)"
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "exhibitId",
+          "date",
+          "rating",
+          "time",
+          "note",
+          "shared"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "기록 id"
+          },
+          "exhibitId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "전시 id. 화면 목 데이터는 숫자를 쓰지만 내보낼 때는 문자열로 적는다"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
+            "description": "관람한 날 YYYY-MM-DD"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "별점 1~5 정수"
+          },
+          "time": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 480,
+            "description": "실제 관람 시간(분) 10~480 (stats.ts와 같은 범위)"
+          },
+          "note": {
+            "type": "string",
+            "description": "개인 메모. 빈 문자열 허용. 공유 평가 시드로 옮기지 않는다"
+          },
+          "shared": {
+            "type": "boolean",
+            "description": "공유 평가에 넣을지 여부"
+          }
+        }
+      }
+    },
+    "interests": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "현대미술",
+          "회화",
+          "사진·영상",
+          "조각·설치",
+          "미디어아트",
+          "공예·디자인",
+          "역사·민속"
+        ]
+      },
+      "description": "관심 분야. 값은 화면의 Category(src/mock/exhibits.ts)와 같다"
+    }
+  }
+}

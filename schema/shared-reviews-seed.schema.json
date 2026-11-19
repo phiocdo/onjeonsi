@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "공유 평가 시드 (data/reviews/seed.json)",
+  "description": "data/reviews/seed.json, 상태: 제안. 공유 기록이 모자랄 때 집계(src/engine/stats.ts의 summarizeReviews)에 넣는 값이다. 필드 이름과 범위는 stats.ts의 ReviewInput을 따른다. 팀원이 실제로 본 전시만 적는다. 메모(note, memo 등)는 개인 정보라 넣을 수 없다 (모르는 키 거부). 스키마로 잡지 못하는 것: exhibitionId가 auto.json에 있는지, venueId가 data/venues에 있는지.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "exhibitionId",
+      "venueId",
+      "rating",
+      "visitMinutes"
+    ],
+    "properties": {
+      "exhibitionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "전시 id (auto.json의 id)"
+      },
+      "venueId": {
+        "type": "string",
+        "pattern": "^venue-[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "시설 id (data/venues/{id}.json)"
+      },
+      "rating": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5,
+        "description": "별점 1~5 정수 (stats.ts RATING_MIN~RATING_MAX)"
+      },
+      "visitMinutes": {
+        "type": "integer",
+        "minimum": 10,
+        "maximum": 480,
+        "description": "실제 관람 시간(분) 10~480 (stats.ts MINUTES_MIN~MINUTES_MAX)"
+      }
+    }
+  }
+}

@@ -6,8 +6,8 @@
   ],
   "gu": "종로구",
   "type": "박물관",
-  "lat": 37.5785,
-  "lng": 126.9822,
+  "lat": 37.577157928122,
+  "lng": 126.989622047178,
   "representative": false,
   "hours": {
     "tue": { "open": "09:00", "close": "18:00" },
@@ -22,6 +22,6 @@
   },
   "lastEntry": "17:30",
   "visitMinutes": 90,
-  "source": "박물관 공식 운영정보",
-  "verified": "2026-11-09"
+  "source": "https://news.seoul.go.kr/culture/archives/508121",
+  "verified": "2026-11-19"
 }

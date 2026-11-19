@@ -6,23 +6,25 @@
   ],
   "gu": "종로구",
   "type": "박물관",
-  "lat": 37.5741,
-  "lng": 126.9778,
+  "lat": 37.570507525011855,
+  "lng": 126.97052372473162,
   "representative": false,
   "hours": {
-    "mon": { "open": "09:00", "close": "18:00" },
-    "tue": { "open": "09:00", "close": "21:00" },
+    "tue": { "open": "09:00", "close": "18:00" },
     "wed": { "open": "09:00", "close": "18:00" },
-    "thu": { "open": "09:00", "close": "21:00" },
-    "fri": { "open": "09:00", "close": "18:00" },
-    "sat": { "open": "09:00", "close": "21:00" },
+    "thu": { "open": "09:00", "close": "18:00" },
+    "fri": { "open": "09:00", "close": "21:00" },
+    "sat": { "open": "09:00", "close": "18:00" },
     "sun": { "open": "09:00", "close": "18:00" }
   },
   "closed": {
-    "weekday": "mon"
+    "weekday": "mon",
+    "dates": [
+      "01-01"
+    ]
   },
-  "lastEntry": "20:30",
+  "lastEntry": "17:30",
   "visitMinutes": 90,
-  "source": "서울시 운영정보",
-  "verified": "2026-11-09"
+  "source": "https://mediahub.seoul.go.kr/archives/2016345",
+  "verified": "2026-11-19"
 }

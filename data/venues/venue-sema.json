@@ -7,22 +7,25 @@
   ],
   "gu": "중구",
   "type": "미술관",
-  "lat": 37.5651,
-  "lng": 126.9815,
+  "lat": 37.5641060692766,
+  "lng": 126.973699316136,
   "representative": true,
   "hours": {
-    "tue": { "open": "10:00", "close": "18:00" },
-    "wed": { "open": "10:00", "close": "18:00" },
-    "thu": { "open": "10:00", "close": "18:00" },
+    "tue": { "open": "10:00", "close": "20:00" },
+    "wed": { "open": "10:00", "close": "20:00" },
+    "thu": { "open": "10:00", "close": "20:00" },
     "fri": { "open": "10:00", "close": "21:00" },
-    "sat": { "open": "10:00", "close": "19:00" },
-    "sun": { "open": "10:00", "close": "19:00" }
+    "sat": { "open": "10:00", "close": "18:00" },
+    "sun": { "open": "10:00", "close": "18:00" }
   },
   "closed": {
-    "weekday": "mon"
+    "weekday": "mon",
+    "dates": [
+      "01-01"
+    ]
   },
-  "lastEntry": "20:00",
+  "lastEntry": "18:00",
   "visitMinutes": 90,
-  "source": "서울시 운영정보",
-  "verified": "2026-11-09"
+  "source": "https://mediahub.seoul.go.kr/archives/2016826",
+  "verified": "2026-11-16"
 }

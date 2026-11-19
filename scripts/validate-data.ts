@@ -11,15 +11,25 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Ajv from 'ajv';
-import type { ErrorObject } from 'ajv';
+import type { ErrorObject, ValidateFunction } from 'ajv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
-/** 검사할 (스키마, 데이터) 짝. 데이터 파일이 늘어나면 여기에 한 줄 추가한다 */
-const TARGETS = [
+/**
+ * 검사할 (스키마, 데이터) 짝. 데이터 파일이 늘어나면 여기에 한 줄 추가한다.
+ * - data: 파일 하나
+ * - dir: 폴더 안의 .json 파일마다 같은 스키마로 검사한다 (시설처럼 한 곳당 파일 하나인 경우)
+ *
+ * 시설은 수집하지 않고 저장소에 있는 값이라, 어긋나면 배포 워크플로가 되돌려도 그대로 실패해
+ * 배포가 멈춘다. 시설 파일은 스키마를 통과해야 머지한다는 팀 규칙과 같다.
+ */
+type Target = { schema: string; data: string } | { schema: string; dir: string };
+
+const TARGETS: Target[] = [
   { schema: 'schema/exhibitions.schema.json', data: 'data/exhibitions/auto.json' },
-  { schema: 'schema/holidays.schema.json', data: 'data/holidays/holidays.json' }
+  { schema: 'schema/holidays.schema.json', data: 'data/holidays/holidays.json' },
+  { schema: 'schema/venue.schema.json', dir: 'data/venues' }
 ];
 
 /** 전시가 수천 건이면 오류도 수천 줄이 되므로 앞에서 끊는다 */
@@ -81,40 +91,80 @@ function describe(error: { path: string; messages: string[] }, data: unknown): s
   return label ? `${what}\n      ↳ ${label}` : what;
 }
 
+/** 검사할 파일 목록. dir 이면 그 폴더의 .json 파일들을 이름순으로 */
+function filesOf(target: Target): string[] {
+  if ('data' in target) return [target.data];
+  const full = path.join(ROOT, target.dir);
+  if (!fs.existsSync(full)) throw new Error(`폴더가 없습니다: ${target.dir}`);
+  return fs
+    .readdirSync(full)
+    .filter((name) => name.endsWith('.json'))
+    .sort()
+    .map((name) => `${target.dir}/${name}`);
+}
+
+/**
+ * dir 대상의 파일 이름이 id와 같은지 본다. 스키마로는 잡지 못한다.
+ * 이름이 같아야 파일 사이에서 id가 겹치지 않는다 (예: venue-mmca.json의 id는 venue-mmca)
+ */
+function idMismatch(file: string, data: unknown): string | null {
+  const id = (data as { id?: unknown } | null)?.id;
+  const expected = path.basename(file, '.json');
+  return typeof id === 'string' && id !== expected ? `파일 이름(${expected})과 id(${id})가 다릅니다` : null;
+}
+
+/** 파일 하나를 검사하고 어긋난 곳을 출력한다. count 는 통과했을 때 보여줄 건수 */
+function validateFile(file: string, validate: ValidateFunction, checkId: boolean): { ok: boolean; count: string } {
+  let data: unknown;
+  try {
+    data = readJson(file);
+  } catch (error) {
+    console.error(`❌ ${file} — ${(error as Error).message}`);
+    return { ok: false, count: '' };
+  }
+
+  const count = Array.isArray(data) ? `${data.length}건` : '1건';
+  const errors = validate(data) ? [] : groupErrors(validate.errors ?? []);
+  const idError = checkId ? idMismatch(file, data) : null;
+  if (!errors.length && !idError) return { ok: true, count };
+
+  console.error(`❌ ${file} (${count}) — 어긋난 곳 ${errors.length + (idError ? 1 : 0)}군데`);
+  if (idError) console.error(`   · ${idError}`);
+  for (const error of errors.slice(0, MAX_SHOWN)) {
+    console.error(`   · ${describe(error, data)}`);
+  }
+  if (errors.length > MAX_SHOWN) {
+    console.error(`   ... 그 외 ${errors.length - MAX_SHOWN}군데 생략`);
+  }
+  return { ok: false, count };
+}
+
 function validateAll(): boolean {
   // allErrors: 첫 오류에서 멈추지 않고 전부 모은다. 한 번 돌려서 다 고치는 게 낫다
   const ajv = new Ajv({ allErrors: true });
   let allPassed = true;
 
   for (const target of TARGETS) {
-    let schema: unknown;
-    let data: unknown;
+    const where = 'data' in target ? target.data : `${target.dir}/`;
+    let validate: ValidateFunction;
+    let files: string[];
     try {
-      schema = readJson(target.schema);
-      data = readJson(target.data);
+      validate = ajv.compile(readJson(target.schema) as object);
+      files = filesOf(target);
     } catch (error) {
-      console.error(`❌ ${target.data} — ${(error as Error).message}`);
+      console.error(`❌ ${where} — ${(error as Error).message}`);
       allPassed = false;
       continue;
     }
 
-    const validate = ajv.compile(schema as object);
-    const count = Array.isArray(data) ? `${data.length}건` : '1건';
-
-    if (validate(data)) {
-      console.log(`✅ ${target.data} (${count}) — ${path.basename(target.schema)} 통과`);
+    const results = files.map((file) => validateFile(file, validate, 'dir' in target));
+    if (results.some((r) => !r.ok)) {
+      allPassed = false;
       continue;
     }
-
-    allPassed = false;
-    const errors = groupErrors(validate.errors ?? []);
-    console.error(`❌ ${target.data} (${count}) — 어긋난 곳 ${errors.length}군데`);
-    for (const error of errors.slice(0, MAX_SHOWN)) {
-      console.error(`   · ${describe(error, data)}`);
-    }
-    if (errors.length > MAX_SHOWN) {
-      console.error(`   ... 그 외 ${errors.length - MAX_SHOWN}군데 생략`);
-    }
+    // 파일 하나면 그 안의 건수를, 폴더면 파일 수를 보여준다
+    const count = 'data' in target ? results[0].count : `파일 ${files.length}개`;
+    console.log(`✅ ${where} (${count}) — ${path.basename(target.schema)} 통과`);
   }
 
   return allPassed;

@@ -9,11 +9,15 @@ JSON 데이터 파일의 형식을 정의한 JSON Schema(draft-07) 파일입니�
 |---|---|
 | `exhibitions.schema.json` | `data/exhibitions/auto.json` (수집 스크립트가 만드는 전시 목록) |
 | `holidays.schema.json` | `data/holidays/holidays.json` (공휴일 `YYYY-MM-DD` 배열) |
+| `venue.schema.json` | `data/venues/*.json` (시설마다 파일 하나. 파일 이름과 `id`가 같은지는 `validate-data.ts`가 따로 검사) |
+
+위 세 가지는 `npm run validate`와 배포 워크플로가 검사합니다. 시설 파일은 수집하지 않는 값이라,
+스키마에 어긋나면 배포가 멈춥니다.
 
 ## 추가 예정
 
-- `venue.schema.json`: 시설 JSON. PR #21에서 파일 형식(한 파일 / 시설마다 한 파일)을 정한 뒤 추가합니다.
-- 제안 5개(`judge-scenarios`, `personal-records-export`, `shared-reviews-seed`, `categories`, `popular-venues`): 11/19 타입 합의 뒤 추가합니다.
+- 제안 스키마 5개(`judge-scenarios`, `personal-records-export`, `shared-reviews-seed`, `popular-venues`, `venue-links`):
+  파일은 PR #33으로 들어왔고, 타입이 확정되면 검사에 추가합니다.
 - PR #22의 `operatingHours`, `imageUrl`, `detailUrl`: PR #22가 병합될 때 exhibitions 스키마에 추가합니다.
 
 ## 제안 스키마 메모

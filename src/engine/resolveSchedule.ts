@@ -1,6 +1,6 @@
 import type { DaySchedule, JudgeInput, JudgeResult, ParsedOperatingHours, TimeInterval, Venue, Weekday } from '../types';
 import { judge, isValidDate, type ResolvedInterval, type ResolvedVenue } from './judge';
-import { isOpen } from './isOpen';
+import { effectiveWeekday, isOpen, venueLastEntry } from './isOpen';
 import { isSessionDay, pickDaySchedule } from './scheduleForDate';
 import { toMinutes, fromMinutes, weekdayOf } from './time';
 import { REASONS } from './reasons';
@@ -147,12 +147,13 @@ function findMismatches(venue: Venue, trusted: Partial<Record<Weekday, TrustedDa
       }
     }
 
-    // 입장 마감은 전시에 적혀 있을 때만 비교한다
-    if (last.lastAdmission !== undefined && venue.lastEntry !== last.lastAdmission) {
+    // 입장 마감은 전시에 적혀 있을 때만 비교한다. 시설 값은 그 요일 기준(폐관 − N 반영)
+    const venueLe = venueLastEntry(venue, wd);
+    if (last.lastAdmission !== undefined && venueLe !== last.lastAdmission) {
       out.push({
         weekday: wd,
         kind: 'lastEntry',
-        venueValue: venue.lastEntry ?? null,
+        venueValue: venueLe ?? null,
         exhibitionValue: last.lastAdmission,
       });
     }
@@ -198,7 +199,7 @@ function venueFromExhibition(trusted: TrustMap): ResolvedVenue {
     });
     putDay(wd, list, hours, lastEntryByDay, intervalsByDay);
   }
-  // judge는 hours, closed, lastEntry, visitMinutes, lastEntryByDay, intervalsByDay, basis만 읽는다.
+  // judge는 hours, closed, holidayAs, lastEntry, lastEntryBeforeClose, visitMinutes, lastEntryByDay, intervalsByDay, basis만 읽는다.
   // 나머지는 타입을 채우기 위한 빈 값이다. 이 객체를 지도·목록에 쓰지 않는다.
   const venue: ResolvedVenue = {
     id: '',
@@ -247,7 +248,7 @@ function mergeVenue(venue: Venue, trusted: TrustMap): ResolvedVenue {
       const close = Math.min(vClose, eClose);
       if (open >= close) continue;
       const out: ResolvedInterval = { open: fromMinutes(open), close: fromMinutes(close) };
-      const le = minTime(venue.lastEntry, interval.lastAdmission);
+      const le = minTime(venueLastEntry(venue, wd), interval.lastAdmission);
       if (le !== null) out.lastEntry = fromMinutes(Math.min(le, close));
       list.push(out);
     }
@@ -298,13 +299,13 @@ export function resolveSchedule(
 }
 
 /**
- * 판정 날짜의 전시 일정으로 요일 정보를 바꾼다.
+ * 판정 날짜의 전시 일정으로 요일 정보를 바꾼다. 그날 일정은 판정에 쓸 요일(wd) 키에 넣는다.
+ * (시설 holidayAs로 공휴일을 다른 요일 시간으로 판정하면 wd는 실제 요일과 다르다)
  * - scheduleForDate가 null(모름)이거나 믿을 수 없는 일정이면 그 요일은 "모름"
  * - 날짜 예외·공휴일 일정이 isOpen: false이거나 쉬는 주(weeksOfMonth)면 확실한 휴관('closed')
  */
-function trustForDate(hours: ParsedOperatingHours, date: string, holidays: string[]): TrustMap {
+function trustForDate(hours: ParsedOperatingHours, date: string, holidays: string[], wd: Weekday): TrustMap {
   const map: TrustMap = { ...trustedDays(hours) };
-  const wd = weekdayOf(date);
   delete map[wd];
   const picked = pickDaySchedule(hours, date, holidays);
   if (!picked) return map;
@@ -331,14 +332,15 @@ export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: Resolv
   const src = resolved.source;
   const hours = input.exhibition.operatingHours ?? src?.hours;
   if (src && src.options.useExhibitionHours && hours?.scheduleType === 'scheduled' && isValidDate(input.date)) {
-    const trusted = trustForDate(hours, input.date, input.holidays);
+    const wd = src.venue ? effectiveWeekday(src.venue, input.date, input.holidays) : weekdayOf(input.date);
+    const trusted = trustForDate(hours, input.date, input.holidays, wd);
     const built = build(src.venue, trusted, src.options);
     if (built.venue === null) {
       return { result: 'unknown', reasons: [REASONS.MISSING_VENUE] };
     }
     let venue = built.venue;
     // 전시가 그날 확실히 쉬면 지정 휴관일로 막는다. 시설이 이미 쉬는 날이면 시설 사유를 그대로 둔다
-    if (trusted[weekdayOf(input.date)] === 'closed' && isOpen(venue, input.date, input.holidays).status !== 'closed') {
+    if (trusted[wd] === 'closed' && isOpen(venue, input.date, input.holidays).status !== 'closed') {
       venue = {
         ...venue,
         closed: { ...venue.closed, dates: [...(venue.closed?.dates ?? []), input.date] },

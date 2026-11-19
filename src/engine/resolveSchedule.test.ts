@@ -651,3 +651,72 @@ describe('resolveSchedule: 입장 마감 = 폐관 − N분 (lastEntryBeforeClose
       .toMatchObject({ result: 'possible', entryTime: '15:00', endTime: '16:30' });
   });
 });
+
+describe('judgeResolved: 시설 없음 → 입력 검사 · 전시 기간 검사 먼저', () => {
+  // 전시 기간 2026-11-01 ~ 2026-11-30. 토요일만 회차라 믿을 요일이 없어 판정용 시설이 null이다
+  const SAT_OUT_BEFORE = '2026-10-31'; // 토, 기간 전
+  const SAT_OUT_AFTER = '2026-12-05'; // 토, 기간 후
+  const session = (o: string, c: string): DaySchedule => ({ ...open(o, c), sessions: true });
+  const onlySessions = makeHours({ sat: session('14:00', '15:20') });
+  const ex: Exhibition = { ...exhibition, operatingHours: onlySessions };
+  const runEx = (resolved: ReturnType<typeof resolveSchedule>, date: string, stayStart: string, stayEnd: string) =>
+    judgeResolved({ exhibition: ex, date, stayStart, stayEnd, holidays: [] }, resolved);
+
+  const INVALID = { result: 'unknown', reasons: [REASONS.INVALID_INPUT] };
+  const OUT = { result: 'impossible', reasons: [REASONS.OUT_OF_PERIOD] };
+  const NO_VENUE = { result: 'unknown', reasons: [REASONS.MISSING_VENUE] };
+
+  describe.each([
+    ['off', OFF],
+    ['on', ON],
+  ] as const)('플래그 %s', (flag, options) => {
+    const r = resolveSchedule(null, onlySessions, options);
+
+    it('판정용 시설이 null이다', () => {
+      expect(r.venue).toBeNull();
+      expect(r.source !== undefined).toBe(flag === 'on');
+    });
+
+    it.each([
+      ['없는 날짜', '2026-02-30', '14:00', '17:00'],
+      ['날짜 형식', '2026/11/21', '14:00', '17:00'],
+      ['시각 형식', SAT, '9:00', '17:00'],
+      ['시작 > 끝', SAT, '17:00', '14:00'],
+      ['시작 = 끝', TUE, '14:00', '14:00'],
+      ['기간 밖이어도 입력 오류가 먼저', SAT_OUT_AFTER, '17:00', '14:00'],
+    ])('입력 오류(%s) → INVALID_INPUT 하나', (_label, date, s, e) => {
+      expect(runEx(r, date, s, e)).toEqual(INVALID);
+    });
+
+    it('기간 밖 → 불가 OUT_OF_PERIOD (회차 요일이어도)', () => {
+      expect(runEx(r, SAT_OUT_BEFORE, '14:00', '17:00')).toEqual(OUT);
+      expect(runEx(r, SAT_OUT_AFTER, '14:00', '17:00')).toEqual(OUT);
+      // 기간 밖이고 회차가 아닌 날(화)도 같다
+      expect(runEx(r, '2026-12-01', '14:00', '17:00')).toEqual(OUT);
+    });
+
+    it('기간 안: 회차 아닌 날 → MISSING_VENUE (기존 동작)', () => {
+      expect(runEx(r, TUE, '14:00', '17:00')).toEqual(NO_VENUE);
+    });
+
+    it(`기간 안 + 회차 요일 → ${flag === 'on' ? 'SESSION_DAY' : 'MISSING_VENUE (off는 회차 규칙 없음)'} (기존 동작)`, () => {
+      expect(runEx(r, SAT, '14:00', '17:00')).toEqual(
+        flag === 'on' ? { result: 'unknown', reasons: [REASONS.SESSION_DAY] } : NO_VENUE,
+      );
+    });
+  });
+
+  it('플래그 on이어도 source가 없으면(운영 시간 없음) 같은 순서', () => {
+    const r = resolveSchedule(null, undefined, ON);
+    expect(r.source).toBeUndefined();
+    expect(runEx(r, SAT, '17:00', '14:00')).toEqual(INVALID);
+    expect(runEx(r, SAT_OUT_AFTER, '14:00', '17:00')).toEqual(OUT);
+    expect(runEx(r, SAT, '14:00', '17:00')).toEqual(NO_VENUE);
+  });
+
+  it('시설이 있으면 지금처럼 judge가 판정한다 (basis 포함)', () => {
+    const r = resolveSchedule(craftMuseum(), onlySessions, ON);
+    expect(runEx(r, SAT_OUT_AFTER, '14:00', '17:00')).toEqual({ ...OUT, basis: 'venue' });
+    expect(runEx(r, SAT, '17:00', '14:00')).toEqual({ ...INVALID, basis: 'venue' });
+  });
+});

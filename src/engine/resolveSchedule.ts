@@ -1,5 +1,5 @@
 import type { DaySchedule, JudgeInput, JudgeResult, ParsedOperatingHours, TimeInterval, Venue, Weekday } from '../types';
-import { judge, isValidDate, type ResolvedInterval, type ResolvedVenue } from './judge';
+import { judge, isValidDate, precheck, type ResolvedInterval, type ResolvedVenue } from './judge';
 import { effectiveWeekday, isOpen, venueLastEntry } from './isOpen';
 import { isSessionDay, pickDaySchedule } from './scheduleForDate';
 import { toMinutes, fromMinutes, weekdayOf } from './time';
@@ -328,10 +328,11 @@ function isSessionDate(hours: ParsedOperatingHours, date: string, holidays: stri
 }
 
 /**
- * 회차 요일 규칙. 판정 날짜가 회차로 운영하는 날이면
- * - 불가는 그대로 둔다(어긴 조건이 정보 부족보다 우선)
- * - 입력 오류(INVALID_INPUT)도 그대로 둔다
- * - 가능·확인 필요는 확인 필요 + SESSION_DAY 하나로 바꾼다. basis는 남긴다
+ * 회차 요일 규칙. 판정 날짜가 회차로 운영하는 날이면 judge 결과를
+ * - 불가는 그대로 둔다(어긴 조건이 정보 부족보다 우선. 전시 기간 밖(OUT_OF_PERIOD)도 불가라 그대로)
+ * - 입력 오류(확인 필요 + INVALID_INPUT)도 그대로 둔다(basis 포함)
+ * - 그 밖의 가능·확인 필요는 확인 필요 + SESSION_DAY 하나로 바꾼다. basis는 남긴다
+ * 시설이 없을 때는 judge를 거치지 않고 judgeWithoutVenue가 같은 순서로 판정한다.
  */
 function applySessionDay(result: JudgeResult): JudgeResult {
   if (result.result === 'impossible') return result;
@@ -342,14 +343,32 @@ function applySessionDay(result: JudgeResult): JudgeResult {
 }
 
 /**
- * resolveSchedule 결과로 판정한다. 시설 정보가 없으면 확인 필요(MISSING_VENUE).
+ * 판정용 시설이 없을 때의 판정. judge와 같은 순서로 검사한다(규칙은 judge.ts의 precheck).
+ * 1) 입력 오류 → 확인 필요 + INVALID_INPUT
+ * 2) 전시 기간 밖 → 불가 + OUT_OF_PERIOD (회차 요일이어도)
+ * 3) 둘 다 통과하면 확인 필요 + SESSION_DAY(회차 요일) 또는 MISSING_VENUE
+ * 시설이 없으므로 basis는 넣지 않는다.
+ */
+function judgeWithoutVenue(input: Omit<JudgeInput, 'venue'>, sessionDate: boolean): JudgeResult {
+  const pre = precheck(input);
+  if (!pre.valid) return { result: 'unknown', reasons: [REASONS.INVALID_INPUT] };
+  if (pre.outOfPeriod) return { result: 'impossible', reasons: [REASONS.OUT_OF_PERIOD] };
+  return { result: 'unknown', reasons: [sessionDate ? REASONS.SESSION_DAY : REASONS.MISSING_VENUE] };
+}
+
+/**
+ * resolveSchedule 결과로 판정한다.
  *
  * useExhibitionHours가 true였으면 그날 일정(scheduleForDate: 날짜 예외, periods, 공휴일, 몇째 주)을
  * 다시 골라 적용한다. 전시 일정은 input.exhibition.operatingHours를 쓰고, 없으면 resolveSchedule에
  * 넘긴 hours를 쓴다. 플래그가 false면 resolved.venue로 그대로 판정한다.
  *
  * 플래그가 true이고 그날 일정이 회차(sessions: true)면 회차 요일 규칙(applySessionDay)을 적용한다.
- * 시설이 없어 MISSING_VENUE가 될 때도 SESSION_DAY로 바꾼다. 플래그가 false면 적용하지 않는다.
+ * 플래그가 false면 적용하지 않는다.
+ *
+ * 판정용 시설이 없으면(플래그와 무관) judgeWithoutVenue: 입력 검사(INVALID_INPUT) → 전시 기간
+ * 검사(불가, OUT_OF_PERIOD)를 먼저 하고, 둘 다 통과했을 때만 확인 필요 + MISSING_VENUE
+ * (플래그 on이고 그날이 회차면 SESSION_DAY)를 낸다.
  */
 export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: ResolveResult): JudgeResult {
   const src = resolved.source;
@@ -359,9 +378,7 @@ export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: Resolv
     const trusted = trustForDate(hours, input.date, input.holidays, wd);
     const built = build(src.venue, trusted, src.options);
     const sessionDate = isSessionDate(hours, input.date, input.holidays);
-    if (built.venue === null) {
-      return { result: 'unknown', reasons: [sessionDate ? REASONS.SESSION_DAY : REASONS.MISSING_VENUE] };
-    }
+    if (built.venue === null) return judgeWithoutVenue(input, sessionDate);
     let venue = built.venue;
     // 전시가 그날 확실히 쉬면 지정 휴관일로 막는다. 시설이 이미 쉬는 날이면 시설 사유를 그대로 둔다
     if (trusted[wd] === 'closed' && isOpen(venue, input.date, input.holidays).status !== 'closed') {
@@ -374,8 +391,6 @@ export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: Resolv
     return sessionDate ? applySessionDay(result) : result;
   }
 
-  if (resolved.venue === null) {
-    return { result: 'unknown', reasons: [REASONS.MISSING_VENUE] };
-  }
+  if (resolved.venue === null) return judgeWithoutVenue(input, false);
   return judge({ ...input, venue: resolved.venue });
 }

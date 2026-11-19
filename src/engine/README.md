@@ -219,7 +219,9 @@ export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: Resolv
 ```ts
 const resolved = resolveSchedule(venue ?? null, ex.operatingHours, { useExhibitionHours: true });
 const result = judgeResolved({ exhibition: ex, date, stayStart, stayEnd, holidays }, resolved);
-// resolved.venue가 null이면 { result: 'unknown', reasons: [MISSING_VENUE] }
+// 판정용 시설이 없으면: 입력 오류 → { result: 'unknown', reasons: [INVALID_INPUT] }
+//                       전시 기간 밖 → { result: 'impossible', reasons: [OUT_OF_PERIOD] }
+//                       그 밖 → { result: 'unknown', reasons: [MISSING_VENUE] } (플래그 on + 회차 날이면 SESSION_DAY)
 ```
 
 - 전시 쪽은 "믿을 수 있는 요일"만 씁니다: `scheduleType`이 `'scheduled'`이고, 그 요일이 `isOpen: true`, 구간이 하나 이상, 각 구간 `open < close`, 구간끼리 겹치지 않음, 회차 요일이 아님(`isSessionDay`, `sessions: true`). 나머지 요일은 "모름"입니다(`isOpen: false`도 "모름").
@@ -237,13 +239,18 @@ const result = judgeResolved({ exhibition: ex, date, stayStart, stayEnd, holiday
 - `judgeResolved`
   - 플래그 off(또는 `source` 없음): `resolved.venue`로 그대로 판정합니다. 지금까지와 같습니다.
   - 플래그 on: 판정 날짜의 일정(`scheduleForDate`)을 다시 골라 그 요일만 바꿔 판정합니다. 전시 일정은 `input.exhibition.operatingHours`, 없으면 `source.hours`입니다.
+    - 그날 일정을 넣는 요일 키는 판정에 쓸 요일(`effectiveWeekday`)입니다. 공휴일이고 시설에 `holidayAs`가 있으면 실제 요일이 아니라 `holidayAs` 요일 키에 넣습니다(`trustForDate`의 `wd`).
     - 그날 일정을 믿을 수 있으면 그 일정으로, "모름"이면 지금처럼 믿지 않는 요일로 다룹니다.
     - 확실히 쉬는 날(날짜 예외가 휴관, 공휴일 규칙이 휴관, 몇째 주에 해당하지 않음)은 그 날짜를 `closed.dates`에 넣어 `CLOSED_DATE`로 막습니다. 시설도 그날 쉬면 시설 사유를 그대로 둡니다.
     - 회차 요일 규칙: 그날 고른 일정이 회차(`sessions: true`, 쉬는 주 제외)면
       - 결과가 불가면 그대로 둡니다(어긴 조건이 정보 부족보다 우선).
       - 가능·확인 필요면 확인 필요 + `SESSION_DAY` 하나로 바꿉니다. `basis`는 남기고 `entryTime` 등은 뺍니다. 입력 오류(`INVALID_INPUT`)는 그대로 둡니다.
-      - 시설이 없어 `MISSING_VENUE`가 될 때도 `SESSION_DAY`로 바꿉니다. 회차 요일이 아니면 `MISSING_VENUE` / `MISSING_HOURS`를 그대로 둡니다.
+      - 시설이 없어 `MISSING_VENUE`가 될 때도 `SESSION_DAY`로 바꿉니다(아래 "판정용 시설이 없을 때"의 3번). 회차 요일이 아니면 `MISSING_VENUE` / `MISSING_HOURS`를 그대로 둡니다.
       - 플래그 off에서는 적용하지 않습니다.
+  - 판정용 시설이 없을 때(플래그 off의 `resolved.venue === null`, 플래그 on에서 그날 만든 시설이 `null`): `judge`와 같은 순서로 봅니다. 검사 규칙은 `judge.ts`의 `precheck` 하나입니다. `basis`는 넣지 않습니다.
+    1. 입력 오류(5장 "입력 검사")면 확인 필요 + `INVALID_INPUT` 하나.
+    2. 전시 기간 밖이면 불가 + `OUT_OF_PERIOD` 하나. 회차 요일이어도 같습니다.
+    3. 둘 다 통과하면 확인 필요 + `MISSING_VENUE`(플래그 on이고 그날이 회차면 `SESSION_DAY`).
 - 입력 `venue`, `hours`는 바꾸지 않습니다.
 - 시설 없이 만든 `venue`(`basis: 'exhibition'`)는 판정용입니다. `id`, `name`, 좌표 등은 빈 값이라 화면에 쓰지 않습니다.
 
@@ -395,6 +402,7 @@ export function findStartCandidates(
 ### 입력 검사
 
 다른 조건보다 먼저 봅니다. 하나라도 틀리면 바로 `{ result: 'unknown', reasons: [INVALID_INPUT], basis }`를 돌려줍니다.
+규칙(입력 검사 + 전시 기간 검사)은 `precheck`(`judge.ts`)에 있고, `judgeResolved`가 시설 없이 판정할 때도 같은 함수를 씁니다.
 
 - `date`가 `YYYY-MM-DD` 형식이고 달력에 실제 있는 날짜인지. `2026-02-30`은 거부합니다.
 - `stayStart`, `stayEnd`가 `HH:MM`(`toMinutes`로 읽힘)인지. `9:00`, `24:00`은 거부합니다.
@@ -483,7 +491,7 @@ export function findStartCandidates(
 
 | 키 | 문구 | 쓰이는 곳 |
 | --- | --- | --- |
-| `OUT_OF_PERIOD` | 전시 기간이 아닙니다 | 전시 기간 밖 |
+| `OUT_OF_PERIOD` | 전시 기간이 아닙니다 | 전시 기간 밖. 시설이 없어도(`judgeResolved`) 이 사유 하나로 불가 |
 | `CLOSED_DATE` | 휴관일로 지정된 날입니다 | 지정 휴관일. 플래그 on에서 전시가 그날 확실히 쉬는 날(날짜 예외 휴관, 공휴일 휴관, 쉬는 주) |
 | `CLOSED_WEEKDAY(weekdayLabel)` | `{요일}요일 휴관입니다` | 정기 휴관 요일 |
 | `CLOSED_HOLIDAY` | 공휴일 다음 날이라 휴관입니다 | 공휴일 다음 날 대체 휴관 |
@@ -492,9 +500,9 @@ export function findStartCandidates(
 | `NOT_ENOUGH_STAY` | 머물 수 있는 시간 안에 관람을 마칠 수 없습니다 | `s + d > stayEnd` |
 | `MISSING_HOURS` | 운영 시간 정보가 없습니다 | 요일별 `hours` 없음, 시설·구간(`intervalsByDay`) 시각 형식 오류 |
 | `MISSING_LAST_ENTRY` | 입장 마감 정보가 없습니다 | 그날 쓸 입장 마감의 형식 오류 (없으면 폐관 시각을 씀) |
-| `MISSING_VENUE` | 시설 정보가 없습니다 | 전시에 연결된 시설이 없을 때 (`judge`는 아직 쓰지 않음) |
-| `SESSION_DAY` | 회차제로 운영돼 입장 가능 시간을 확인해야 합니다 | 플래그 on의 `judgeResolved`에서 판정 날짜가 회차 요일일 때. 가능·확인 필요(`MISSING_VENUE` 포함)를 이 사유 하나로 바꿈. 불가는 그대로 (4장 참고) |
-| `INVALID_INPUT` | 입력한 날짜나 시간이 올바르지 않습니다 | 입력 검사 실패 (5장 참고) |
+| `MISSING_VENUE` | 시설 정보가 없습니다 | `judgeResolved`에서 판정용 시설이 없을 때. 입력 검사·전시 기간 검사를 통과한 경우만 (`judge`는 쓰지 않음, 4장 참고) |
+| `SESSION_DAY` | 회차제로 운영돼 입장 가능 시간을 확인해야 합니다 | 플래그 on의 `judgeResolved`에서 판정 날짜가 회차 요일일 때. 가능·확인 필요(`MISSING_VENUE` 포함)를 이 사유 하나로 바꿈. 불가(`OUT_OF_PERIOD` 포함)·입력 오류는 그대로 (4장 참고) |
+| `INVALID_INPUT` | 입력한 날짜나 시간이 올바르지 않습니다 | 입력 검사 실패 (5장 참고). 시설이 없어도(`judgeResolved`) 같은 규칙(`precheck`) |
 | `NOT_IMPLEMENTED` | 판정 로직 구현 전입니다 | 쓰지 않음 |
 
 - `NOT_IMPLEMENTED`는 스텁 시절 값입니다. `judge`에서 쓰지 않습니다.

@@ -4,7 +4,12 @@ import { basisLabel, displayVenueName, getCatalog, getHolidays, judgeEntry, toda
 import type { Weekday } from '../types'
 
 type Range = { start: string; end: string }
-type SlotResult = { possible: string[]; unavailable: { range: string; reason: string }[] }
+
+type SlotResult = {
+  possible: string[]
+  unavailable: { range: string; reason: string }[]
+  unknown: { range: string; reason: string }[]
+}
 
 const DAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 const GAP = 30
@@ -34,9 +39,10 @@ function GUIDE(entry: CatalogEntry, date: string) {
 
 // 시간대별 추천 시각과 불가 사유 계산
 function CHECK(entry: CatalogEntry | null, date: string, ranges: Range[], holidays: string[]): SlotResult {
-  if (!entry) return { possible: [], unavailable: [] }
+  if (!entry) return { possible: [], unavailable: [], unknown: [] }
   const possible: string[] = []
   const unavailable: SlotResult['unavailable'] = []
+  const unknown: SlotResult['unknown'] = []
 
   ranges.forEach((range) => {
     const start = MINS(range.start)
@@ -50,7 +56,11 @@ function CHECK(entry: CatalogEntry | null, date: string, ranges: Range[], holida
 
     const whole = judgeEntry(entry, { date, stayStart: range.start, stayEnd: range.end }, holidays)
     const tail = basisLabel(whole.basis) ? ` (${basisLabel(whole.basis)})` : ''
-    if (whole.result !== 'possible') {
+    if (whole.result === 'unknown') {
+      unknown.push({ range: label, reason: `${whole.reasons[0] ?? '시설 정보가 없습니다.'}${tail}` })
+      return
+    }
+    if (whole.result === 'impossible') {
       unavailable.push({ range: label, reason: `${whole.reasons[0] ?? '관람 조건을 확인할 수 없어요.'}${tail}` })
       return
     }
@@ -65,7 +75,7 @@ function CHECK(entry: CatalogEntry | null, date: string, ranges: Range[], holida
     else unavailable.push({ range: label, reason: `${whole.reasons[0] ?? '운영 시간 안에 관람 시간을 확보할 수 없어요.'}${tail}` })
   })
 
-  return { possible: [...new Set(possible)].sort().slice(0, 3), unavailable }
+  return { possible: [...new Set(possible)].sort().slice(0, 3), unavailable, unknown }
 }
 
 function WhenToGo() {
@@ -152,6 +162,19 @@ function WhenToGo() {
             <p className="empty-result">가능한 시간이 없어요.</p>
           )}
         </div>
+
+// 수정 후
+        {result.unknown.length > 0 && (
+          <div className="result-section">
+            <h2>확인 필요 시간대</h2>
+            {result.unknown.map((item, index) => (
+              <div className="unavailable-item" key={index}>
+                <strong>{item.range}</strong>
+                <span>{item.reason}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="result-section">
           <h2>불가능한 시간대</h2>

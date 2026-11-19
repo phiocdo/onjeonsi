@@ -22,11 +22,13 @@
   "closed": {
     "dates": [
       "01-01",
-      "2026-12-01"
+      "2026-12-01",
+      "2027-02-07",
+      "2027-09-15"
     ]
   },
   "lastEntry": "18:00",
   "visitMinutes": 90,
   "source": "https://www.mmca.go.kr/visitingInfo/seoulInfo.do",
-  "verified": "2026-11-16"
+  "verified": "2026-11-19"
 }

@@ -44,7 +44,9 @@ function Hannune() {
   const holidays = useMemo(() => getHolidays(), [])
 
   const all = useMemo(() => {
-    const active = catalog.filter(({ exhibition }) => !exhibition.end || exhibition.end >= date)
+    const active = catalog.filter (
+      ({ exhibition }) => (!exhibition.start || exhibition.start <= date) && (!exhibition.end || exhibition.end >= date),
+    )
     return judgeCatalog(active, { date, stayStart: time, stayEnd: '23:59' }, holidays).map(CARD)
   }, [catalog, holidays, date, time])
 

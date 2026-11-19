@@ -8,7 +8,9 @@
  * 각 시나리오는 조건 하나만 어기도록 시설·시각을 골라 사유가 정확히 하나 나오게 한다
  * (S19 여러 조건 동시 위반은 예외).
  *
- * 달력 (2026-11): 14 토(2째 주), 16 월, 17 화, 18 수, 21 토(3째 주), 23 월, 24 화
+ * 달력 (2026-11): 14 토(2째 주), 16 월, 17 화, 18 수, 19 목, 20 금, 21 토(3째 주), 23 월, 24 화, 27 금, 28 토
+ * 달력 (2026-12): 25 금(성탄절)
+ * 달력 (2027-01): 1 금(신정)
  * 달력 (2027-02): 7 일(설날 당일), 8 월(설 연휴)
  * 몇째 주는 1~7일이 1째 주, 8~14일이 2째 주인 방식이다(weekOfMonth).
  */
@@ -480,6 +482,113 @@ describe('F-05 판정 시나리오', () => {
       expect(resolvedRun(hours, '2027-02-08', '13:00', '16:00', { exhibition, holidays: SEOLLAL_HOLIDAYS })).toMatchObject({
         result: 'possible', entryTime: '13:00', basis: 'merged',
       });
+    });
+  });
+
+  describe('추가: 공휴일 운영시간·폐관 기준 입장 마감 (서울시립미술관 공식 규칙)', () => {
+    /**
+     * 공식 안내를 그대로 옮긴 시설(동절기 기준):
+     * 화~목 10:00~20:00, 금 10:00~21:00, 토·일·공휴일 10:00~18:00, 입장 마감은 관람 종료 1시간 전,
+     * 매주 월요일·1월 1일 휴관(월요일이 공휴일이면 개관, 대체 휴관 없음). 관람 90분.
+     */
+    const SEMA: Venue = {
+      ...BASE_VENUE,
+      id: 'scenario-sema',
+      hours: {
+        tue: { open: '10:00', close: '20:00' },
+        wed: { open: '10:00', close: '20:00' },
+        thu: { open: '10:00', close: '20:00' },
+        fri: { open: '10:00', close: '21:00' },
+        sat: { open: '10:00', close: '18:00' },
+        sun: { open: '10:00', close: '18:00' },
+      },
+      closed: { weekday: 'mon', ifHoliday: 'open', dates: ['01-01'] },
+      holidayAs: 'sun',
+      lastEntry: undefined,
+      lastEntryBeforeClose: 60,
+      visitMinutes: 90,
+    };
+    // 2026-11-23(월)은 가상 공휴일(HOLIDAYS와 같음), 12-25·01-01은 실제 공휴일
+    const SEMA_HOLIDAYS = ['2026-11-23', '2026-12-25', '2027-01-01'];
+    const sema = (date: string, stayStart: string, stayEnd: string) =>
+      run({ venue: SEMA, date, stayStart, stayEnd, holidays: SEMA_HOLIDAYS });
+
+    it('S29 공휴일인 금요일(12/25) 17:59~19:59 → 불가, 일요일 시간(입장 마감 17:00)', () => {
+      expect(sema('2026-12-25', '17:59', '19:59')).toEqual({
+        result: 'impossible',
+        reasons: [REASONS.AFTER_LAST_ENTRY('17:00'), REASONS.NOT_ENOUGH_BEFORE_CLOSE],
+        basis: 'venue',
+      });
+    });
+
+    it('S30 화요일(11/24) 18:01~20:01 → 가능, 입장 마감 19:00. 전날 공휴일 월요일이어도 대체 휴관 없음', () => {
+      expect(sema('2026-11-24', '18:01', '20:01')).toEqual({
+        result: 'possible',
+        reasons: [],
+        entryTime: '18:01',
+        endTime: '19:31',
+        slackMinutes: 29,
+        basis: 'venue',
+      });
+    });
+
+    it('S31 금요일(11/27) 19:00~21:00 → 가능, 입장 마감 20:00', () => {
+      expect(sema('2026-11-27', '19:00', '21:00')).toEqual({
+        result: 'possible',
+        reasons: [],
+        entryTime: '19:00',
+        endTime: '20:30',
+        slackMinutes: 30,
+        basis: 'venue',
+      });
+    });
+
+    it('S32 토요일(11/28) 17:59~19:59 → 불가, 입장 마감 17:00 + 폐관 전 부족', () => {
+      expect(sema('2026-11-28', '17:59', '19:59')).toEqual({
+        result: 'impossible',
+        reasons: [REASONS.AFTER_LAST_ENTRY('17:00'), REASONS.NOT_ENOUGH_BEFORE_CLOSE],
+        basis: 'venue',
+      });
+    });
+
+    it('S33 공휴일인 월요일(11/23) → 일요일 시간으로 개관. 공휴일이 아닌 월요일은 휴관', () => {
+      expect(sema('2026-11-23', '13:00', '16:00')).toEqual({
+        result: 'possible',
+        reasons: [],
+        entryTime: '13:00',
+        endTime: '14:30',
+        slackMinutes: 90,
+        basis: 'venue',
+      });
+      // 일요일 입장 마감 17:00
+      expect(sema('2026-11-23', '17:01', '19:00').reasons).toContain(REASONS.AFTER_LAST_ENTRY('17:00'));
+      expect(sema('2026-11-16', '13:00', '16:00')).toEqual({
+        result: 'impossible',
+        reasons: [REASONS.CLOSED_WEEKDAY('월')],
+        basis: 'venue',
+      });
+    });
+
+    it('S34 2027-01-01(금, 공휴일) → 불가, CLOSED_DATE (closed.dates가 공휴일보다 우선)', () => {
+      expect(sema('2027-01-01', '13:00', '16:00')).toEqual({
+        result: 'impossible',
+        reasons: [REASONS.CLOSED_DATE],
+        basis: 'venue',
+      });
+    });
+
+    it('S35 새 필드 없는 기준 시설의 공휴일 금요일 → 금요일 시간 그대로 (회귀 방지)', () => {
+      // 2026-11-20(금)을 공휴일로 둔다. 기준 시설 금 10:00~18:00, 입장 마감 17:00
+      const holidayFri = run({ date: '2026-11-20', stayStart: '17:00', stayEnd: '19:00', holidays: ['2026-11-20'] });
+      expect(holidayFri).toEqual({
+        result: 'possible',
+        reasons: [],
+        entryTime: '17:00',
+        endTime: '18:00',
+        slackMinutes: 0,
+        basis: 'venue',
+      });
+      expect(holidayFri).toEqual(run({ date: '2026-11-20', stayStart: '17:00', stayEnd: '19:00', holidays: [] }));
     });
   });
 });

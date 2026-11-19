@@ -401,3 +401,91 @@ describe('judge 구간이 여러 개인 날 (intervalsByDay)', () => {
     expect(result).toEqual(judge(makeInput()));
   });
 });
+
+describe('judge 입장 마감 = 폐관 − N분 (lastEntryBeforeClose)', () => {
+  // 화요일 10:00~20:00, 관람 60분
+  const LATE = { hours: { tue: { open: '10:00', close: '20:00' } }, lastEntry: undefined, lastEntryBeforeClose: 60 };
+
+  it('폐관 20:00 − 60분 = 19:00 정각 도착은 가능 (lastEntryAssumed 없음)', () => {
+    const result = judge(makeInput({ venue: LATE, stayStart: '19:00', stayEnd: '21:00' }));
+    expect(result).toEqual({
+      result: 'possible',
+      reasons: [],
+      entryTime: '19:00',
+      endTime: '20:00',
+      slackMinutes: 0,
+      basis: 'venue',
+    });
+  });
+
+  it('19:01 도착은 불가, AFTER_LAST_ENTRY(19:00)', () => {
+    const result = judge(makeInput({ venue: LATE, stayStart: '19:01', stayEnd: '21:00' }));
+    expect(result.result).toBe('impossible');
+    expect(result.reasons).toEqual([REASONS.AFTER_LAST_ENTRY('19:00'), REASONS.NOT_ENOUGH_BEFORE_CLOSE]);
+  });
+
+  it('우선순위: lastEntryBeforeClose > lastEntry', () => {
+    // lastEntry 17:00만 보면 18:30은 불가지만 폐관 − 60 = 19:00이 이긴다
+    const result = judge(makeInput({ venue: { ...LATE, lastEntry: '17:00' }, stayStart: '18:30', stayEnd: '21:00' }));
+    expect(result).toMatchObject({ result: 'possible', entryTime: '18:30' });
+  });
+
+  it('우선순위: lastEntryByDay(전시 근거) > lastEntryBeforeClose', () => {
+    const venue: ResolvedVenue = { ...makeVenue(LATE), lastEntryByDay: { tue: '18:00' } };
+    const result = judge({ ...makeInput({ stayStart: '18:30', stayEnd: '21:00' }), venue });
+    expect(result.reasons).toEqual([REASONS.AFTER_LAST_ENTRY('18:00')]);
+  });
+
+  it('폐관 − N이 개관보다 이르면 그대로 계산해 불가', () => {
+    const result = judge(
+      makeInput({
+        venue: { hours: { tue: { open: '10:00', close: '11:00' } }, lastEntryBeforeClose: 120 },
+        stayStart: '10:00',
+        stayEnd: '12:00',
+      }),
+    );
+    expect(result.result).toBe('impossible');
+    expect(result.reasons).toEqual([REASONS.AFTER_LAST_ENTRY('09:00')]);
+  });
+
+  it('N이 음수면 MISSING_LAST_ENTRY(확인 필요)', () => {
+    const result = judge(makeInput({ venue: { ...LATE, lastEntryBeforeClose: -10 }, stayStart: '14:00', stayEnd: '17:00' }));
+    expect(result).toEqual({ result: 'unknown', reasons: [REASONS.MISSING_LAST_ENTRY], basis: 'venue' });
+  });
+
+  it('구간이 여러 개인 날: 구간에 입장 마감이 없으면 그날 폐관 − N을 쓴다', () => {
+    const venue: ResolvedVenue = {
+      ...makeVenue({ hours: { tue: { open: '10:00', close: '18:00' } }, lastEntry: undefined, lastEntryBeforeClose: 60 }),
+      intervalsByDay: { tue: [{ open: '10:00', close: '12:00' }, { open: '13:00', close: '18:00' }] },
+    };
+    const result = judge({ ...makeInput({ stayStart: '17:01', stayEnd: '19:00' }), venue });
+    expect(result.reasons).toEqual([REASONS.AFTER_LAST_ENTRY('17:00'), REASONS.NOT_ENOUGH_BEFORE_CLOSE]);
+  });
+});
+
+describe('judge 공휴일 운영시간 (holidayAs)', () => {
+  // 화 10:00~20:00, 일 10:00~18:00, 입장 마감 폐관 − 60분. 2026-11-10(화)을 공휴일로 둔다
+  const HOLIDAY_VENUE = {
+    hours: { tue: { open: '10:00', close: '20:00' }, sun: { open: '10:00', close: '18:00' } },
+    holidayAs: 'sun' as const,
+    lastEntry: undefined,
+    lastEntryBeforeClose: 60,
+  };
+
+  it('공휴일이면 일요일 시간·입장 마감(17:00)으로 판정', () => {
+    const result = judge(makeInput({ venue: HOLIDAY_VENUE, stayStart: '17:30', stayEnd: '20:00', holidays: ['2026-11-10'] }));
+    expect(result.reasons).toEqual([REASONS.AFTER_LAST_ENTRY('17:00'), REASONS.NOT_ENOUGH_BEFORE_CLOSE]);
+  });
+
+  it('공휴일이 아니면 화요일 시간 그대로', () => {
+    const result = judge(makeInput({ venue: HOLIDAY_VENUE, stayStart: '17:30', stayEnd: '20:00' }));
+    expect(result).toMatchObject({ result: 'possible', entryTime: '17:30', endTime: '18:30' });
+  });
+
+  it('holidayAs 요일의 hours가 없으면 MISSING_HOURS(확인 필요)', () => {
+    const result = judge(
+      makeInput({ venue: { ...HOLIDAY_VENUE, hours: { tue: { open: '10:00', close: '20:00' } } }, holidays: ['2026-11-10'] }),
+    );
+    expect(result).toEqual({ result: 'unknown', reasons: [REASONS.MISSING_HOURS], basis: 'venue' });
+  });
+});

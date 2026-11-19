@@ -10,8 +10,13 @@ export interface Venue {
   lng: number;
   representative: boolean;
   hours?: Partial<Record<Weekday, { open: string; close: string }>>;
-  closed?: { weekday?: Weekday; ifHoliday?: 'nextDay'; dates?: string[] };
+  // ifHoliday: 휴관 요일이 공휴일이면 연다. nextDay는 다음 날 대체 휴관, open은 대체 휴관 없음
+  closed?: { weekday?: Weekday; ifHoliday?: 'nextDay' | 'open'; dates?: string[] };
+  // 공휴일이고 그날 열면 이 요일의 운영시간·입장 마감을 쓴다 ex) 'sun'
+  holidayAs?: Weekday;
   lastEntry?: string;
+  // 입장 마감 = 그날 폐관 − N분. 있으면 lastEntry보다 우선한다 ex) 60
+  lastEntryBeforeClose?: number;
   visitMinutes?: number;
   docent?: { days: Weekday[]; times: string[] }[];
   entry?: string;

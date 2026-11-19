@@ -1,6 +1,6 @@
 import type { JudgeInput, JudgeResult, Venue, Weekday } from '../types';
-import { isOpen } from './isOpen';
-import { toMinutes, fromMinutes, weekdayOf, addDays } from './time';
+import { effectiveWeekday, isOpen, venueLastEntry } from './isOpen';
+import { toMinutes, fromMinutes, addDays } from './time';
 import { REASONS } from './reasons';
 import { DEFAULT_VISIT_MINUTES } from './constants';
 
@@ -15,7 +15,8 @@ export interface ResolvedInterval {
 
 /**
  * judge가 받을 수 있는 시설 정보. Venue에 엔진에서만 쓰는 필드를 더한 것이다.
- * - lastEntryByDay: 요일별 입장 마감. 있으면 그 요일은 venue.lastEntry 대신 이 값을 쓴다.
+ * - lastEntryByDay: 요일별 입장 마감(resolveSchedule이 전시 근거로 만든다). 있으면 그 요일은
+ *   lastEntryBeforeClose·lastEntry 대신 이 값을 쓴다.
  * - intervalsByDay: 하루에 구간이 여러 개인 요일(점심 휴관 등). 있으면 그 요일은 hours 대신
  *   이 구간들로 판정한다. hours에는 첫 구간 시작 ~ 마지막 구간 끝이 들어 있다.
  * - basis: 이 시설 정보가 어디서 왔는지. 판정 결과의 basis로 그대로 나간다.
@@ -112,13 +113,16 @@ export const judge: JudgeFn = (input) => {
     return { result: 'unknown', reasons: [op.reason], basis };
   }
 
-  // 3) 그날의 운영 구간. 구간이 여러 개인 요일은 intervalsByDay, 아니면 hours 하나
-  const wd = weekdayOf(date);
+  // 3) 그날의 운영 구간. 구간이 여러 개인 요일은 intervalsByDay, 아니면 hours 하나.
+  // 요일은 판정에 쓸 요일(공휴일이면 holidayAs)이다.
+  // 입장 마감: lastEntryByDay[wd](전시 근거) > 그날 폐관 − N(lastEntryBeforeClose) > lastEntry > 없음(폐관 기준)
+  const wd = effectiveWeekday(venue, date, holidays);
+  const dayLastEntry = venueLastEntry(venue, wd);
   const multi = venue.intervalsByDay?.[wd];
   const windows: ResolvedInterval[] =
     multi && multi.length > 0
-      ? multi.map((iv) => ({ ...iv, lastEntry: iv.lastEntry ?? op.lastEntry }))
-      : [{ open: op.open, close: op.close, lastEntry: venue.lastEntryByDay?.[wd] ?? op.lastEntry }];
+      ? multi.map((iv) => ({ ...iv, lastEntry: iv.lastEntry ?? dayLastEntry }))
+      : [{ open: op.open, close: op.close, lastEntry: venue.lastEntryByDay?.[wd] ?? dayLastEntry }];
 
   const d = venue.visitMinutes ?? DEFAULT_VISIT_MINUTES;
   const checks: WindowCheck[] = [];

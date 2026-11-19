@@ -186,12 +186,17 @@ export type ResolvedVenue = Venue & {
 
 - 입력 `JudgeInput`: `venue`, `exhibition`, `date`, `stayStart`, `stayEnd`, `holidays`.
 - `Exhibition`에서는 `start`, `end`만 읽습니다.
-- `Venue`에서는 `hours`, `closed`, `lastEntry`, `visitMinutes`를 읽습니다.
+- `Venue`에서는 `hours`, `closed`, `holidayAs`, `lastEntry`, `lastEntryBeforeClose`, `visitMinutes`를 읽습니다.
+  - `closed.ifHoliday`: 휴관 요일이 공휴일일 때. `'nextDay'`는 개관하고 다음 날 대체 휴관, `'open'`은 개관만 하고 대체 휴관 없음.
+  - `holidayAs`(선택): 공휴일이고 그날 열면 이 요일의 운영시간·구간·입장 마감으로 판정합니다. 예: `'sun'`.
+    그 요일의 `hours`가 없으면 확인 필요(`MISSING_HOURS`). 휴관 여부는 실제 요일로 봅니다.
+  - `lastEntryBeforeClose`(선택): 입장 마감 = 그날 폐관 − N분. 있으면 `lastEntry`보다 우선합니다. 예: `60`.
+  - 두 필드가 없으면 판정은 이전과 같습니다.
 - `venue`에 `ResolvedVenue`를 넘기면 `lastEntryByDay`, `intervalsByDay`, `basis`도 읽습니다. `Venue` 타입 자체에는 이 필드가 없습니다.
-  - `lastEntryByDay`: 요일별 입장 마감. 그 요일 값이 있으면 `lastEntry` 대신 씁니다.
+  - `lastEntryByDay`: 요일별 입장 마감(전시 근거로 `resolveSchedule`이 만듭니다). 그 요일 값이 있으면 `lastEntryBeforeClose`·`lastEntry` 대신 씁니다.
   - `intervalsByDay`: 하루에 구간이 여러 개인 요일(점심 휴관 등). 그 요일은 `hours` 대신 이 구간들로 판정합니다.
     `hours`에는 첫 구간 시작 ~ 마지막 구간 끝이 들어 있습니다(휴관·운영 여부는 `hours`로 봅니다).
-    구간의 `lastEntry`가 없으면 시설 `lastEntry`를 씁니다. 시설 데이터(`Venue.hours`)는 지금처럼 요일당 구간 하나입니다.
+    구간의 `lastEntry`가 없으면 시설 기준 입장 마감(그날 폐관 − N, 없으면 `lastEntry`)을 씁니다. 시설 데이터(`Venue.hours`)는 지금처럼 요일당 구간 하나입니다.
   - `basis`: 시설 정보가 어디서 왔는지. 결과의 `basis`로 그대로 나갑니다.
 - 관람 시간은 `venue.visitMinutes ?? DEFAULT_VISIT_MINUTES`(60)입니다. 0은 0분으로 봅니다.
 - 출력 `JudgeResult`: `result`, `reasons`, `basis`, 그리고 가능일 때만 `entryTime`, `endTime`, `slackMinutes`, `lastEntryAssumed`.
@@ -222,13 +227,13 @@ const result = judgeResolved({ exhibition: ex, date, stayStart, stayEnd, holiday
 - 결과
   - 시설만 있음, 플래그 off, 또는 믿을 요일 없음: 시설 그대로, `basis: 'venue'`.
   - 시설 없음 + 플래그 on: 믿을 요일만 `hours`로, `lastAdmission`(폐관 이하)을 입장 마감으로. `closed`는 넣지 않습니다. `basis: 'exhibition'`.
-  - 둘 다 + 플래그 on: 휴관 규칙은 시설 것. 전시 구간마다 시설 시간과 겹치는 부분(늦은 개관 ~ 이른 폐관)만 남기고, 하나도 안 겹치면 그 요일은 뺌, 전시가 "모름"이면 시설 시간. 시설에 없는 요일은 넣지 않습니다. 구간 입장 마감 = `min(시설 lastEntry, 전시 lastAdmission, 그 구간 끝)`. `basis: 'merged'`.
+  - 둘 다 + 플래그 on: 휴관 규칙은 시설 것. 전시 구간마다 시설 시간과 겹치는 부분(늦은 개관 ~ 이른 폐관)만 남기고, 하나도 안 겹치면 그 요일은 뺌, 전시가 "모름"이면 시설 시간. 시설에 없는 요일은 넣지 않습니다. 구간 입장 마감 = `min(시설 입장 마감, 전시 lastAdmission, 그 구간 끝)`. 시설 입장 마감은 그 요일 시설 폐관 − N(`lastEntryBeforeClose`), 없으면 `lastEntry`입니다(겹친 구간 끝이 아니라 시설 폐관 기준). `basis: 'merged'`.
   - 그 밖: `venue: null`, `basis: null`.
   - 남은 구간이 하나면 `hours` + `lastEntryByDay`(지금까지와 같음), 여러 개면 `hours`(첫 시작 ~ 마지막 끝) + `intervalsByDay`.
   - 입장 마감이 없으면 지금처럼 비워 둡니다. `judge`가 폐관 시각을 씁니다(`lastEntryAssumed`).
 - `source`: 플래그 on이고 `hours`가 `'scheduled'`일 때만 `{ venue, hours, options }`가 들어갑니다. `judgeResolved`가 씁니다.
 - `mismatches`: 시설과 전시가 둘 다 있으면 플래그와 상관없이 계산합니다(시설 데이터 점검용). `{ weekday, kind: 'closed' | 'open' | 'close' | 'lastEntry', venueValue, exhibitionValue }`.
-  구간이 여러 개인 요일은 첫 구간 시작↔시설 `open`, 마지막 구간 끝↔시설 `close`, 마지막 구간 `lastAdmission`↔시설 `lastEntry`를 비교합니다.
+  구간이 여러 개인 요일은 첫 구간 시작↔시설 `open`, 마지막 구간 끝↔시설 `close`, 마지막 구간 `lastAdmission`↔시설 입장 마감(그 요일 폐관 − N, 없으면 `lastEntry`)을 비교합니다.
 - `judgeResolved`
   - 플래그 off(또는 `source` 없음): `resolved.venue`로 그대로 판정합니다. 지금까지와 같습니다.
   - 플래그 on: 판정 날짜의 일정(`scheduleForDate`)을 다시 골라 그 요일만 바꿔 판정합니다. 전시 일정은 `input.exhibition.operatingHours`, 없으면 `source.hours`입니다.
@@ -271,12 +276,18 @@ const day = scheduleForDate(ex.operatingHours, '2026-11-21', holidays);
 
 ```ts
 export function isOpen(venue: Venue, date: string, holidays: string[]): OpenStatus;
+export function effectiveWeekday(venue: Venue, date: string, holidays: string[]): Weekday;
+export function venueLastEntry(venue: Venue, weekday: Weekday): string | undefined;
 ```
 
 - 출력 `OpenStatus`
-  - `{ status: 'open'; open; close; lastEntry? }`
+  - `{ status: 'open'; open; close; lastEntry? }` (`open`, `close`는 판정에 쓸 요일의 값, `lastEntry`는 시설 전체 값 그대로)
   - `{ status: 'closed'; reason }`
   - `{ status: 'unknown'; reason }`
+- `effectiveWeekday`: 판정에 쓸 요일. 공휴일이고 `holidayAs`가 있으면 그 요일, 아니면 실제 요일.
+- `venueLastEntry`: 시설 기준 그 요일 입장 마감. `lastEntryBeforeClose`가 있으면 `hours[요일].close − N`, 없으면 `lastEntry`.
+  - 개관보다 이르면 그대로 둡니다(판정이 불가가 됩니다). 00:00보다 이르면 00:00.
+  - N이 0 이상의 수가 아니면 `''`(형식 오류 → `MISSING_LAST_ENTRY`). 그 요일 `hours`가 없으면 `lastEntry`.
 - 규칙은 5장을 봅니다.
 
 ### time (`time.ts`)
@@ -369,11 +380,17 @@ export function findStartCandidates(
 
 먼저 걸리는 규칙이 이깁니다.
 
-1. 지정 휴관일(`closed.dates`)이면 휴관. `'YYYY-MM-DD'` 또는 매년 `'MM-DD'`.
-2. 정기 휴관 요일(`closed.weekday`)이면 휴관. 단, 그날이 공휴일이고 `ifHoliday`가 `'nextDay'`면 개관.
-3. 전날이 공휴일과 겹친 휴관 요일이면 휴관(`ifHoliday`가 `'nextDay'`일 때).
-4. 그 요일의 `hours`가 없으면 `unknown`.
-5. 나머지는 `open`. 그 요일의 `open`, `close`와 시설의 `lastEntry`를 돌려줍니다.
+1. 지정 휴관일(`closed.dates`)이면 휴관. `'YYYY-MM-DD'` 또는 매년 `'MM-DD'`. 공휴일이어도 휴관입니다(예: 1/1).
+2. 정기 휴관 요일(`closed.weekday`)이면 휴관. 단, 그날이 공휴일이고 `ifHoliday`가 `'nextDay'` 또는 `'open'`이면 개관.
+3. 전날이 공휴일과 겹친 휴관 요일이면 휴관(`ifHoliday`가 `'nextDay'`일 때만. `'open'`은 대체 휴관 없음).
+4. 판정에 쓸 요일(`effectiveWeekday`: 공휴일이고 `holidayAs`가 있으면 그 요일)의 `hours`가 없으면 `unknown`.
+5. 나머지는 `open`. 판정에 쓸 요일의 `open`, `close`와 시설의 `lastEntry`를 돌려줍니다.
+
+예: `closed: { weekday: 'mon', ifHoliday: 'open', dates: ['01-01'] }`, `holidayAs: 'sun'`
+
+- 공휴일인 월요일 → 개관, 일요일 시간(`hours.mon`이 없어도 됩니다). 다음 날 화요일은 평소대로 개관.
+- 공휴일인 금요일 → 일요일 시간.
+- 1/1(공휴일) → 1번에서 휴관.
 
 ### 입력 검사
 
@@ -389,11 +406,15 @@ export function findStartCandidates(
 
 - `s = max(stayStart, open)`
 - `d = visitMinutes ?? 60`
-- `le = min(lastEntryByDay[그날 요일] ?? lastEntry, close)`
-  - 요일별 입장 마감이 있으면 그 값, 없으면 시설 전체 `lastEntry`.
+- `open`, `close`, 요일은 판정에 쓸 요일(`effectiveWeekday`) 기준입니다. 공휴일이고 `holidayAs`가 있으면 그 요일입니다.
+- `le = min(입장 마감, close)`. 입장 마감 우선순위:
+  1. `lastEntryByDay[요일]` (전시 근거로 `resolveSchedule`이 만든 값)
+  2. 그날 `close − lastEntryBeforeClose`분. 개관보다 일러도 그대로 계산합니다(결과는 불가).
+  3. 시설 전체 `lastEntry`
+  4. 없으면 폐관 기준(아래)
   - 입장 마감이 그날 폐관보다 늦게 적혀 있으면 폐관 시각까지만 입장할 수 있다고 봅니다.
     예: `lastEntry` 20:00, 그날 폐관 18:00 → `le` = 18:00.
-  - 둘 다 없으면 `le = close`(폐관 시각)로 봅니다. 가능이면 `lastEntryAssumed: true`를 붙입니다.
+  - 모두 없으면 `le = close`(폐관 시각)로 봅니다. 가능이면 `lastEntryAssumed: true`를 붙입니다.
     값은 있는데 형식이 틀리면 `MISSING_LAST_ENTRY`입니다.
 
 5개를 모두 만족해야 가능입니다.
@@ -406,7 +427,7 @@ export function findStartCandidates(
 
 ### 구간이 여러 개인 날 (`intervalsByDay`)
 
-- 구간마다 위 조건 3-5를 따로 봅니다. 구간마다 `open`, `close`, `le`(구간 `lastEntry ?? 시설 lastEntry`, 없으면 구간 끝)가 다릅니다.
+- 구간마다 위 조건 3-5를 따로 봅니다. 구간마다 `open`, `close`, `le`(구간 `lastEntry ?? 시설 입장 마감(그날 폐관 − N ?? lastEntry)`, 없으면 구간 끝)가 다릅니다.
 - 조건을 모두 만족하는 구간이 하나라도 있으면 가능. 가장 이른 그런 구간의 `s`, `close`로 출력을 만듭니다.
 - 모두 안 되면, 위반 없이 정보만 모자란 구간이 있으면 확인 필요, 아니면 불가입니다.
   불가 사유는 "가장 가까웠던 구간" 하나의 것입니다. 가까움 = `max(0, s - le) + max(0, s + d - min(close, stayEnd))`(모자란 분)이 가장 작은 구간, 같으면 이른 구간.
@@ -454,7 +475,8 @@ export function findStartCandidates(
 
 - `holidays`는 호출하는 쪽에서 `data/holidays/holidays.json`을 읽어 넘깁니다. 엔진은 파일을 읽지 않습니다.
 - 좌표는 `Number.isFinite`로 확인한 뒤 씁니다. `auto.json`에 `lat: null`이 있습니다.
-- 시설 JSON의 `lastEntry`는 시설 전체에 하나입니다. 요일별 입장 마감(`lastEntryByDay`)은 `resolveSchedule`이 만듭니다.
+- 시설 JSON의 `lastEntry`는 시설 전체에 하나입니다. 폐관 기준 입장 마감은 `lastEntryBeforeClose`로 적습니다. 요일별 입장 마감(`lastEntryByDay`)은 시설 JSON에 쓰지 않고 `resolveSchedule`이 만듭니다.
+- 공휴일 운영시간이 다른 시설은 `holidayAs`로 "공휴일엔 어느 요일 시간"인지 적습니다. 그 요일의 `hours`가 있어야 합니다.
 - 작성 규칙은 팀 Notion의 'JSON 데이터 작성 가이드'를 참고합니다.
 
 ## 7. 사유 문구 (`REASONS`)
@@ -482,6 +504,9 @@ export function findStartCandidates(
 - 휴관 요일은 하나만 지정할 수 있습니다(`closed.weekday`).
 - 연휴가 이어질 때 대체 휴관 처리가 단순합니다. 전날 하루만 봅니다. 실제 시설 규칙 확인이 필요합니다.
 - 자정을 넘는 운영과 `24:00`은 지원하지 않습니다.
+- 시설 운영시간은 계절 구분이 없다. 하절기에는 가능을 불가로 판정할 수 있다(안전한 방향).
+  예: 서울시립미술관 토·일·공휴일은 동절기 값(18:00)을 넣으므로 하절기(3~10월) 18:00~19:00은 불가로 나옵니다.
+- 공휴일 운영시간은 기존 요일 하나를 가리키는 방식(`holidayAs`)만 됩니다. 어느 요일과도 다른 공휴일 시간은 표현하지 못합니다.
 - `resolveSchedule`의 `useExhibitionHours`가 꺼져 있으면(기본값) 전시 운영 시간을 판정에 쓰지 않습니다.
   켜면 믿을 수 있는 요일만 씁니다(4장 참고). 해석기가 '모름'과 '휴관'을 구분하게 되면 켤 예정입니다.
   - 날짜별 일정(`scheduleForDate`)도 플래그가 켜져 있을 때만 적용됩니다.
@@ -547,6 +572,20 @@ export function findStartCandidates(
 | S26 | 시설 없음 + 회차 요일 | 시설 없음, 전시 수 회차만, 수 13:00~16:00 / 목 13:00~16:00 | 확인 필요, `SESSION_DAY` / 확인 필요, `MISSING_VENUE` |
 | S27 | 격주(`weeksOfMonth`) 쉬는 주 | 플래그 on, 전시 토요일 1·3째 주만(`weeksOfMonth: [1, 3]`), 토 2026-11-14(2째 주) / 2026-11-21(3째 주), 13:00~16:00 | 불가, `CLOSED_DATE`(`basis: 'merged'`) / 가능 |
 | S28 | 명절 당일 휴관(`exceptions`) | 플래그 on, 전시 2027-02-07(설날 당일) 휴관 예외, `holiday: null`, 공휴일 2027-02-06~09, 2027-02-07 / 2027-02-08(월, 공휴일이라 시설 개관), 13:00~16:00 | 불가, `CLOSED_DATE`(`basis: 'merged'`) / 가능 |
+
+S29~S35는 서울시립미술관 공식 규칙을 옮긴 시설로 봅니다(동절기 기준):
+화~목 10:00~20:00, 금 10:00~21:00, 토·일 10:00~18:00, `closed: { weekday: 'mon', ifHoliday: 'open', dates: ['01-01'] }`,
+`holidayAs: 'sun'`, `lastEntryBeforeClose: 60`, `visitMinutes` 90. 공휴일: `['2026-11-23'(가상), '2026-12-25', '2027-01-01']`.
+
+| 번호 | 명세 항목 | 입력 요약 | 기대 결과 |
+| --- | --- | --- | --- |
+| S29 | 공휴일 운영시간 | 2026-12-25(금, 공휴일) 17:59~19:59 | 불가, `AFTER_LAST_ENTRY('17:00')`, `NOT_ENOUGH_BEFORE_CLOSE` |
+| S30 | 폐관 기준 입장 마감(평일) | 2026-11-24(화) 18:01~20:01 | 가능, 18:01~19:31, 여유 29 (전날 공휴일 월요일이어도 대체 휴관 없음) |
+| S31 | 폐관 기준 입장 마감(금) | 2026-11-27(금) 19:00~21:00 | 가능, 19:00~20:30, 여유 30 |
+| S32 | 폐관 기준 입장 마감(토) | 2026-11-28(토) 17:59~19:59 | 불가, `AFTER_LAST_ENTRY('17:00')`, `NOT_ENOUGH_BEFORE_CLOSE` |
+| S33 | 휴관 요일이 공휴일(`'open'`) | 2026-11-23(월, 공휴일) / 2026-11-16(월) | 개관, 일요일 시간(13:00~14:30 가능, 17:01 입장 마감 이후) / 불가 `CLOSED_WEEKDAY('월')` |
+| S34 | 지정 휴관일이 공휴일 | 2027-01-01(금, 공휴일) | 불가, `CLOSED_DATE` |
+| S35 | 새 필드 없는 시설(회귀 방지) | 기준 시설, 2026-11-20(금)을 공휴일로 | 금요일 시간 그대로, 공휴일이 아닐 때와 같은 결과 |
 
 ## 10. 테스트 실행
 

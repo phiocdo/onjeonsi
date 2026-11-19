@@ -163,7 +163,6 @@ function WhenToGo() {
           )}
         </div>
 
-// 수정 후
         {result.unknown.length > 0 && (
           <div className="result-section">
             <h2>확인 필요 시간대</h2>

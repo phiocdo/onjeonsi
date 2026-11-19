@@ -532,6 +532,35 @@ describe('parseHours — 특정 날짜 예외', () => {
     ]);
   });
 
+  it('날짜 예외로 늘린 구간은 입장 마감도 같은 간격만큼 옮긴다', () => {
+    // 17:30 을 그대로 두면 22:00까지 여는 날에도 17:30 뒤 방문이 불가로 나온다
+    const r = parseHours('화-일 10:00~18:00 (17:30까지 입장가능) / 11.5.(목) 22:00까지', 2026);
+    expect(r.exceptions).toEqual([
+      {
+        date: '2026-11-05',
+        schedule: { isOpen: true, intervals: [{ open: '10:00', close: '22:00', lastAdmission: '21:30' }] },
+      },
+    ]);
+  });
+
+  it('평소보다 일찍 닫는 날은 입장 마감도 앞당긴다', () => {
+    const r = parseHours('화-일 10:00~18:00 (17:30까지 입장가능) / 11.5.(목) 16:00까지', 2026);
+    expect(r.exceptions[0].schedule.intervals).toEqual([{ open: '10:00', close: '16:00', lastAdmission: '15:30' }]);
+  });
+
+  it('쉬는 요일의 날짜에는 끝 시각만으로 예외를 만들지 않는다', () => {
+    // 그날 여는 시각을 모르므로 지어내지 않는다
+    const r = parseHours('화-일 10:00~18:00 (17:30까지 입장가능) / 11.2.(월) 22:00까지', 2026);
+    expect(r.exceptions).toEqual([]);
+    expect(r.weekdays.mon.isOpen).toBe(false);
+  });
+
+  it('요일 연장 운영도 입장 마감을 같이 옮긴다', () => {
+    const r = parseHours('화-일 10:00~18:00 (17:30까지 입장가능), 금 21:00까지 야간개관', 2026);
+    expect(r.weekdays.fri.intervals).toEqual([{ open: '10:00', close: '21:00', lastAdmission: '20:30' }]);
+    expect(r.weekdays.thu.intervals).toEqual([{ open: '10:00', close: '18:00', lastAdmission: '17:30' }]);
+  });
+
   it('"N월 N일(요일)" 형식도 읽는다', () => {
     const r = parseHours('10:30~12:00 (90분) *10월 11일(토)은 휴관', 2026);
     expect(r.exceptions).toEqual([

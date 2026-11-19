@@ -85,6 +85,34 @@ describe('parseHours — 휴관', () => {
     expect(openDays(t)).not.toContain('mon');
   });
 
+  it('날짜의 "월"·"일"은 휴관 요일로 읽지 않는다', () => {
+    // "1월 1일" 의 월·일을 요일로 읽으면 매주 월·일요일이 휴관이 된다
+    expect(openDays('10:00~18:00 ※ 1월 1일 휴관')).toEqual(ORDER);
+    expect(openDays('10:00~18:00 ※ 12 월 25 일 휴관')).toEqual(ORDER);
+    // 진짜 요일과 날짜가 같이 있으면 요일만 닫는다
+    expect(openDays('10:00~18:00, 매주 월요일 및 1월 1일 휴관'))
+      .toEqual(['tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+  });
+
+  it('"당일"·"공휴일"·"평일"의 "일"은 일요일로 읽지 않는다', () => {
+    expect(openDays('10:00~18:00 ※ 설·추석 당일 휴관')).toEqual(ORDER);
+    expect(openDays('10:00~18:00 ※ 공휴일 휴관')).toEqual(ORDER);
+    expect(openDays('10:00~18:00 ※ 평일 휴관')).toEqual(ORDER);
+    // 요일 목록 안의 "일" 은 그대로 일요일이다
+    expect(openDays('10:00~18:00 (일, 월, 공휴일 휴관)')).toEqual(['tue', 'wed', 'thu', 'fri', 'sat']);
+    expect(openDays('10:00~18:00 ※ 토일 휴관')).toEqual(['mon', 'tue', 'wed', 'thu', 'fri']);
+  });
+
+  it('띄어 쓰지 않은 휴관 요일도 놓치지 않는다', () => {
+    // 앞 글자가 한글이라고 모두 건너뛰면 휴관 요일을 놓쳐 틀린 "가능"이 나온다
+    const notMon = ['tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    expect(openDays('10:00~18:00 (매주월요일 휴관)')).toEqual(notMon);
+    expect(openDays('10:00~18:00 (공휴일및월요일 휴관)')).toEqual(notMon);
+    expect(openDays('10:00~18:00 (매월 2, 4 월요일 휴관)')).toEqual(notMon);
+    expect(openDays('10:00~18:00 (일요일과월요일 휴관)')).toEqual(['tue', 'wed', 'thu', 'fri', 'sat']);
+    expect(openDays('10:00~18:00 (매주월·화 휴관)')).toEqual(['wed', 'thu', 'fri', 'sat', 'sun']);
+  });
+
   it('명절 휴관은 공휴일 전체가 아니라 그 날짜만 닫는다', () => {
     // 공휴일 전체를 닫으면 성탄절·어린이날도 "확실한 휴관"이 된다
     const r = parseHours('10:00~17:30, 매주 월요일 및 추석 당일 휴관', 2026);

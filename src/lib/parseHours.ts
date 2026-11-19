@@ -105,6 +105,35 @@ const EVERY_SESSION =
 //     '반'·'부' 앞에 한글이 오면("주말부") 회차가 아니다
 const SESSION_LABEL = /[0-9A-Za-z]\s*(?:회차|차시|타임)|(?:^|[^가-힣])[반부]\s*[(:：]?\s*$/;
 
+/**
+ * 휴관 문구 앞부분에서 닫는 요일을 읽는다. "일, 월, 공휴일 휴관" -> 일·월
+ *
+ * 요일 글자 바로 앞이 숫자나 다른 한글이면 낱말의 일부이므로 요일로 보지 않는다.
+ *   "1월 1일", "12 월 25 일"     -> 날짜의 월·일
+ *   "당일", "공휴일", "평일", "매월" -> 요일이 아닌 낱말
+ * 다음 경우는 띄어 쓰지 않았어도 요일로 읽는다. 휴관 요일을 놓치면 틀린 "가능"이 나오기 때문이다.
+ *   - 뒤에 "요일"이 붙은 경우: "매주월요일", "2, 4 월요일". 날짜의 월·일 뒤에는 "요일"이 오지 않는다
+ *   - 앞이 "매주"이거나 "및"·"과"·"와"인 경우: "매주월·화", "공휴일및월"
+ *   - 앞 글자도 요일인 경우: "토일", "월화"
+ */
+function readClosedWeekdays(near: string): Weekday[] {
+  const days: Weekday[] = [];
+  for (const m of near.matchAll(/[월화수목금토일]/g)) {
+    const before = near.slice(0, m.index);
+    const after = near.slice(m.index + 1);
+    if (/^\s*요일/.test(after) || /(?:매주|[및과와])\s*$/.test(before)) {
+      days.push(KO_TO_DAY[m[0]]);
+      continue;
+    }
+    // 숫자 뒤의 월·일은 날짜다. 숫자와 사이에 띄어쓰기가 있어도 같다
+    if (/\d\s*$/.test(before)) continue;
+    const prev = before.slice(-1);
+    if (/[가-힣]/.test(prev) && !/[월화수목금토일]/.test(prev)) continue;
+    days.push(KO_TO_DAY[m[0]]);
+  }
+  return days;
+}
+
 function emptyDay(): DaySchedule {
   return { isOpen: false, intervals: [] };
 }
@@ -774,8 +803,8 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
   for (const m of text.matchAll(/(.*?)(?:휴관|휴무)/gs)) {
     // 시간 구간 앞쪽은 운영시간 설명이므로 제외하고, 마지막 시각 뒤부터만 본다
     const near = m[1].replace(/[\s\S]*\d{1,2}:\d{2}/, '').slice(-20);
-    for (const d of [...near.matchAll(/([월화수목금토일])\s*(?:요일)?/g)]) {
-      weekdays[KO_TO_DAY[d[1]]] = emptyDay();
+    for (const day of readClosedWeekdays(near)) {
+      weekdays[day] = emptyDay();
     }
     if (/공휴일|국경일/.test(near)) {
       holiday = { isOpen: false, intervals: [] };

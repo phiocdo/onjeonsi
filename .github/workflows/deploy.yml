@@ -8,8 +8,8 @@ on:
   push:
     branches: [main] # 사람이 main에 머지했을 때
   schedule:
-    # UTC 기준이라 20:00 UTC = 다음 날 05:00 KST
-    - cron: '0 20 * * *'
+    # UTC 기준이라 20:17 UTC = 다음 날 05:17 KST. 정각은 실행이 몰려 늦어지므로 17분으로 둔다
+    - cron: '17 20 * * *'
   workflow_dispatch:
 
 permissions:
@@ -127,4 +127,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

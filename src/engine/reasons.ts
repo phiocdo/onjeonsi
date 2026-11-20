@@ -11,6 +11,7 @@ export const REASONS = {
   MISSING_LAST_ENTRY: '입장 마감 정보가 없습니다',
   MISSING_VENUE: '시설 정보가 없습니다',
   SESSION_DAY: '회차제로 운영돼 입장 가능 시간을 확인해야 합니다',
+  HOLIDAY_UNSTATED: '공휴일 운영 여부가 안내되지 않았습니다',
   INVALID_INPUT: '입력한 날짜나 시간이 올바르지 않습니다',
   NOT_IMPLEMENTED: '판정 로직 구현 전입니다',
 } as const;

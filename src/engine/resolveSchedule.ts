@@ -343,6 +343,35 @@ function applySessionDay(result: JudgeResult): JudgeResult {
 }
 
 /**
+ * 전시 운영시간 원문이 공휴일을 언급했는지.
+ * - 해석 결과의 holiday가 있으면(해석기가 "공휴일 휴관" 등을 읽음) 언급한 것
+ * - 원문(hoursText)에 '공휴일'·'국경일'이 있으면 언급한 것. 해석기는 "공휴일 정상 운영",
+ *   "토·공휴일 10:00~17:00" 같은 개관 언급을 holiday에 담지 않으므로 원문을 같이 본다
+ * 명절(설·추석)만 적힌 문구는 그 명절 날짜만 exceptions로 정하므로 공휴일 전체의 언급으로 보지 않는다.
+ */
+function mentionsHoliday(hours: ParsedOperatingHours, hoursText: string | undefined): boolean {
+  if (hours.holiday) return true;
+  return /공휴일|국경일/.test(hoursText ?? '');
+}
+
+/**
+ * 공휴일 미안내 규칙. 근거가 전시 문구뿐인 공휴일에 원문이 공휴일을 언급하지 않았으면 judge 결과를
+ * - 불가는 그대로 둔다(applySessionDay와 같음)
+ * - 입력 오류(확인 필요 + INVALID_INPUT)도 그대로 둔다
+ * - 가능은 확인 필요 + HOLIDAY_UNSTATED
+ * - 확인 필요(SESSION_DAY 등)는 기존 사유 뒤에 HOLIDAY_UNSTATED를 덧붙인다. basis는 남긴다
+ * 회차 요일 규칙(applySessionDay) 다음에 적용하므로, 둘 다 해당하면 [SESSION_DAY, HOLIDAY_UNSTATED]다.
+ */
+function applyHolidayUnstated(result: JudgeResult): JudgeResult {
+  if (result.result === 'impossible') return result;
+  if (result.result === 'unknown' && result.reasons.includes(REASONS.INVALID_INPUT)) return result;
+  const prev = result.result === 'unknown' ? result.reasons : [];
+  const out: JudgeResult = { result: 'unknown', reasons: [...prev, REASONS.HOLIDAY_UNSTATED] };
+  if (result.basis !== undefined) out.basis = result.basis;
+  return out;
+}
+
+/**
  * 판정용 시설이 없을 때의 판정. judge와 같은 순서로 검사한다(규칙은 judge.ts의 precheck).
  * 1) 입력 오류 → 확인 필요 + INVALID_INPUT
  * 2) 전시 기간 밖 → 불가 + OUT_OF_PERIOD (회차 요일이어도)
@@ -366,6 +395,10 @@ function judgeWithoutVenue(input: Omit<JudgeInput, 'venue'>, sessionDate: boolea
  * 플래그가 true이고 그날 일정이 회차(sessions: true)면 회차 요일 규칙(applySessionDay)을 적용한다.
  * 플래그가 false면 적용하지 않는다.
  *
+ * 플래그가 true이고 근거가 전시 문구뿐(basis 'exhibition')인데 그날이 공휴일이고 원문이 공휴일을
+ * 언급하지 않았으면(mentionsHoliday) 공휴일 미안내 규칙(applyHolidayUnstated)을 회차 요일 규칙 다음에
+ * 적용한다. 시설 근거가 있는 전시(venue·merged)와 공휴일이 아닌 날은 바뀌지 않는다.
+ *
  * 판정용 시설이 없으면(플래그와 무관) judgeWithoutVenue: 입력 검사(INVALID_INPUT) → 전시 기간
  * 검사(불가, OUT_OF_PERIOD)를 먼저 하고, 둘 다 통과했을 때만 확인 필요 + MISSING_VENUE
  * (플래그 on이고 그날이 회차면 SESSION_DAY)를 낸다.
@@ -387,8 +420,16 @@ export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: Resolv
         closed: { ...venue.closed, dates: [...(venue.closed?.dates ?? []), input.date] },
       };
     }
-    const result = judge({ ...input, venue });
-    return sessionDate ? applySessionDay(result) : result;
+    const judged = judge({ ...input, venue });
+    const result = sessionDate ? applySessionDay(judged) : judged;
+    // 근거가 전시 문구뿐(시설 규칙이 그날을 정하지 않음)인 공휴일에 원문이 공휴일을 언급하지 않았으면
+    // 그날 여는지 모른다. 그날만 따로 적힌 날짜 예외(exceptions)가 있으면 안내된 것으로 본다
+    const holidayUnstated =
+      built.basis === 'exhibition' &&
+      input.holidays.includes(input.date) &&
+      !mentionsHoliday(hours, input.exhibition.hoursText) &&
+      pickDaySchedule(hours, input.date, input.holidays)?.source !== 'exception';
+    return holidayUnstated ? applyHolidayUnstated(result) : result;
   }
 
   if (resolved.venue === null) return judgeWithoutVenue(input, false);

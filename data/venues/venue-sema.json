@@ -20,12 +20,14 @@
   },
   "closed": {
     "weekday": "mon",
+    "ifHoliday": "open",
     "dates": [
       "01-01"
     ]
   },
-  "lastEntry": "18:00",
+  "holidayAs": "sun",
+  "lastEntryBeforeClose": 60,
   "visitMinutes": 90,
-  "source": "https://mediahub.seoul.go.kr/archives/2016826",
-  "verified": "2026-11-16"
+  "source": "https://sema.seoul.go.kr/kr/visit/seosomun",
+  "verified": "2026-11-19"
 }

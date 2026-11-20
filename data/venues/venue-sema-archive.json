@@ -1,0 +1,33 @@
+{
+  "id": "venue-sema-archive",
+  "name": "서울시립 미술아카이브",
+  "aliases": [
+    "서울시립 미술아카이브",
+    "미술아카이브"
+  ],
+  "gu": "종로구",
+  "type": "미술관",
+  "lat": 37.6078008399411,
+  "lng": 126.97190179486,
+  "representative": false,
+  "hours": {
+    "tue": { "open": "10:00", "close": "20:00" },
+    "wed": { "open": "10:00", "close": "20:00" },
+    "thu": { "open": "10:00", "close": "20:00" },
+    "fri": { "open": "10:00", "close": "20:00" },
+    "sat": { "open": "10:00", "close": "18:00" },
+    "sun": { "open": "10:00", "close": "18:00" }
+  },
+  "closed": {
+    "weekday": "mon",
+    "ifHoliday": "open",
+    "dates": [
+      "01-01"
+    ]
+  },
+  "holidayAs": "sun",
+  "lastEntry": "18:00",
+  "visitMinutes": 60,
+  "source": "https://sema.seoul.go.kr/semaaa/front/info/about.jsp",
+  "verified": "2026-11-19"
+}

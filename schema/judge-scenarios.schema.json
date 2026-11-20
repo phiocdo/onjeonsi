@@ -82,10 +82,11 @@
             "NOT_ENOUGH_STAY",
             "MISSING_HOURS",
             "MISSING_LAST_ENTRY",
+            "SESSION_DAY",
             "INVALID_INPUT"
           ]
         },
-        "description": "possible이면 0개, impossible이면 1개 이상(INVALID_INPUT 제외), unknown이면 MISSING_HOURS·MISSING_LAST_ENTRY·INVALID_INPUT 중 1개 이상. INVALID_INPUT은 다른 사유와 함께 나오지 않으므로 있으면 그것 하나뿐이다",
+        "description": "possible이면 0개, impossible이면 1개 이상(INVALID_INPUT 제외), unknown이면 MISSING_HOURS·MISSING_LAST_ENTRY·SESSION_DAY·INVALID_INPUT 중 1개 이상. SESSION_DAY는 judgeResolved가 회차 요일에 가능·확인 필요를 바꿔 내는 사유라 unknown에서만 나온다. INVALID_INPUT은 다른 사유와 함께 나오지 않으므로 있으면 그것 하나뿐이다",
         "anyOf": [
           {
             "not": {
@@ -181,6 +182,7 @@
                 "enum": [
                   "MISSING_HOURS",
                   "MISSING_LAST_ENTRY",
+                  "SESSION_DAY",
                   "INVALID_INPUT"
                 ]
               }

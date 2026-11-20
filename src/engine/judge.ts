@@ -34,6 +34,24 @@ export function isValidDate(date: string): boolean {
   return addDays(date, 0) === date;
 }
 
+/** precheck 결과. 입력이 맞으면 머무는 시각(분)과 전시 기간 밖인지를 함께 돌려준다. */
+export type Precheck =
+  | { valid: false }
+  | { valid: true; sStart: number; end: number; outOfPeriod: boolean };
+
+/**
+ * 시설 정보 없이 할 수 있는 검사. judge와 judgeResolved(시설 없음)가 같은 규칙을 쓰도록 여기서만 정의한다.
+ * - 입력 검사: 날짜·시각 형식이 틀리거나 머무는 끝이 시작보다 늦지 않으면 valid: false (→ INVALID_INPUT)
+ * - 전시 기간 검사: date가 exhibition.start ~ end 밖이면 outOfPeriod: true (→ OUT_OF_PERIOD)
+ */
+export function precheck(input: Pick<JudgeInput, 'exhibition' | 'date' | 'stayStart' | 'stayEnd'>): Precheck {
+  const { exhibition, date } = input;
+  const sStart = toMinutes(input.stayStart);
+  const end = toMinutes(input.stayEnd);
+  if (!isValidDate(date) || sStart === null || end === null || end <= sStart) return { valid: false };
+  return { valid: true, sStart, end, outOfPeriod: date < exhibition.start || date > exhibition.end };
+}
+
 /** 구간 하나를 판정한 결과. */
 interface WindowCheck {
   violations: string[];
@@ -84,20 +102,20 @@ function checkWindow(
 }
 
 export const judge: JudgeFn = (input) => {
-  const { exhibition, date, stayStart, stayEnd, holidays } = input;
+  const { date, holidays } = input;
   const venue = input.venue as ResolvedVenue;
   const basis = venue.basis ?? 'venue';
   const reasons: string[] = [];
 
   // 0) 입력 검사: 날짜·시각 형식이 틀리거나 머무는 끝이 시작보다 늦지 않으면 판정하지 않는다
-  const sStart = toMinutes(stayStart);
-  const end = toMinutes(stayEnd);
-  if (!isValidDate(date) || sStart === null || end === null || end <= sStart) {
+  const pre = precheck(input);
+  if (!pre.valid) {
     return { result: 'unknown', reasons: [REASONS.INVALID_INPUT], basis };
   }
+  const { sStart, end } = pre;
 
   // 1) 전시 기간 판정
-  if (date < exhibition.start || date > exhibition.end) {
+  if (pre.outOfPeriod) {
     reasons.push(REASONS.OUT_OF_PERIOD);
   }
 

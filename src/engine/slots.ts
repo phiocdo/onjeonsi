@@ -50,6 +50,8 @@ function normalizeRanges(ranges: { start: string; end: string }[]): { start: num
  * - 그래서 possible·unavailable·unknown은 이른 시각 순이고, limit은 가장 이른 시각부터 채운다.
  * - 시작 시각은 range.start를 30분 단위로 올림한다 (10:10 → 10:30).
  * - 후보 + 관람 소요 시간 <= range.end 이고 후보 < range.end 인 동안만 묻는다.
+ * - judge 인자: 출발 시각마다 부를 판정 함수. 보통 judge를 넘긴다. 전시 운영시간 근거·회차 규칙을 쓰려면
+ *   judge 대신 judgeResolved를 감싼 함수를 넘긴다 (예: (input) => judgeResolved(input, resolved)).
  */
 export function findStartCandidates(
   input: Omit<JudgeInput, 'stayStart' | 'stayEnd'>,

@@ -31,7 +31,7 @@ function LATEST(records: VisitRecord[]) {
   return [...records].sort((a, b) => b.date.localeCompare(a.date))[0]?.date ?? todayInSeoul()
 }
 
-// 관람 기록 항목 카드
+// 관람 기록 항목
 function ITEM({ entry, map, share, drop }: { entry: VisitRecord; map: Map<string, CatalogEntry>; share: (id: string) => void; drop: (id: string) => void }) {
   const found = map.get(entry.exhibitId)
   if (!found) return null
@@ -191,7 +191,7 @@ export default function Archive() {
             <textarea placeholder="오늘의 관람 메모" value={note} onChange={(e) => setNote(e.target.value)} />
             <label className="check-row">
               <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
-              <span>별점과 실제 관람 시간을 익명으로 공유하는 데 동의합니다. 다른 사용자가 전시를 고를 때 참고해요. 메모와 날짜는 공유하지 않아요.</span>
+              <span>별점과 실제 관람 시간을 익명으로 공유하는 데 동의합니다. 다른 사용자가 전시를 고를 때 참고합니다. 메모와 날짜는 공유하지 않습니다.</span>
             </label>
             <button type="button" className="primary-button" onClick={SAVE}>기록 저장</button>
           </div>
@@ -242,7 +242,7 @@ export default function Archive() {
               <p className="recommend-basis">높게 평가한(★4 이상) 전시와 같은 분류: {genres.join(', ')}</p>
             ) : (
               <>
-                <p className="recommend-basis">{valid.length ? '★4 이상 기록이 아직 없어요. 관심 분야를 골라 주세요.' : '기록이 없어요. 관심 분야를 먼저 골라 주세요.'}</p>
+                <p className="recommend-basis">{valid.length ? '★4 이상 기록이 아직 없습니다. 관심 분야를 선택하십시오.' : '기록이 없습니다. 관심 분야를 먼저 선택하십시오.'}</p>
                 <div className="chips">
                   {fields.map((field) => (
                     <button key={field} type="button" className={interests.includes(field) ? 'chip chosen' : 'chip'} onClick={() => TOGGLE(field)}>{field}</button>

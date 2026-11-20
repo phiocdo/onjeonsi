@@ -559,6 +559,49 @@ function readHolidayClosures(near: string, year: number): string[] | null {
 }
 
 /**
+ * 휴관 문장 안의 양력 날짜를 매년 쉬는 날로 읽는다. 명절 말이 없어도 읽는다.
+ *   "매주 월요일, 1월 1일 휴관"          -> 올해·다음 해 1월 1일
+ *   "1월 1일, 12월 25일 휴관"            -> 두 날짜 모두
+ *   "1월 1일은 쉽니다"                   -> 1월 1일
+ * 명절을 같이 적은 경우("1월 1일, 설날 및 추석 당일 휴관")는 readHolidayClosures 도 같은 날짜를 넣는다.
+ *
+ * 연도가 붙은 날짜("2027년 1월 1일 휴관")는 매년이 아니라 그 해 그 날 하루만 닫는다.
+ *   매년으로 늘리면 2028-01-01 에 틀린 "불가"가 된다.
+ *
+ * 휴관 말 바로 앞에서부터 쉼표로 이어진 조각을, 휴관 목록 낱말(CLOSURE_ITEM, 여기서는 "YYYY년" 도)로만
+ * 된 동안만 거슬러 본다. 그래서 다음은 읽지 않는다.
+ *   "11월 1일 ~ 12월 31일"     기간 표기 ('~', '-' 는 목록 낱말이 아니다)
+ *   "전시기간 2027년 1월 1일"   다른 말이 낀 조각
+ *   "11월 22일은 16:00까지"     시각이 있으면 before 가 그 시각 뒤부터라 날짜가 남지 않는다
+ * "11.22(일) 휴관" 처럼 요일이 붙은 날짜는 (2) 날짜 예외가 이미 그 해 하루로 닫는다.
+ */
+function readClosureDates(before: string, year: number): string[] {
+  const segments = (before.split(CLAUSE_START).pop() ?? '').split(',');
+  // 휴관 말 바로 앞 조각에만 붙는 조사. "1월 1일은 쉽니다", "1월 1일에는 휴관"
+  segments[segments.length - 1] = segments[segments.length - 1].replace(/\s*(?:은|는|에는|에|도)\s*$/, '');
+  const items: string[] = [];
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const s = segments[i].trim();
+    // "YYYY년" 은 날짜에만 붙는다. CLOSURE_ITEM 에 넣으면 요일을 읽는 readLongClosureList 까지 바뀌므로 여기서만 허용한다
+    if (!s || !CLOSURE_ITEM.test(s.replace(/\d{4}\s*년/g, ' '))) break;
+    items.unshift(s);
+  }
+
+  const out: string[] = [];
+  for (const y of [year, year + 1]) {
+    for (const m of items.join(',').matchAll(/(?:(\d{4})\s*년\s*)?(\d{1,2})\s*월\s*(\d{1,2})\s*일/g)) {
+      // 연도가 적힌 날짜는 한 번만 넣는다
+      if (m[1] && y !== year) continue;
+      const mo = Number(m[2]);
+      const d = Number(m[3]);
+      if (mo < 1 || mo > 12 || d < 1 || d > 31) continue;
+      out.push(`${m[1] ?? y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+    }
+  }
+  return out;
+}
+
+/**
  * "12~13시 휴관" 처럼 하루 중간에 쉬는 구간을 읽는다. 없으면 null
  * normalize 를 지나면 "12~13:00 휴관" 꼴이 된다.
  */
@@ -882,6 +925,19 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
         // 명절 날짜를 모르는 해면 예전처럼 공휴일 전체를 닫는다. 틀린 "가능"보다 낫다
         holiday = { isOpen: false, intervals: [] };
       }
+    }
+    // 명절 말이 없어도 휴관 목록의 "1월 1일" 은 닫는다. 위에서 이미 넣은 날짜는 건너뛴다
+    for (const date of readClosureDates(before, year)) {
+      if (!exceptions.some(e => e.date === date)) exceptions.push({ date, schedule: emptyDay() });
+    }
+  }
+  // "1월 1일은 쉽니다", "1월 1일 쉼" 은 날짜만 닫는다.
+  //   요일·공휴일까지 이 말로 읽으면 기존 휴관 해석이 바뀌므로 여기서는 날짜만 본다.
+  //   "쉼터", "쉼표" 는 휴관 말이 아니다
+  for (const m of text.matchAll(/(.*?)(?:쉽니다|쉼(?![가-힣]))/gs)) {
+    const before = m[1].replace(/[\s\S]*\d{1,2}:\d{2}/, '');
+    for (const date of readClosureDates(before, year)) {
+      if (!exceptions.some(e => e.date === date)) exceptions.push({ date, schedule: emptyDay() });
     }
   }
 

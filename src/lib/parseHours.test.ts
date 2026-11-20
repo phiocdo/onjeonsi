@@ -181,6 +181,80 @@ describe('parseHours — 휴관', () => {
   });
 });
 
+describe('parseHours — 명절 없이 적힌 휴관 날짜', () => {
+  /** 휴관(isOpen: false)으로 들어간 날짜 예외만 돌려준다 */
+  const closedDates = (text: string, year = 2026) =>
+    parseHours(text, year).exceptions.filter(e => !e.schedule.isOpen).map(e => e.date);
+
+  it('"1월 1일 휴관"만 있어도 매년 1월 1일을 닫는다', () => {
+    // 명절 말이 없다고 건너뛰면 2027-01-01(금)에 틀린 "가능"이 나온다
+    const t = '화~일 10:00~18:00 / 매주 월요일, 1월 1일 휴관';
+    expect(closedDates(t, 2026)).toEqual(['2026-01-01', '2027-01-01']);
+    expect(closedDates(t, 2027)).toEqual(['2027-01-01', '2028-01-01']);
+    const r = parseHours(t, 2026);
+    expect(r.holiday).toBeNull();
+    expect(r.weekdays.mon.isOpen).toBe(false);
+    expect(r.weekdays.fri.isOpen).toBe(true);
+  });
+
+  it('휴무·쉽니다·쉼으로 적어도 닫는다', () => {
+    expect(closedDates('화~일 10:00~18:00 / 매주 월요일, 1월 1일 휴무')).toEqual(['2026-01-01', '2027-01-01']);
+    expect(closedDates('10:00~18:00 / 1월 1일은 쉽니다')).toEqual(['2026-01-01', '2027-01-01']);
+    expect(closedDates('10:00~18:00 (1월 1일 쉼)')).toEqual(['2026-01-01', '2027-01-01']);
+  });
+
+  it('날짜가 여러 개면 모두 닫는다', () => {
+    const dates = closedDates('화~일 10:00~18:00 / 매주 월요일, 1월 1일, 12월 25일 휴관');
+    expect(dates).toEqual(expect.arrayContaining(['2026-01-01', '2026-12-25', '2027-01-01', '2027-12-25']));
+    expect(dates).toHaveLength(4);
+  });
+
+  it('명절과 같이 적힌 경우는 예전과 같다', () => {
+    const r = parseHours('10:00~18:00 ※ 1월 1일, 설날 및 추석 당일 휴관', 2026);
+    expect(r.holiday).toBeNull();
+    expect(r.exceptions.map(e => e.date)).toEqual([
+      '2026-01-01', '2026-02-17', '2026-09-25', '2027-01-01', '2027-02-07', '2027-09-15',
+    ]);
+  });
+
+  it('시간이 붙은 날짜는 휴관이 아니다', () => {
+    expect(parseHours('10:00~18:00 / 11월 22일은 16:00까지', 2026).exceptions).toEqual([]);
+    expect(closedDates('10:00~18:00 / 11월 22일은 16:00까지 / 매주 월요일, 1월 1일 휴관'))
+      .toEqual(['2026-01-01', '2027-01-01']);
+    // 요일이 붙은 날짜 예외("11월 22일(일)은 16:00까지")는 그대로 시간 변경 예외로 남는다
+    const r = parseHours('10:00~18:00 / 11월 22일(일)은 16:00까지 / 1월 1일 휴관', 2026);
+    expect(r.exceptions.find(e => e.date === '2026-11-22')).toEqual({
+      date: '2026-11-22',
+      schedule: { isOpen: true, intervals: [{ open: '10:00', close: '16:00' }] },
+    });
+    expect(closedDates('10:00~18:00 / 11월 22일(일)은 16:00까지 / 1월 1일 휴관'))
+      .toEqual(['2026-01-01', '2027-01-01']);
+  });
+
+  it('기간 표기의 날짜는 휴관이 아니다', () => {
+    expect(closedDates('10:00~18:00 / 2026년 11월 1일 ~ 12월 31일 / 매주 월요일 휴관')).toEqual([]);
+    expect(closedDates('10:00~18:00, 전시기간 11월 1일 ~ 12월 31일, 매주 월요일 휴관')).toEqual([]);
+    expect(closedDates('10:00~18:00, 11월 1일-12월 31일, 매주 월요일 휴관')).toEqual([]);
+    // 양 끝에 연도가 붙어도 기간이다
+    expect(closedDates('10:00~18:00, 2026년 11월 1일 ~ 2027년 1월 31일, 매주 월요일 휴관')).toEqual([]);
+    expect(closedDates('10:00~18:00, 전시기간 2027년 1월 1일, 매주 월요일 휴관')).toEqual([]);
+  });
+
+  it('연도가 적힌 날짜는 그 해 그 날 하루만 닫는다', () => {
+    // "2027년 1월 1일" 은 그 해 하루뿐이다. 매년으로 늘리면 2026-01-01·2028-01-01 에 틀린 "불가"가 나온다
+    const t = '10:00~18:00 / 매주 월요일, 2027년 1월 1일 휴관';
+    expect(closedDates(t, 2026)).toEqual(['2027-01-01']);
+    expect(closedDates(t, 2027)).toEqual(['2027-01-01']);
+    expect(closedDates(t, 2026)).not.toContain('2028-01-01');
+    expect(parseHours(t, 2026).weekdays.mon.isOpen).toBe(false);
+    expect(closedDates('10:00~18:00 / 2027년 1월 1일 휴관')).toEqual(['2027-01-01']);
+  });
+
+  it('연도가 적힌 날짜가 여러 개면 그 날짜들만 닫는다', () => {
+    expect(closedDates('10:00~18:00 / 2026년 12월 31일, 2027년 1월 1일 휴관')).toEqual(['2026-12-31', '2027-01-01']);
+  });
+});
+
 describe('parseHours — 입장 마감', () => {
   it('괄호 안에 적힌 마감 시각을 읽는다', () => {
     expect(parseHours('9:00~18:00(입장마감 17:30)', 2026).weekdays.mon.intervals[0].lastAdmission)

@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import { calculateDistance, type Coordinate } from '../engine/distance'
 import { rankExhibitions } from '../engine/sort'
+import { readVisitedIds } from '../lib/archive'
 import { basisLabel, displayLocation, displayVenueName, getCatalog, getHolidays, judgeCatalog, todayInSeoul, type JudgedEntry } from '../lib/catalog'
 import type { JudgeResult } from '../types'
 import OneExhibit, { OPEN } from '../components/OneExhibit'
@@ -34,7 +35,6 @@ type Item = { id: string; title: string; placeName: string; poster?: string; lat
 type Spot = 'here' | 'home' | 'pick'
 
 const BASE: Coordinate = { lat: 37.5759, lng: 126.9768 }
-const RECORDS = 'onjeonsi:archive:records'
 const RADII = [500, 1000, 2000]
 const STAYS = [60, 90, 120, 180]
 const ZOOM: Record<number, number> = { 500: 5, 1000: 6, 2000: 7 }
@@ -50,15 +50,9 @@ function NOW() {
   return { date: todayInSeoul(now), time: now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' }) }
 }
 
-// 아카이브 기록 전시 ID 집합 조회
+// 아카이브 기록 전시 ID 집합 조회 (저장 형식은 lib/archive가 안다)
 function CONQUERED(): Set<string> {
-  try {
-    const raw = localStorage.getItem(RECORDS)
-    const list = raw ? (JSON.parse(raw) as Array<{ exhibitId?: string }>) : []
-    return new Set(list.flatMap((r) => (r.exhibitId ? [r.exhibitId] : [])))
-  } catch {
-    return new Set()
-  }
+  return readVisitedIds()
 }
 
 // 종료 시각 계산

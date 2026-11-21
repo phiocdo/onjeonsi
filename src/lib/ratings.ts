@@ -7,10 +7,11 @@
  *   s.level !== 'none' ? `★ ${s.averageRating} · ${s.medianMinutes}분 · ${s.label}` : s.label
  *
  * - shared: 여러 사람의 공유 기록. 지금은 서버가 없어 빈 배열이고, 나중에 서버 집계가 생기면 여기에 넣는다.
- * - 내 기록(ArchiveEntry)은 집계에 넣지 않는다. fromArchiveEntry는 추천(recommend.ts)의 myRecords용이다.
+ * - 내 기록(VisitRecord)은 집계에 넣지 않는다. fromVisitRecord는 추천(recommend.ts)의 myRecords용이다.
  * - 집계 계산과 3건 기준은 src/engine/stats.ts(summarizeReviews, MIN_COUNT)를 그대로 쓴다.
  */
 import { MIN_COUNT, isValidReview, summarizeReviews } from '../engine/stats';
+import type { VisitRecord } from '../types/records';
 
 /** 집계·추천에 넣는 기록 한 건 */
 export interface RatingRecord {
@@ -60,25 +61,16 @@ export function fromSeedReview(r: SeedReviewInput): RatingRecord {
   };
 }
 
-/** src/mock/exhibits.ts의 ArchiveEntry 중 여기서 쓰는 필드 */
-export interface ArchiveEntryInput {
-  exhibitId: number | string;
-  rating: number;
-  time: number;
-}
-
 /**
- * ArchiveEntry → 기록 형식. 추천의 내 기록(myRecords)용이며 공유 집계에는 넣지 않는다.
- * - exhibitId는 숫자라 문자열로 바꾼다. 지금 값은 mock 전시 번호라 실제 전시(auto.json의 id)와 연결되지 않는다.
- *   기록을 실제 전시 id로 옮기는 것은 화면 작업(F-06)이다.
- * - time 필드를 visitMinutes로 옮긴다. ArchiveEntry에는 시설 정보가 없어 venueId는 null이다.
+ * 아카이브 기록(VisitRecord) → 기록 형식. 추천의 내 기록(myRecords)용이며 공유 집계에는 넣지 않는다.
+ * - venueId는 기록할 때 복사해 둔 전시 정보에서 가져온다.
  */
-export function fromArchiveEntry(e: ArchiveEntryInput): RatingRecord {
+export function fromVisitRecord(r: Pick<VisitRecord, 'exhibitionId' | 'exhibition' | 'rating' | 'visitMinutes'>): RatingRecord {
   return {
-    exhibitionId: String(e.exhibitId),
-    venueId: null,
-    rating: e.rating,
-    visitMinutes: e.time,
+    exhibitionId: r.exhibitionId,
+    venueId: r.exhibition.venueId,
+    rating: r.rating,
+    visitMinutes: r.visitMinutes,
   };
 }
 

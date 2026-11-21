@@ -32,7 +32,7 @@ export interface PersonalResult {
   filledWithPopular: boolean;
 }
 
-/** 내 기록. ArchiveEntry는 fromArchiveEntry로 바꾼 뒤 알면 field를 붙여 넘긴다 */
+/** 내 기록. VisitRecord는 fromVisitRecord(ratings.ts)로 바꾼 뒤 record.exhibition.field를 붙여 넘긴다 */
 export type MyRecord = RatingRecord & { field?: string | null };
 
 export const POPULAR_REASON = '근처 인기 전시';

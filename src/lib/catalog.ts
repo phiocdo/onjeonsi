@@ -154,6 +154,13 @@ export function mismatchReport(entries: readonly CatalogEntry[]): MismatchReport
 
 // ─── 번들된 데이터 ────────────────────────────────────────
 
+/**
+ * 화면에서 전시 운영 시간(operatingHours)을 판정에 쓸지 정하는 스위치.
+ * 엔진(resolveSchedule·buildCatalog)의 기본값은 꺼짐 그대로 두고, 화면 진입점(getCatalog)에서만 켠다.
+ * 끄려면 false로 바꾼다.
+ */
+export const SHOW_EXHIBITION_HOURS = true;
+
 // 시설 파일이 늘어도 코드를 고치지 않도록 폴더 전체를 읽는다
 const venueModules = import.meta.glob<Venue>('/data/venues/*.json', {
   eager: true,
@@ -197,7 +204,9 @@ function getLinks(): VenueLinks {
 /** 번들된 데이터로 만든 카탈로그. 처음 부를 때 한 번만 계산한다. */
 export function getCatalog(): CatalogEntry[] {
   if (catalogCache === null) {
-    catalogCache = buildCatalog(bundledExhibitions, getVenues(), getLinks());
+    catalogCache = buildCatalog(bundledExhibitions, getVenues(), getLinks(), {
+      useExhibitionHours: SHOW_EXHIBITION_HOURS,
+    });
   }
   return catalogCache;
 }

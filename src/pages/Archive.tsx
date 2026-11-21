@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { OPEN } from '../components/OneExhibit'
+import { isValidReview } from '../engine/stats'
 import { displayVenueName, getCatalog, todayInSeoul, type CatalogEntry } from '../lib/catalog'
-
-type Entry = { id: string; exhibitId: string; date: string; rating: number; time: number; note: string; shared: boolean }
+import { fromArchiveEntry, getRatingSummary } from '../lib/ratings'
+import { recommendPersonal, type Candidate } from '../lib/recommend'
+import type { VisitRecord } from '../types/records'
 
 const RECORDS = 'onjeonsi:archive:records'
 const INTERESTS = 'onjeonsi:archive:interests'
 const WEEK = ['일', '월', '화', '수', '목', '금', '토']
 const STARS = [5, 4, 3, 2, 1]
 
-// local storage 조회
+// lcoal storage 조회
 function READ<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
@@ -19,18 +21,18 @@ function READ<T>(key: string, fallback: T): T {
   }
 }
 
-// 날짜 문자열 점 구분 형식 변환
+// 날짜 점 구분 변환
 function FORMAT(iso: string) {
   return iso.replaceAll('-', '.')
 }
 
-// 최근 관람 기록 날짜 or 서울 오늘 날짜 반환
-function LATEST(records: Entry[]) {
+// 최근 관람 기록 날짜
+function LATEST(records: VisitRecord[]) {
   return [...records].sort((a, b) => b.date.localeCompare(a.date))[0]?.date ?? todayInSeoul()
 }
 
-// 관람 기록 항목 카드
-function ITEM({ entry, map, share, drop }: { entry: Entry; map: Map<string, CatalogEntry>; share: (id: string) => void; drop: (id: string) => void }) {
+// 관람 기록 항목
+function ITEM({ entry, map, share, drop }: { entry: VisitRecord; map: Map<string, CatalogEntry>; share: (id: string) => void; drop: (id: string) => void }) {
   const found = map.get(entry.exhibitId)
   if (!found) return null
   const { exhibition } = found
@@ -64,7 +66,7 @@ export default function Archive() {
   const fields = useMemo(() => Array.from(new Set(catalog.map((c) => c.exhibition.field).filter((f): f is string => Boolean(f)))), [catalog])
   const today = useMemo(() => todayInSeoul(), [])
 
-  const [records, setRecords] = useState<Entry[]>(() => READ<Entry[]>(RECORDS, []))
+  const [records, setRecords] = useState<VisitRecord[]>(() => READ<VisitRecord[]>(RECORDS, []))
   const [interests, setInterests] = useState<string[]>(() => READ<string[]>(INTERESTS, []))
   const [exhibit, setExhibit] = useState(() => catalog[0]?.exhibition.id ?? '')
   const [date, setDate] = useState(today)
@@ -72,9 +74,9 @@ export default function Archive() {
   const [time, setTime] = useState('70')
   const [note, setNote] = useState('')
   const [shared, setShared] = useState(false)
-  const [picked, setPicked] = useState(() => LATEST(READ<Entry[]>(RECORDS, [])))
+  const [picked, setPicked] = useState(() => LATEST(READ<VisitRecord[]>(RECORDS, [])))
   const [view, setView] = useState(() => {
-    const [year, month] = LATEST(READ<Entry[]>(RECORDS, [])).split('-').map(Number)
+    const [year, month] = LATEST(READ<VisitRecord[]>(RECORDS, [])).split('-').map(Number)
     return { year, month: month - 1 }
   })
 
@@ -97,35 +99,43 @@ export default function Archive() {
     return field ? [field] : []
   })))
   const basis = genres.length ? genres : interests
-  const seen = new Set(valid.map((r) => r.exhibitId))
 
-  const picks = catalog.filter((c) => c.exhibition.field && basis.includes(c.exhibition.field) && !seen.has(c.exhibition.id) && c.exhibition.end >= today).slice(0, 4).map((c) => {
-    const src = liked.find((r) => map.get(r.exhibitId)?.exhibition.field === c.exhibition.field)
-    const name = src ? map.get(src.exhibitId)?.exhibition.title : undefined
-    return { entry: c, reason: name ? `'${name}'과 같은 ${c.exhibition.field}` : `관심 분야 ${c.exhibition.field}` }
-  })
+  const picks = useMemo(() => {
+    const candidates: Candidate[] = catalog.filter((c) => c.exhibition.end >= today).map((c) => ({ id: c.exhibition.id, venueId: c.venue?.id ?? null, field: c.exhibition.field ?? null, distanceM: null, result: 'possible' }))
+    const myRecords = valid.map((r) => {
+      const found = map.get(r.exhibitId)
+      return { ...fromArchiveEntry(r), field: found?.exhibition.field ?? null }
+    })
+    const ratingOf = (c: Candidate) => getRatingSummary(c.id, c.venueId, { shared: [], seed: [] })
+    const { items } = recommendPersonal(candidates, { myRecords, interests, seenIds: valid.map((r) => r.exhibitId), ratingOf, popularVenueIds: [], limit: 4 })
+    return items.flatMap((item) => {
+      const entry = map.get(item.id)
+      return entry ? [{ entry, reason: item.reason }] : []
+    })
+  }, [catalog, today, valid, map, interests])
 
   const first = new Date(view.year, view.month, 1).getDay()
   const last = new Date(view.year, view.month + 1, 0).getDate()
   const cells: (number | null)[] = [...Array<null>(first).fill(null), ...Array.from({ length: last }, (_, i) => i + 1)]
 
-  // 연/월 기준 일자 ISO 문자열 변환
+  // 년/월 기준 일자 문자열 변환
   function ISO(day: number) {
     return `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   }
 
-  // 달력 이동
+  // 달력 월 이동
   function SHIFT(delta: number) {
     const next = new Date(view.year, view.month + delta, 1)
     setView({ year: next.getFullYear(), month: next.getMonth() })
   }
 
-  // new 관람 기록 검증 및 저장
+  // 관람 기록 검증 및 저장
   function SAVE() {
+    const score = Number(rating)
     const mins = Number(time)
-    if (!exhibit || !date || !mins || mins < 10 || mins > 480) return
+    if (!exhibit || !date || !isValidReview({ rating: score, visitMinutes: mins })) return
 
-    const entry: Entry = { id: String(Date.now()), exhibitId: exhibit, date, rating: Number(rating), time: mins, note: note.trim(), shared }
+    const entry: VisitRecord = { id: String(Date.now()), exhibitId: exhibit, date, rating: score, time: mins, note: note.trim(), shared }
     setRecords((prev) => [entry, ...prev])
     setPicked(entry.date)
     const [year, month] = entry.date.split('-').map(Number)
@@ -133,7 +143,7 @@ export default function Archive() {
     setNote('')
   }
 
-  // 기록 공유 여부 전환
+  // 기록 공유 상태
   function SHARE(id: string) {
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, shared: !r.shared } : r)))
   }
@@ -143,7 +153,7 @@ export default function Archive() {
     setRecords((prev) => prev.filter((r) => r.id !== id))
   }
 
-  // 관심 분야 선택
+  // 관심 분야 토글
   function TOGGLE(field: string) {
     setInterests((prev) => (prev.includes(field) ? prev.filter((c) => c !== field) : [...prev, field]))
   }
@@ -155,7 +165,7 @@ export default function Archive() {
       <div className="archive-layout">
         <div className="archive-main">
           <div className="panel">
-            <h2>전시 기록 남기기</h2>
+            <h2>기록</h2>
             <div className="record-inputs">
               <label>
                 전시
@@ -170,7 +180,7 @@ export default function Archive() {
               <label>
                 별점
                 <select value={rating} onChange={(e) => setRating(e.target.value)}>
-                  {STARS.map((n) => <option key={n} value={n}>{'★'.repeat(n)} {n}점</option>)}
+                  {STARS.map((n) => <option key={n} value={n}>{'★'.repeat(n)}</option>)}
                 </select>
               </label>
               <label>
@@ -181,7 +191,7 @@ export default function Archive() {
             <textarea placeholder="오늘의 관람 메모" value={note} onChange={(e) => setNote(e.target.value)} />
             <label className="check-row">
               <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
-              <span>별점과 실제 관람 시간을 익명으로 공유하는 데 동의합니다. 다른 사용자가 전시를 고를 때 참고해요. 메모와 날짜는 공유하지 않아요.</span>
+              <span>별점과 실제 관람 시간을 익명으로 공유하는 데 동의합니다. 다른 사용자가 전시를 고를 때 참고합니다. 메모와 날짜는 공유하지 않습니다.</span>
             </label>
             <button type="button" className="primary-button" onClick={SAVE}>기록 저장</button>
           </div>
@@ -219,7 +229,7 @@ export default function Archive() {
                 {sorted.map((entry) => <ITEM key={entry.id} entry={entry} map={map} share={SHARE} drop={DROP} />)}
               </div>
             ) : (
-              <p className="empty-result">아직 기록이 없어요. 위에서 첫 기록을 남겨 보세요.</p>
+              <p className="empty-result">아직 기록이 없습니다. 위에서 첫 기록을 남기십시오.</p>
             )}
           </div>
         </div>
@@ -232,7 +242,7 @@ export default function Archive() {
               <p className="recommend-basis">높게 평가한(★4 이상) 전시와 같은 분류: {genres.join(', ')}</p>
             ) : (
               <>
-                <p className="recommend-basis">{valid.length ? '★4 이상 기록이 아직 없어요. 관심 분야를 골라 주세요.' : '기록이 없어요. 관심 분야를 먼저 골라 주세요.'}</p>
+                <p className="recommend-basis">{valid.length ? '★4 이상 기록이 아직 없습니다. 관심 분야를 선택하십시오.' : '기록이 없습니다. 관심 분야를 먼저 선택하십시오.'}</p>
                 <div className="chips">
                   {fields.map((field) => (
                     <button key={field} type="button" className={interests.includes(field) ? 'chip chosen' : 'chip'} onClick={() => TOGGLE(field)}>{field}</button>
@@ -253,7 +263,7 @@ export default function Archive() {
                   </span>
                 </button>
               ))}
-              {!picks.length && basis.length > 0 && <p className="empty-result">추천할 새 전시가 없어요.</p>}
+              {!picks.length && basis.length > 0 && <p className="empty-result">추천할 새 전시가 없습니다.</p>}
             </div>
           </div>
         </aside>

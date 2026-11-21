@@ -463,7 +463,7 @@ describe('judgeResolved: 판정 날짜의 일정 (scheduleForDate)', () => {
     expect(runEx(r, ex, SAT, '19:00', '21:00')).toMatchObject({ result: 'possible', entryTime: '19:00', endTime: '20:00' });
   });
 
-  it('공휴일 휴관이 적혀 있으면 공휴일은 CLOSED_DATE, 적혀 있지 않으면 요일 일정', () => {
+  it('공휴일 휴관이 적혀 있으면 공휴일은 CLOSED_DATE, 적혀 있지 않으면(전시 근거뿐) HOLIDAY_UNSTATED', () => {
     const hours = parseHours('화-일 10:00~18:00 (공휴일 휴관)', 2026);
     expect(hours.holiday).toEqual(closedDay());
     const r = resolveSchedule(null, hours, ON);
@@ -471,7 +471,12 @@ describe('judgeResolved: 판정 날짜의 일정 (scheduleForDate)', () => {
     expect(runEx(r, withHours(hours), SAT, '14:00', '17:00', [])).toMatchObject({ result: 'possible' });
 
     const noRule = parseHours('화-일 10:00~18:00', 2026);
-    expect(runEx(resolveSchedule(null, noRule, ON), withHours(noRule), SAT, '14:00', '17:00', [SAT]).result).toBe('possible');
+    // 근거가 전시 문구뿐인데 공휴일 언급이 없으면 그날 여는지 모른다 → 확인 필요 (공휴일 미안내 규칙)
+    expect(runEx(resolveSchedule(null, noRule, ON), withHours(noRule), SAT, '14:00', '17:00', [SAT])).toEqual({
+      result: 'unknown', reasons: [REASONS.HOLIDAY_UNSTATED], basis: 'exhibition',
+    });
+    // 공휴일이 아니면 요일 일정 그대로
+    expect(runEx(resolveSchedule(null, noRule, ON), withHours(noRule), SAT, '14:00', '17:00', []).result).toBe('possible');
   });
 
   it('weeksOfMonth: 쉬는 주에는 시설이 열어도 불가', () => {

@@ -7,12 +7,24 @@ type Area = (typeof AREAS)[number]
 type Card = { id: string; title: string; venue: string; area: string; status: Status; judge: JudgeResult; poster?: string; lines: string[] }
 
 const AREAS = ['전체', '종로구', '중구'] as const
+const RECORDS = 'onjeonsi:archive:records'
 const STATUS: Record<JudgeResult['result'], Status> = { possible: '가능', impossible: '불가', unknown: '확인 필요' }
 
 // 서울 현재 날짜/시각 반환
 function NOW() {
   const now = new Date()
   return { date: todayInSeoul(now), time: now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' }) }
+}
+
+// 아카이브 기록 전시 ID 집합 조회
+function CONQUERED(): Set<string> {
+  try {
+    const raw = localStorage.getItem(RECORDS)
+    const list = raw ? (JSON.parse(raw) as Array<{ exhibitId?: string }>) : []
+    return new Set(list.flatMap((r) => (r.exhibitId ? [r.exhibitId] : [])))
+  } catch {
+    return new Set()
+  }
 }
 
 // 구 판별
@@ -37,16 +49,29 @@ function CARD({ entry, result }: JudgedEntry): Card {
   return { id: exhibition.id, title: exhibition.title, venue: displayVenueName(entry) || '장소 미상', area: GU(entry), status: STATUS[result.result], judge: result, poster: exhibition.imageUrl || undefined, lines: [`${exhibition.start} ~ ${exhibition.end}`, source] }
 }
 
+// 전시 카드 및 관람 완료(정복) 오버레이
+function ITEM({ item, done }: { item: Card; done: boolean }) {
+  return (
+    <div className={done ? 'conquered-card' : undefined}>
+      <OneExhibit id={item.id} title={item.title} venue={item.venue} status={item.status} judge={item.judge} poster={item.poster} lines={item.lines} />
+      {done && (
+        <div className="conquered-veil" aria-label="정복">
+          <span className="conquered-stamp">관람</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Hannune() {
   const [area, setArea] = useState<Area>('전체')
   const { date, time } = useMemo(() => NOW(), [])
   const catalog = useMemo(() => getCatalog(), [])
   const holidays = useMemo(() => getHolidays(), [])
+  const done = useMemo(() => CONQUERED(), [])
 
   const all = useMemo(() => {
-    const active = catalog.filter (
-      ({ exhibition }) => (!exhibition.start || exhibition.start <= date) && (!exhibition.end || exhibition.end >= date),
-    )
+    const active = catalog.filter(({ exhibition }) => (!exhibition.start || exhibition.start <= date) && (!exhibition.end || exhibition.end >= date))
     return judgeCatalog(active, { date, stayStart: time, stayEnd: '23:59' }, holidays).map(CARD)
   }, [catalog, holidays, date, time])
 
@@ -68,7 +93,7 @@ function Hannune() {
       {items.length ? (
         <div className="card-grid">
           {items.map((item) => (
-            <OneExhibit key={item.id} id={item.id} title={item.title} venue={item.venue} status={item.status} judge={item.judge} poster={item.poster} lines={item.lines} />
+            <ITEM key={item.id} item={item} done={done.has(item.id)} />
           ))}
         </div>
       ) : (

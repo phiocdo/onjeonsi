@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { Exhibition, Venue } from '../types';
 import { REASONS } from '../engine/reasons';
+import type { VenueLinks } from '../engine/matchVenue';
 import exhibitionsJson from '../../data/exhibitions/auto.json';
+import linksJson from '../../data/venue-links.json';
 import {
   basisLabel,
   buildCatalog,
   displayLocation,
   displayVenueName,
   getCatalog,
+  getVenues,
   judgeEntry,
   mismatchReport,
+  SHOW_EXHIBITION_HOURS,
   todayInSeoul,
   type CatalogEntry,
 } from './catalog';
@@ -225,5 +229,21 @@ describe('getCatalog (실제 데이터)', () => {
     const catalog = getCatalog();
     expect(Array.isArray(catalog)).toBe(true);
     expect(catalog).toHaveLength(exhibitionsJson.length);
+  });
+
+  it('SHOW_EXHIBITION_HOURS 값을 buildCatalog의 useExhibitionHours로 넘긴다', () => {
+    // getCatalog와 같은 입력으로 스위치 값 그대로 / 반대로 만든 카탈로그와 비교한다.
+    // 반대 값과 달라야 비교가 의미 있으므로 실제 데이터에 근거가 바뀌는 전시가 있는지도 본다
+    const exhibitions = exhibitionsJson as unknown as Exhibition[];
+    const links = linksJson as VenueLinks;
+    const summary = (entries: CatalogEntry[]) =>
+      entries.map((e) => [e.exhibition.id, e.resolved.basis, e.resolved.source?.options.useExhibitionHours ?? null]);
+    const withFlag = (on: boolean) => buildCatalog(exhibitions, getVenues(), links, { useExhibitionHours: on });
+
+    const actual = summary(getCatalog());
+    expect(actual).toEqual(summary(withFlag(SHOW_EXHIBITION_HOURS)));
+    expect(actual).not.toEqual(summary(withFlag(!SHOW_EXHIBITION_HOURS)));
+    // source는 플래그 on일 때만 들어간다
+    expect(getCatalog().some((e) => e.resolved.source !== undefined)).toBe(SHOW_EXHIBITION_HOURS);
   });
 });

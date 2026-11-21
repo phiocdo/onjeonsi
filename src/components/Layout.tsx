@@ -15,16 +15,18 @@ const TABS: TAB_ITEM[] = [
   { TO: '/team', LABEL: '팀', KEY: 'team', END: false },
 ]
 
-const ICON_PATH = (KEY: TAB_ITEM['KEY']) => `${import.meta.env.BASE_URL}${KEY}.png`
+// 탭 아이콘 경로 반환
+const ICON = (KEY: TAB_ITEM['KEY']) => `${import.meta.env.BASE_URL}${KEY}.png`
 
-const FIND_ACTIVE_TAB = (PATHNAME: string): TAB_ITEM => {
+// 현재 경로 활성 탭 조회
+const ACTIVE = (PATHNAME: string): TAB_ITEM => {
   const FOUND = TABS.find((TAB) => (TAB.END ? PATHNAME === TAB.TO : PATHNAME.startsWith(TAB.TO)))
   return FOUND ?? TABS[0]
 }
 
 export default function LAYOUT() {
   const LOCATION = useLocation()
-  const ACTIVE_TAB = FIND_ACTIVE_TAB(LOCATION.pathname)
+  const ACTIVE_TAB = ACTIVE(LOCATION.pathname)
 
   return (
     <main className="site-shell">
@@ -38,7 +40,7 @@ export default function LAYOUT() {
             ))}
           </div>
 
-          <img key={ACTIVE_TAB.KEY} className="tab-icon" src={ICON_PATH(ACTIVE_TAB.KEY)} width={32} height={32}/>
+          <img key={ACTIVE_TAB.KEY} className="tab-icon" src={ICON(ACTIVE_TAB.KEY)} width={32} height={32} alt="" />
         </nav>
       </header>
 

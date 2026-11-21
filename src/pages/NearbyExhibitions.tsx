@@ -34,6 +34,7 @@ type Item = { id: string; title: string; placeName: string; poster?: string; lat
 type Spot = 'here' | 'home' | 'pick'
 
 const BASE: Coordinate = { lat: 37.5759, lng: 126.9768 }
+const RECORDS = 'onjeonsi:archive:records'
 const RADII = [500, 1000, 2000]
 const STAYS = [60, 90, 120, 180]
 const ZOOM: Record<number, number> = { 500: 5, 1000: 6, 2000: 7 }
@@ -47,6 +48,17 @@ const PICK: CSSProperties = { appearance: 'none', background: 'transparent', bor
 function NOW() {
   const now = new Date()
   return { date: todayInSeoul(now), time: now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' }) }
+}
+
+// 아카이브 기록 전시 ID 집합 조회
+function CONQUERED(): Set<string> {
+  try {
+    const raw = localStorage.getItem(RECORDS)
+    const list = raw ? (JSON.parse(raw) as Array<{ exhibitId?: string }>) : []
+    return new Set(list.flatMap((r) => (r.exhibitId ? [r.exhibitId] : [])))
+  } catch {
+    return new Set()
+  }
 }
 
 // 종료 시각 계산
@@ -95,7 +107,7 @@ function SEED(text: string, salt: number) {
   return h / 9973
 }
 
-// 위치 미상 장소 좌표 배치
+// 위치 미상 장소 배치
 function SCATTER(key: string): CSSProperties {
   return { left: `${8 + SEED(key, 7) * 84}%`, top: `${16 + SEED(key, 13) * 76}%` }
 }
@@ -120,7 +132,21 @@ function CHIP({ on, run, children }: { on: boolean; run: () => void; children: R
   return <button type="button" className={on ? 'chip chosen' : 'chip'} style={LOOK(on)} aria-pressed={on} onClick={run}>{children}</button>
 }
 
-// 장소별 전시 말풍선 생성
+// 전시 카드 및 정복 오버레이
+function CARD({ ex, time, done }: { ex: Item; time: string; done: boolean }) {
+  return (
+    <div className={done ? 'conquered-card' : undefined}>
+      <OneExhibit id={ex.id} judge={ex.judge} title={ex.title} venue={ex.placeName} status={STATUS[ex.judge.result]} poster={ex.poster} lines={[ex.distance == null ? '위치 정보 없음' : `${ex.distance}m`, LINE(ex.judge, time)]} />
+      {done && (
+        <div className="conquered-veil" aria-label="정복 완료">
+          <span className="conquered-stamp">관람</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 장소별 전시 말풍선
 function INFO({ items, pick }: { items: Item[]; pick: (item: Item) => void }) {
   return (
     <div className="info-box">
@@ -135,7 +161,7 @@ function INFO({ items, pick }: { items: Item[]; pick: (item: Item) => void }) {
   )
 }
 
-// 지도 반경 및 핀 표시
+// 지도 반경 및 핀
 function MARK(map: InstanceType<Kakao['maps']['Map']>, center: Coordinate, radius: number, spots: Item[][], go: (item: Item) => void) {
   const sdk = window.kakao?.maps
   if (!sdk) return () => {}
@@ -185,6 +211,7 @@ function NearbyExhibitions() {
   const init = useMemo(() => NOW(), [])
   const catalog = useMemo(() => getCatalog(), [])
   const holidays = useMemo(() => getHolidays(), [])
+  const done = useMemo(() => CONQUERED(), [])
 
   const [ready, setReady] = useState(false)
   const [fail] = useState(() => !window.kakao?.maps)
@@ -302,7 +329,7 @@ function NearbyExhibitions() {
       {list.length ? (
         <div className="card-grid">
           {list.map((ex) => (
-            <OneExhibit key={ex.id} id={ex.id} judge={ex.judge} title={ex.title} venue={ex.placeName} status={STATUS[ex.judge.result]} poster={ex.poster} lines={[ex.distance == null ? '위치 정보 없음' : `${ex.distance}m`, LINE(ex.judge, time)]} />
+            <CARD key={ex.id} ex={ex} time={time} done={done.has(ex.id)} />
           ))}
         </div>
       ) : (

@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import seedJson from '../../data/reviews/seed.json'
 import { OPEN } from '../components/OneExhibit'
 import { isValidReview } from '../engine/stats'
 import { displayVenueName, getCatalog, todayInSeoul, type CatalogEntry } from '../lib/catalog'
-import { fromArchiveEntry, getRatingSummary } from '../lib/ratings'
+import { fromArchiveEntry, fromSeedReview, getRatingSummary, type SeedReviewInput } from '../lib/ratings'
 import { recommendPersonal, type Candidate } from '../lib/recommend'
+import { deleteMyShared, getCachedStats, refreshStats, shareRating, subscribeStats, type ShareRatingInput } from '../lib/sharedRatings'
 import type { VisitRecord } from '../types/records'
+
+const SEED = (seedJson as SeedReviewInput[]).map(fromSeedReview)
 
 const RECORDS = 'onjeonsi:archive:records'
 const INTERESTS = 'onjeonsi:archive:interests'
@@ -74,6 +78,9 @@ export default function Archive() {
   const [time, setTime] = useState('70')
   const [note, setNote] = useState('')
   const [shared, setShared] = useState(false)
+  const [shareRetry, setShareRetry] = useState<ShareRatingInput | null>(null)
+  const [retrying, setRetrying] = useState(false)
+  const stats = useSyncExternalStore(subscribeStats, getCachedStats)
   const [picked, setPicked] = useState(() => LATEST(READ<VisitRecord[]>(RECORDS, [])))
   const [view, setView] = useState(() => {
     const [year, month] = LATEST(READ<VisitRecord[]>(RECORDS, [])).split('-').map(Number)
@@ -106,13 +113,13 @@ export default function Archive() {
       const found = map.get(r.exhibitId)
       return { ...fromArchiveEntry(r), field: found?.exhibition.field ?? null }
     })
-    const ratingOf = (c: Candidate) => getRatingSummary(c.id, c.venueId, { shared: [], seed: [] })
+    const ratingOf = (c: Candidate) => getRatingSummary(c.id, c.venueId, { stats, seed: SEED })
     const { items } = recommendPersonal(candidates, { myRecords, interests, seenIds: valid.map((r) => r.exhibitId), ratingOf, popularVenueIds: [], limit: 4 })
     return items.flatMap((item) => {
       const entry = map.get(item.id)
       return entry ? [{ entry, reason: item.reason }] : []
     })
-  }, [catalog, today, valid, map, interests])
+  }, [catalog, today, valid, map, interests, stats])
 
   const first = new Date(view.year, view.month, 1).getDay()
   const last = new Date(view.year, view.month + 1, 0).getDate()
@@ -129,6 +136,19 @@ export default function Archive() {
     setView({ year: next.getFullYear(), month: next.getMonth() })
   }
 
+  // 공유 기록 전송 및 실패 시 재시도 상태 갱신
+  async function SEND_SHARE(payload: ShareRatingInput) {
+    setRetrying(true)
+    const res = await shareRating(payload)
+    setRetrying(false)
+    if (res.ok) {
+      setShareRetry(null)
+      void refreshStats()
+    } else if (res.reason !== 'disabled') {
+      setShareRetry(payload)
+    }
+  }
+
   // 관람 기록 검증 및 저장
   function SAVE() {
     const score = Number(rating)
@@ -141,16 +161,50 @@ export default function Archive() {
     const [year, month] = entry.date.split('-').map(Number)
     setView({ year, month: month - 1 })
     setNote('')
+
+    if (shared) {
+      const venueId = map.get(exhibit)?.venue?.id ?? null
+      void SEND_SHARE({ exhibitionId: exhibit, venueId, stars: score, minutes: mins })
+    }
   }
 
   // 기록 공유 상태
   function SHARE(id: string) {
-    setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, shared: !r.shared } : r)))
+    const target = records.find((r) => r.id === id)
+    if (!target) return
+    const nextShared = !target.shared
+    const nextRecords = records.map((r) => (r.id === id ? { ...r, shared: nextShared } : r))
+    setRecords(nextRecords)
+
+    const venueId = map.get(target.exhibitId)?.venue?.id ?? null
+    if (nextShared) {
+      void SEND_SHARE({ exhibitionId: target.exhibitId, venueId, stars: target.rating, minutes: target.time })
+    } else {
+      const otherShared = nextRecords.find((r) => r.exhibitId === target.exhibitId && r.shared)
+      if (otherShared) {
+        void SEND_SHARE({ exhibitionId: otherShared.exhibitId, venueId, stars: otherShared.rating, minutes: otherShared.time })
+      } else {
+        if (shareRetry?.exhibitionId === target.exhibitId) setShareRetry(null)
+        void deleteMyShared(target.exhibitId).then((res) => { if (res.ok) void refreshStats() })
+      }
+    }
   }
 
   // 관람 기록 삭제
   function DROP(id: string) {
-    setRecords((prev) => prev.filter((r) => r.id !== id))
+    const target = records.find((r) => r.id === id)
+    const nextRecords = records.filter((r) => r.id !== id)
+    setRecords(nextRecords)
+    if (!target?.shared) return
+
+    if (shareRetry?.exhibitionId === target.exhibitId) setShareRetry(null)
+    const otherShared = nextRecords.find((r) => r.exhibitId === target.exhibitId && r.shared)
+    if (otherShared) {
+      const venueId = map.get(otherShared.exhibitId)?.venue?.id ?? null
+      void SEND_SHARE({ exhibitionId: otherShared.exhibitId, venueId, stars: otherShared.rating, minutes: otherShared.time })
+    } else {
+      void deleteMyShared(target.exhibitId).then((res) => { if (res.ok) void refreshStats() })
+    }
   }
 
   // 관심 분야 토글
@@ -194,6 +248,12 @@ export default function Archive() {
               <span>별점과 실제 관람 시간을 익명으로 공유하는 데 동의합니다. 다른 사용자가 전시를 고를 때 참고합니다. 메모와 날짜는 공유하지 않습니다.</span>
             </label>
             <button type="button" className="primary-button" onClick={SAVE}>기록 저장</button>
+            {shareRetry && (
+              <p className="hint" role="alert">
+                공유하지 못했습니다.{' '}
+                <button type="button" className="text-button" disabled={retrying} onClick={() => void SEND_SHARE(shareRetry)}>다시 시도</button>
+              </p>
+            )}
           </div>
 
           <div className="panel">

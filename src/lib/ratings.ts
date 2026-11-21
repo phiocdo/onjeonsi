@@ -10,7 +10,15 @@
  * - 내 기록(ArchiveEntry)은 집계에 넣지 않는다. fromArchiveEntry는 추천(recommend.ts)의 myRecords용이다.
  * - 집계 계산과 3건 기준은 src/engine/stats.ts(summarizeReviews, MIN_COUNT)를 그대로 쓴다.
  */
-import { MIN_COUNT, isValidReview, summarizeReviews } from '../engine/stats';
+import {
+  MIN_COUNT,
+  MINUTES_MAX,
+  MINUTES_MIN,
+  RATING_MAX,
+  RATING_MIN,
+  isValidReview,
+  summarizeReviews,
+} from '../engine/stats';
 
 /** 집계·추천에 넣는 기록 한 건 */
 export interface RatingRecord {
@@ -35,8 +43,23 @@ export interface RatingSummary {
   label: string;
 }
 
+/** 이미 집계된 통계 한 항목 (서버 RPC 등 외부 집계 결과) */
+export interface AggregatedStat {
+  count: number;
+  averageRating: number;
+  medianMinutes: number;
+}
+
+/** 전시별·시설별 사전 집계 통계 */
+export interface SharedRatingStats {
+  exhibitions: ReadonlyMap<string, AggregatedStat>;
+  venues: ReadonlyMap<string, AggregatedStat>;
+}
+
 export interface RatingSources {
-  // 여러 사람의 공유 기록 (나중에 서버 집계가 생기면 여기에 넣음)
+  // 이미 집계된 공유 통계 (서버 RPC 결과)
+  stats?: SharedRatingStats;
+  // 여러 사람의 공유 기록 (개별 기록 목록)
   shared?: RatingRecord[];
   // 정적 시드 기록 (data/reviews/seed.json)
   seed?: RatingRecord[];
@@ -82,6 +105,32 @@ export function fromArchiveEntry(e: ArchiveEntryInput): RatingRecord {
   };
 }
 
+function isValidAggregatedStat(stat: AggregatedStat | undefined): stat is AggregatedStat {
+  if (!stat || typeof stat !== 'object') return false;
+  const { count, averageRating, medianMinutes } = stat;
+  return (
+    typeof count === 'number' &&
+    Number.isInteger(count) &&
+    count >= MIN_COUNT &&
+    typeof averageRating === 'number' &&
+    Number.isFinite(averageRating) &&
+    averageRating >= RATING_MIN &&
+    averageRating <= RATING_MAX &&
+    typeof medianMinutes === 'number' &&
+    Number.isFinite(medianMinutes) &&
+    medianMinutes >= MINUTES_MIN &&
+    medianMinutes <= MINUTES_MAX
+  );
+}
+
+function fromAggregated(level: 'exhibition' | 'venue', stat: AggregatedStat): RatingSummary {
+  const averageRating = Math.round(stat.averageRating * 10) / 10;
+  const medianMinutes = Math.round(stat.medianMinutes * 10) / 10;
+  const label =
+    level === 'exhibition' ? `이 전시 기록 ${stat.count}건` : `이 시설 기록 ${stat.count}건`;
+  return { level, count: stat.count, averageRating, medianMinutes, label };
+}
+
 function summarize(level: Exclude<RatingLevel, 'none'>, records: RatingRecord[]): RatingSummary {
   const { count, averageRating, medianMinutes } = summarizeReviews(records);
   const label =
@@ -103,7 +152,7 @@ const NONE: RatingSummary = {
 
 /**
  * 한 전시의 별점·관람 시간 요약. 읽기 순서:
- * ① shared의 그 전시 → ② shared의 그 시설 → ③ seed의 그 전시, 없으면 그 시설 → ④ 기록 부족.
+ * ① 공유 통계(stats)/shared의 그 전시 → ② 공유 통계(stats)/shared의 그 시설 → ③ seed의 그 전시, 없으면 그 시설 → ④ 기록 부족.
  * 각 단계는 유효한 기록(별점 1~5 정수, 관람 시간 10~480분)이 MIN_COUNT(3)건 이상일 때만 쓴다.
  */
 export function getRatingSummary(
@@ -111,6 +160,9 @@ export function getRatingSummary(
   venueId: string | null | undefined,
   sources: RatingSources,
 ): RatingSummary {
+  const statExhibition = sources.stats?.exhibitions.get(exhibitionId);
+  if (isValidAggregatedStat(statExhibition)) return fromAggregated('exhibition', statExhibition);
+
   const shared = (sources.shared ?? []).filter(isValidReview);
   const seed = (sources.seed ?? []).filter(isValidReview);
   const byExhibition = (r: RatingRecord) => r.exhibitionId === exhibitionId;
@@ -118,6 +170,9 @@ export function getRatingSummary(
 
   const sharedExhibition = shared.filter(byExhibition);
   if (sharedExhibition.length >= MIN_COUNT) return summarize('exhibition', sharedExhibition);
+
+  const statVenue = venueId ? sources.stats?.venues.get(venueId) : undefined;
+  if (isValidAggregatedStat(statVenue)) return fromAggregated('venue', statVenue);
 
   const sharedVenue = shared.filter(byVenue);
   if (sharedVenue.length >= MIN_COUNT) return summarize('venue', sharedVenue);

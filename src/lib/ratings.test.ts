@@ -132,3 +132,90 @@ describe('변환 함수', () => {
     });
   });
 });
+
+describe('서버 사전 집계 통계(sources.stats)', () => {
+  it('서버 통계에 그 전시가 있으면 exhibition 단계를 쓴다', () => {
+    const stats = {
+      exhibitions: new Map([['e1', { count: 4, averageRating: 4.25, medianMinutes: 65 }]]),
+      venues: new Map([['v1', { count: 10, averageRating: 3.5, medianMinutes: 90 }]]),
+    };
+    const seed = [rec('e1', 'v1', 2, 30), rec('e1', 'v1', 2, 30), rec('e1', 'v1', 2, 30)];
+
+    expect(getRatingSummary('e1', 'v1', { stats, seed })).toEqual({
+      level: 'exhibition',
+      count: 4,
+      averageRating: 4.3,
+      medianMinutes: 65,
+      label: '이 전시 기록 4건',
+    });
+  });
+
+  it('전시 통계가 없으면 시설 통계를 쓴다', () => {
+    const stats = {
+      exhibitions: new Map([['e2', { count: 5, averageRating: 5, medianMinutes: 40 }]]),
+      venues: new Map([['v1', { count: 8, averageRating: 3.84, medianMinutes: 75 }]]),
+    };
+    const seed = [rec('e1', 'v1', 2, 30), rec('e1', 'v1', 2, 30), rec('e1', 'v1', 2, 30)];
+
+    expect(getRatingSummary('e1', 'v1', { stats, seed })).toEqual({
+      level: 'venue',
+      count: 8,
+      averageRating: 3.8,
+      medianMinutes: 75,
+      label: '이 시설 기록 8건',
+    });
+  });
+
+  it('venueId가 없으면 시설 통계를 건너뛰고 시드 → 기록 부족 순으로 간다', () => {
+    const stats = {
+      exhibitions: new Map(),
+      venues: new Map([['v1', { count: 8, averageRating: 4.5, medianMinutes: 60 }]]),
+    };
+    const seed = [rec('e1', null, 4, 50), rec('e1', null, 4, 60), rec('e1', null, 5, 70)];
+
+    expect(getRatingSummary('e1', null, { stats, seed })).toMatchObject({
+      level: 'seed',
+      label: '예시 기록',
+    });
+    expect(getRatingSummary('e2', null, { stats, seed })).toMatchObject({
+      level: 'none',
+      label: '기록 부족',
+    });
+  });
+
+  it('서버 통계가 비어 있으면 지금처럼 시드 → 기록 부족으로 폴백한다', () => {
+    const empty = { exhibitions: new Map(), venues: new Map() };
+    const seed = [rec('e1', 'v1', 4, 50), rec('e1', 'v1', 4, 60), rec('e1', 'v1', 5, 70)];
+
+    expect(getRatingSummary('e1', 'v1', { stats: empty, seed })).toMatchObject({
+      level: 'seed',
+      count: 3,
+      label: '예시 기록',
+    });
+    expect(getRatingSummary('e2', 'v1', { stats: empty, seed })).toMatchObject({
+      level: 'seed',
+      count: 3,
+      label: '예시 기록',
+    });
+    expect(getRatingSummary('e2', 'v2', { stats: empty, seed })).toEqual({
+      level: 'none',
+      count: 0,
+      averageRating: null,
+      medianMinutes: null,
+      label: '기록 부족',
+    });
+  });
+
+  it('서버 통계의 count가 3 미만이거나 범위 밖이면 무시하고 다음 단계로 간다', () => {
+    const stats = {
+      exhibitions: new Map([['e1', { count: 2, averageRating: 5, medianMinutes: 60 }]]),
+      venues: new Map([['v1', { count: 5, averageRating: 6, medianMinutes: 60 }]]),
+    };
+    const seed = [rec('e1', 'v1', 3, 40), rec('e1', 'v1', 4, 50), rec('e1', 'v1', 5, 60)];
+
+    expect(getRatingSummary('e1', 'v1', { stats, seed })).toMatchObject({
+      level: 'seed',
+      label: '예시 기록',
+    });
+  });
+});

@@ -1,5 +1,8 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import seedJson from '../../data/reviews/seed.json'
 import { basisLabel, displayLocation, displayVenueName, getCatalog, getHolidays, judgeEntry, todayInSeoul, type CatalogEntry } from '../lib/catalog'
+import { fromSeedReview, getRatingSummary, type SeedReviewInput } from '../lib/ratings'
+import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
 import type { JudgeResult, Venue, Weekday } from '../types'
 import './OneExhibit.css'
 
@@ -14,6 +17,7 @@ type Detail = {
 }
 
 const EMPTY = '정보 없음'
+const SEED = (seedJson as SeedReviewInput[]).map(fromSeedReview)
 const ORDER: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const DAY: Record<Weekday, string> = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토', sun: '일' }
 const STATUS: Record<JudgeResult['result'], Status> = { possible: '가능', impossible: '불가', unknown: '확인 필요' }
@@ -85,6 +89,7 @@ function DETAIL(entry: CatalogEntry, passed?: JudgeResult): Detail {
 // 전시 상세 창
 export function WINDOW() {
   const [pick, setPick] = useState<Pick | null>(CURRENT)
+  const stats = useSyncExternalStore(subscribeStats, getCachedStats)
 
   useEffect(() => {
     LISTENERS.add(setPick)
@@ -103,6 +108,9 @@ export function WINDOW() {
   if (!pick) return null
   const found = getCatalog().find((item) => item.exhibition.id === pick.id)
   const detail = found ? DETAIL(found, pick.judge) : null
+  const rating = found
+    ? getRatingSummary(found.exhibition.id, found.venue?.id ?? null, { stats, seed: SEED })
+    : null
 
   return (
     <div className="one-backdrop" role="dialog" aria-modal="true" onClick={CLOSE}>
@@ -169,8 +177,14 @@ export function WINDOW() {
                   <div className="info-block">
                     <h3>다른 관람자의 기록</h3>
                     <div className="visitor-stats">
-                      <div><strong>기록 부족</strong><span>평균 별점</span></div>
-                      <div><strong>{detail.duration}</strong><span>예상 관람 시간</span></div>
+                      <div>
+                        <strong>{rating && rating.level !== 'none' && rating.averageRating !== null ? `★ ${rating.averageRating.toFixed(1)}` : (rating?.label ?? '기록 부족')}</strong>
+                        <span>{rating && rating.level !== 'none' ? rating.label : '평균 별점'}</span>
+                      </div>
+                      <div>
+                        <strong>{rating && rating.level !== 'none' && rating.medianMinutes !== null ? `${rating.medianMinutes}분` : detail.duration}</strong>
+                        <span>{rating && rating.level !== 'none' && rating.medianMinutes !== null ? '실제 관람 시간' : '예상 관람 시간'}</span>
+                      </div>
                       <div><strong>정보 없음</strong><span>혼잡도</span></div>
                     </div>
                   </div>

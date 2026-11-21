@@ -591,4 +591,122 @@ describe('F-05 판정 시나리오', () => {
       expect(holidayFri).toEqual(run({ date: '2026-11-20', stayStart: '17:00', stayEnd: '19:00', holidays: [] }));
     });
   });
+
+  describe('추가: 공휴일 미안내 (judgeResolved, useExhibitionHours: true)', () => {
+    /**
+     * 시설이 없어 근거가 전시 문구뿐(basis 'exhibition')인 전시. 운영시간은 해석기가 내는 모양을 손으로 적었다
+     * (원문 hoursText와 해석 결과 operatingHours를 같이 둔다. 해석기 결과에 기대지 않으려고 parseHours는 부르지 않는다).
+     * 공휴일: 2026-12-25(금), 2027-01-01(금). 2026-11-20(금)은 평일.
+     */
+    const ON = { useExhibitionHours: true };
+    const PH_HOLIDAYS = ['2026-12-25', '2027-01-01'];
+    const NEW_YEAR = '2027-01-01';
+    const FRI = '2026-11-20';
+    const open10_20: DaySchedule = { isOpen: true, intervals: [{ open: '10:00', close: '20:00' }] };
+    const closedDay: DaySchedule = { isOpen: false, intervals: [] };
+    const daily = (day: DaySchedule) => ({ mon: day, tue: day, wed: day, thu: day, fri: day, sat: day, sun: day });
+    const hoursOf = (day: DaySchedule, holiday: DaySchedule | null = null): ParsedOperatingHours => ({
+      scheduleType: 'scheduled',
+      weekdays: daily(day),
+      holiday,
+      exceptions: [],
+    });
+    const exRun = (
+      venue: Venue | null,
+      hoursText: string,
+      hours: ParsedOperatingHours,
+      date: string,
+      stayStart: string,
+      stayEnd: string,
+      holidays: string[] = PH_HOLIDAYS,
+    ) => {
+      const exhibition = { ...BASE_EXHIBITION, hoursText, operatingHours: hours };
+      return judgeResolved(
+        { exhibition, date, stayStart, stayEnd, holidays },
+        resolveSchedule(venue, hours, ON),
+      );
+    };
+
+    it('S36 공휴일 + 전시 근거 + 원문에 공휴일 언급 없음 → 확인 필요, HOLIDAY_UNSTATED 하나', () => {
+      expect(exRun(null, '10:00~20:00', hoursOf(open10_20), NEW_YEAR, '14:00', '16:00')).toEqual({
+        result: 'unknown',
+        reasons: [REASONS.HOLIDAY_UNSTATED],
+        basis: 'exhibition',
+      });
+    });
+
+    it('S37 같은 전시 평일(11/20 금) → 가능 (입장 마감 정보 없음)', () => {
+      expect(exRun(null, '10:00~20:00', hoursOf(open10_20), FRI, '14:00', '16:00')).toEqual({
+        result: 'possible',
+        reasons: [],
+        entryTime: '14:00',
+        endTime: '15:00',
+        slackMinutes: 60,
+        basis: 'exhibition',
+        lastEntryAssumed: true,
+      });
+    });
+
+    it('S38 원문 "공휴일 휴관" → 불가, CLOSED_DATE', () => {
+      const hours = hoursOf(open10_20, closedDay);
+      expect(exRun(null, '10:00~20:00 (공휴일 휴관)', hours, NEW_YEAR, '14:00', '16:00')).toEqual({
+        result: 'impossible',
+        reasons: [REASONS.CLOSED_DATE],
+        basis: 'exhibition',
+      });
+    });
+
+    it('S39 원문 "공휴일 정상 운영"(해석 결과 holiday: null) → 가능', () => {
+      // 해석기는 개관 언급을 holiday에 담지 않는다. 원문의 '공휴일'로 언급을 확인한다
+      expect(exRun(null, '10:00~20:00 (공휴일 정상 운영)', hoursOf(open10_20), NEW_YEAR, '14:00', '16:00')).toEqual({
+        result: 'possible',
+        reasons: [],
+        entryTime: '14:00',
+        endTime: '15:00',
+        slackMinutes: 60,
+        basis: 'exhibition',
+        lastEntryAssumed: true,
+      });
+    });
+
+    it('S40 시설 근거가 있는 전시(merged)의 공휴일 → 변화 없음', () => {
+      // 기준 시설은 01-01이 지정 휴관일이라 12/25(금)로 본다. 공휴일이 아닐 때와 결과가 같다
+      const holiday = exRun(BASE_VENUE, '10:00~20:00', hoursOf(open10_20), '2026-12-25', '14:00', '16:00');
+      expect(holiday).toEqual({
+        result: 'possible',
+        reasons: [],
+        entryTime: '14:00',
+        endTime: '15:00',
+        slackMinutes: 60,
+        basis: 'merged',
+      });
+      expect(holiday).toEqual(exRun(BASE_VENUE, '10:00~20:00', hoursOf(open10_20), '2026-12-25', '14:00', '16:00', []));
+    });
+
+    it('S41 이미 불가(입장 마감 이후) → 불가 그대로, AFTER_LAST_ENTRY 하나', () => {
+      const withLa: DaySchedule = { isOpen: true, intervals: [{ open: '10:00', close: '20:00', lastAdmission: '18:00' }] };
+      expect(exRun(null, '10:00~20:00 (입장 마감 18:00)', hoursOf(withLa), NEW_YEAR, '18:30', '21:00')).toEqual({
+        result: 'impossible',
+        reasons: [REASONS.AFTER_LAST_ENTRY('18:00')],
+        basis: 'exhibition',
+      });
+    });
+
+    it('S42 회차 요일과 겹침 → 확인 필요, [SESSION_DAY, HOLIDAY_UNSTATED] / 평일 회차는 SESSION_DAY 하나', () => {
+      // 금요일만 회차, 나머지 요일은 상시 10:00~20:00
+      const session: DaySchedule = { isOpen: true, intervals: [{ open: '14:00', close: '15:20' }], sessions: true };
+      const hours: ParsedOperatingHours = { ...hoursOf(open10_20), weekdays: { ...daily(open10_20), fri: session } };
+      const text = '10:00~20:00 / 금 1회차 14:00~15:20';
+      expect(exRun(null, text, hours, NEW_YEAR, '13:00', '17:00')).toEqual({
+        result: 'unknown',
+        reasons: [REASONS.SESSION_DAY, REASONS.HOLIDAY_UNSTATED],
+        basis: 'exhibition',
+      });
+      expect(exRun(null, text, hours, FRI, '13:00', '17:00')).toEqual({
+        result: 'unknown',
+        reasons: [REASONS.SESSION_DAY],
+        basis: 'exhibition',
+      });
+    });
+  });
 });

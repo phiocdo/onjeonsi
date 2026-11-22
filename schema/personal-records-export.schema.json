@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "개인 기록 내보내기 파일",
-  "description": "개인 기록 내보내기 파일 (사용자가 내려받는 JSON, 저장소에는 두지 않는다), 상태: 제안. 기록 필드 이름은 아카이브 화면(src/pages/Archive.tsx, src/mock/useArchive.ts)을 따르고 타입은 src/types/records.ts의 VisitRecord와 같다. 화면은 localStorage의 onjeonsi:archive:records(기록)와 onjeonsi:archive:interests(관심 분야)에 저장한다. 스키마로 잡지 못하는 것: 기록 id가 겹치는지, exhibitId가 실제 전시인지.",
+  "description": "개인 기록 내보내기 파일 (사용자가 아카이브 화면에서 내려받는 JSON, 저장소에는 두지 않는다). 타입은 src/types/records.ts의 ArchiveExport, 만드는 함수는 src/lib/archive.ts의 buildExport. 화면은 localStorage의 onjeonsi:archive에 같은 모양(exportedAt 제외)으로 저장한다. 스키마로 잡지 못하는 것: 기록 id가 겹치는지, exhibitionId가 실제 전시인지, 없는 날짜(2026-02-30 등).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,16 +10,29 @@
     "records",
     "interests"
   ],
+  "definitions": {
+    "isoDateTime": {
+      "type": "string",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
+    },
+    "nullableText": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "nullableDate": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$"
+    }
+  },
   "properties": {
     "version": {
       "type": "integer",
-      "const": 1,
-      "description": "파일 형식 버전"
+      "const": 2,
+      "description": "파일 형식 버전. 1은 필드 이름이 exhibitId·time이고 전시 정보 사본이 없던 형식"
     },
     "exportedAt": {
-      "type": "string",
-      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
-      "description": "내보낸 시각, ISO 8601 날짜시간 (예: 2026-11-16T09:30:00.000Z)"
+      "$ref": "#/definitions/isoDateTime",
+      "description": "내보낸 시각, ISO 8601 날짜시간 (예: 2026-11-21T09:30:00.000Z)"
     },
     "records": {
       "type": "array",
@@ -28,12 +41,14 @@
         "additionalProperties": false,
         "required": [
           "id",
-          "exhibitId",
+          "exhibitionId",
+          "exhibition",
           "date",
           "rating",
-          "time",
+          "visitMinutes",
           "note",
-          "shared"
+          "shared",
+          "createdAt"
         ],
         "properties": {
           "id": {
@@ -41,10 +56,25 @@
             "minLength": 1,
             "description": "기록 id"
           },
-          "exhibitId": {
+          "exhibitionId": {
             "type": "string",
             "minLength": 1,
-            "description": "전시 id. 화면 목 데이터는 숫자를 쓰지만 내보낼 때는 문자열로 적는다"
+            "description": "전시 id (data/exhibitions/auto.json의 id)"
+          },
+          "exhibition": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title", "venueName", "venueId", "field", "imageUrl", "start", "end"],
+            "description": "전시 정보 사본. 기록할 때 만들고, 카탈로그에 전시가 있는 동안은 읽을 때마다 최신으로 고친다. 전시가 끝나 auto.json에서 빠져도 기록을 보여 주려고 둔다",
+            "properties": {
+              "title": { "type": "string", "minLength": 1 },
+              "venueName": { "$ref": "#/definitions/nullableText" },
+              "venueId": { "$ref": "#/definitions/nullableText", "description": "시설 id (venue-*)" },
+              "field": { "$ref": "#/definitions/nullableText", "description": "서울시 대분류 (전시/미술 등)" },
+              "imageUrl": { "$ref": "#/definitions/nullableText" },
+              "start": { "$ref": "#/definitions/nullableDate", "description": "전시 시작일 YYYY-MM-DD" },
+              "end": { "$ref": "#/definitions/nullableDate", "description": "전시 종료일 YYYY-MM-DD. 지났으면 화면에 '종료된 전시'로 표시" }
+            }
           },
           "date": {
             "type": "string",
@@ -57,19 +87,23 @@
             "maximum": 5,
             "description": "별점 1~5 정수"
           },
-          "time": {
+          "visitMinutes": {
             "type": "integer",
             "minimum": 10,
             "maximum": 480,
-            "description": "실제 관람 시간(분) 10~480 (stats.ts와 같은 범위)"
+            "description": "실제 관람 시간(분) 10~480 정수 (범위는 stats.ts와 같다. 소수 입력은 저장할 때 반올림)"
           },
           "note": {
             "type": "string",
-            "description": "개인 메모. 빈 문자열 허용. 공유 평가 시드로 옮기지 않는다"
+            "description": "개인 메모. 빈 문자열 허용. 공유 평가로 옮기지 않는다"
           },
           "shared": {
             "type": "boolean",
-            "description": "공유 평가에 넣을지 여부"
+            "description": "별점·관람 시간 익명 공유 동의"
+          },
+          "createdAt": {
+            "$ref": "#/definitions/isoDateTime",
+            "description": "기록을 만든 시각"
           }
         }
       }
@@ -79,17 +113,9 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "enum": [
-          "현대미술",
-          "회화",
-          "사진·영상",
-          "조각·설치",
-          "미디어아트",
-          "공예·디자인",
-          "역사·민속"
-        ]
+        "minLength": 1
       },
-      "description": "관심 분야. 값은 화면의 Category(src/mock/exhibits.ts)와 같다"
+      "description": "관심 분야. 값은 전시의 field(서울시 대분류)와 같은 종류"
     }
   }
 }

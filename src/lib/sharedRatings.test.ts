@@ -21,8 +21,10 @@ import {
   deleteMyShared,
   fetchStats,
   getCachedStats,
+  refreshStats,
   resetStatsCache,
   shareRating,
+  subscribeStats,
 } from './sharedRatings';
 
 function makeMockClient() {
@@ -144,9 +146,117 @@ describe('fetchStats', () => {
     expect(stats.exhibitions.size).toBe(0);
     expect(stats.venues.size).toBe(0);
   });
+
+  it('시간 초과 뒤 응답이 늦게 성공하면 캐시를 갱신하고 구독자에게 알린다', async () => {
+    vi.useFakeTimers();
+    const { client, rpc } = makeMockClient();
+    let resolveRpc!: (v: unknown) => void;
+    rpc.mockImplementation(() => new Promise((resolve) => { resolveRpc = resolve; }));
+    mockClient = client;
+    const listener = vi.fn();
+    const unsubscribe = subscribeStats(listener);
+
+    const pending = fetchStats();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect((await pending).exhibitions.size).toBe(0);
+    expect(listener).not.toHaveBeenCalled();
+
+    resolveRpc({ data: [{ scope: 'exhibition', id: 'ex-late', count: 4, avg_stars: 4, median_minutes: 50 }], error: null });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(getCachedStats().exhibitions.get('ex-late')).toEqual({ count: 4, averageRating: 4, medianMinutes: 50 });
+    // 캐시에 들어갔으니 다시 부르지 않는다
+    await fetchStats();
+    expect(rpc).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it('시간 초과 뒤 응답이 늦게 실패하면 아무것도 바뀌지 않는다', async () => {
+    vi.useFakeTimers();
+    const { client, rpc } = makeMockClient();
+    let rejectRpc!: (e: unknown) => void;
+    rpc.mockImplementation(() => new Promise((_, reject) => { rejectRpc = reject; }));
+    mockClient = client;
+    const listener = vi.fn();
+    const unsubscribe = subscribeStats(listener);
+    const before = getCachedStats();
+
+    const pending = fetchStats();
+    await vi.advanceTimersByTimeAsync(3000);
+    await pending;
+    rejectRpc(new Error('late network error'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(getCachedStats()).toBe(before);
+    unsubscribe();
+  });
+
+  it('늦게 도착한 옛 응답은 더 새로운 결과를 덮어쓰지 않는다', async () => {
+    vi.useFakeTimers();
+    const { client, rpc } = makeMockClient();
+    let resolveOld!: (v: unknown) => void;
+    rpc
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }))
+      .mockResolvedValueOnce({ data: [{ scope: 'venue', id: 'v-new', count: 3, avg_stars: 5, median_minutes: 30 }], error: null });
+    mockClient = client;
+
+    const first = fetchStats();
+    await vi.advanceTimersByTimeAsync(3000);
+    await first;
+    const fresh = await refreshStats();
+    expect(fresh.venues.has('v-new')).toBe(true);
+
+    resolveOld({ data: [{ scope: 'venue', id: 'v-old', count: 3, avg_stars: 1, median_minutes: 30 }], error: null });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getCachedStats()).toBe(fresh);
+  });
 });
 
 describe('shareRating', () => {
+  it('동시에 두 번 공유해도 익명 로그인은 한 번만 한다', async () => {
+    const { client, getSession, signInAnonymously, upsert } = makeMockClient();
+    let finishSignIn!: () => void;
+    signInAnonymously.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishSignIn = () => {
+            // 로그인이 끝나면 세션이 생긴다
+            getSession.mockResolvedValue({ data: { session: { user: { id: 'anon-1' } } }, error: null });
+            resolve({ data: { session: { user: { id: 'anon-1' } } }, error: null });
+          };
+        }),
+    );
+    mockClient = client;
+
+    const a = shareRating({ exhibitionId: 'ex-1', venueId: null, stars: 4, minutes: 60 });
+    const b = shareRating({ exhibitionId: 'ex-2', venueId: null, stars: 5, minutes: 90 });
+    await vi.waitFor(() => expect(signInAnonymously).toHaveBeenCalled());
+    finishSignIn();
+
+    expect(await Promise.all([a, b])).toEqual([{ ok: true }, { ok: true }]);
+    expect(signInAnonymously).toHaveBeenCalledTimes(1);
+    expect(upsert).toHaveBeenCalledTimes(2);
+
+    // 세션이 생긴 뒤에는 다시 로그인하지 않는다
+    await shareRating({ exhibitionId: 'ex-3', venueId: null, stars: 3, minutes: 40 });
+    expect(signInAnonymously).toHaveBeenCalledTimes(1);
+  });
+
+  it('익명 로그인이 실패하면 다음 공유 때 다시 시도한다', async () => {
+    const { client, signInAnonymously, upsert } = makeMockClient();
+    signInAnonymously
+      .mockResolvedValueOnce({ data: null, error: { message: 'captcha' } })
+      .mockResolvedValue({ data: { session: { user: { id: 'anon-1' } } }, error: null });
+    mockClient = client;
+
+    expect(await shareRating({ exhibitionId: 'ex-1', venueId: null, stars: 4, minutes: 60 })).toEqual({ ok: false, reason: 'captcha' });
+    expect(upsert).not.toHaveBeenCalled();
+    expect(await shareRating({ exhibitionId: 'ex-1', venueId: null, stars: 4, minutes: 60 })).toEqual({ ok: true });
+    expect(signInAnonymously).toHaveBeenCalledTimes(2);
+  });
+
   it('세션이 없을 때만 signInAnonymously 후 upsert를 호출하고 user_id는 보내지 않는다', async () => {
     const { client, getSession, signInAnonymously, from, upsert } = makeMockClient();
     mockClient = client;

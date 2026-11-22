@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react'
-import seedJson from '../../data/reviews/seed.json'
 import { basisLabel, displayLocation, displayVenueName, getCatalog, getHolidays, judgeEntry, todayInSeoul, type CatalogEntry } from '../lib/catalog'
-import { fromSeedReview, getRatingSummary, type SeedReviewInput } from '../lib/ratings'
+import { getRatingSummary } from '../lib/ratings'
+import { SEED_RECORDS } from '../lib/seed'
 import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
 import type { JudgeResult, Venue, Weekday } from '../types'
 import './OneExhibit.css'
@@ -17,7 +17,6 @@ type Detail = {
 }
 
 const EMPTY = '정보 없음'
-const SEED = (seedJson as SeedReviewInput[]).map(fromSeedReview)
 const ORDER: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const DAY: Record<Weekday, string> = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토', sun: '일' }
 const STATUS: Record<JudgeResult['result'], Status> = { possible: '가능', impossible: '불가', unknown: '확인 필요' }
@@ -109,7 +108,7 @@ export function WINDOW() {
   const found = getCatalog().find((item) => item.exhibition.id === pick.id)
   const detail = found ? DETAIL(found, pick.judge) : null
   const rating = found
-    ? getRatingSummary(found.exhibition.id, found.venue?.id ?? null, { stats, seed: SEED })
+    ? getRatingSummary(found.exhibition.id, found.venue?.id ?? null, { stats, seed: SEED_RECORDS })
     : null
 
   return (

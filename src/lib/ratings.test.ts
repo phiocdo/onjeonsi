@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  fromArchiveEntry,
+  fromVisitRecord,
   fromSeedReview,
   getRatingSummary,
   type RatingRecord,
@@ -123,10 +123,11 @@ describe('변환 함수', () => {
     ).toEqual({ exhibitionId: 'e1', venueId: 'venue-a', rating: 4, visitMinutes: 70 });
   });
 
-  it('fromArchiveEntry는 exhibitId를 문자열로, time을 visitMinutes로 옮긴다', () => {
-    expect(fromArchiveEntry({ exhibitId: 18, rating: 5, time: 80 })).toEqual({
-      exhibitionId: '18',
-      venueId: null,
+  it('fromVisitRecord는 전시 정보 사본의 venueId를 가져온다', () => {
+    const exhibition = { title: '전시', venueName: '시설', venueId: 'venue-sema', field: '전시/미술', imageUrl: null, start: null, end: null };
+    expect(fromVisitRecord({ exhibitionId: 'auto-seoul-1', exhibition, rating: 5, visitMinutes: 80 })).toEqual({
+      exhibitionId: 'auto-seoul-1',
+      venueId: 'venue-sema',
       rating: 5,
       visitMinutes: 80,
     });

@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import OneExhibit, { type Status } from '../components/OneExhibit'
+import { readVisitedIds } from '../lib/archive'
 import { displayVenueName, getCatalog, getHolidays, judgeCatalog, todayInSeoul, type CatalogEntry, type JudgedEntry } from '../lib/catalog'
 import type { JudgeResult } from '../types'
 
@@ -7,7 +8,6 @@ type Area = (typeof AREAS)[number]
 type Card = { id: string; title: string; venue: string; area: string; status: Status; judge: JudgeResult; poster?: string; lines: string[] }
 
 const AREAS = ['전체', '종로구', '중구'] as const
-const RECORDS = 'onjeonsi:archive:records'
 const STATUS: Record<JudgeResult['result'], Status> = { possible: '가능', impossible: '불가', unknown: '확인 필요' }
 
 // 서울 현재 날짜/시각 반환
@@ -16,15 +16,9 @@ function NOW() {
   return { date: todayInSeoul(now), time: now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' }) }
 }
 
-// 아카이브 기록 전시 ID 집합 조회
+// 아카이브 기록 전시 ID 집합 조회 (저장 형식은 lib/archive가 안다)
 function CONQUERED(): Set<string> {
-  try {
-    const raw = localStorage.getItem(RECORDS)
-    const list = raw ? (JSON.parse(raw) as Array<{ exhibitId?: string }>) : []
-    return new Set(list.flatMap((r) => (r.exhibitId ? [r.exhibitId] : [])))
-  } catch {
-    return new Set()
-  }
+  return readVisitedIds()
 }
 
 // 구 판별

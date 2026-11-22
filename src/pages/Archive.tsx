@@ -1,29 +1,30 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import seedJson from '../../data/reviews/seed.json'
 import { OPEN } from '../components/OneExhibit'
-import { isValidReview } from '../engine/stats'
 import { displayVenueName, getCatalog, todayInSeoul, type CatalogEntry } from '../lib/catalog'
-import { fromArchiveEntry, fromSeedReview, getRatingSummary, type SeedReviewInput } from '../lib/ratings'
+import { fromVisitRecord, getRatingSummary } from '../lib/ratings'
 import { recommendPersonal, type Candidate } from '../lib/recommend'
-import { deleteMyShared, getCachedStats, refreshStats, shareRating, subscribeStats, type ShareRatingInput } from '../lib/sharedRatings'
-import type { VisitRecord } from '../types/records'
+import { SEED_RECORDS } from '../lib/seed'
+import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
+import { planShareSync, shareQueue } from '../lib/shareSync'
+import {
+  ARCHIVE_KEY,
+  browserStorage,
+  buildExport,
+  clearArchive,
+  createRecord,
+  emptyArchive,
+  exportFileName,
+  loadArchive,
+  saveArchive,
+  viewOf,
+  type RecordStatus,
+} from '../lib/archive'
+import type { ArchiveData, VisitRecord } from '../types/records'
 
-const SEED = (seedJson as SeedReviewInput[]).map(fromSeedReview)
-
-const RECORDS = 'onjeonsi:archive:records'
-const INTERESTS = 'onjeonsi:archive:interests'
 const WEEK = ['일', '월', '화', '수', '목', '금', '토']
 const STARS = [5, 4, 3, 2, 1]
-
-// lcoal storage 조회
-function READ<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : fallback
-  } catch {
-    return fallback
-  }
-}
+// 카탈로그에 없는 전시 표시 문구
+const STATUS_LABEL: Record<RecordStatus, string> = { listed: '', ended: ' · 종료된 전시', unlisted: ' · 목록에서 빠진 전시' }
 
 // 날짜 점 구분 변환
 function FORMAT(iso: string) {
@@ -35,27 +36,30 @@ function LATEST(records: VisitRecord[]) {
   return [...records].sort((a, b) => b.date.localeCompare(a.date))[0]?.date ?? todayInSeoul()
 }
 
-// 관람 기록 항목
-function ITEM({ entry, map, share, drop }: { entry: VisitRecord; map: Map<string, CatalogEntry>; share: (id: string) => void; drop: (id: string) => void }) {
-  const found = map.get(entry.exhibitId)
-  if (!found) return null
-  const { exhibition } = found
-  const venue = displayVenueName(found) || '장소 미상'
-  const field = exhibition.field || '전시'
+// 같은 관람일이면 나중에 만든 기록이 위로 오게 정렬
+function NEWEST(a: VisitRecord, b: VisitRecord) {
+  return b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
+}
+
+// 관람 기록 항목. 카탈로그에 전시가 없으면(끝난 전시) 기록할 때 복사해 둔 정보를 보여 준다
+function ITEM({ entry, found, today, share, drop }: { entry: VisitRecord; found: CatalogEntry | undefined; today: string; share: (id: string) => void; drop: (id: string) => void }) {
+  const view = viewOf(entry, found, today)
+  const venue = view.venueName || '장소 미상'
+  const field = view.field || '전시'
 
   return (
     <article className="record">
-      {exhibition.imageUrl && <img src={exhibition.imageUrl} alt={exhibition.title} loading="lazy" decoding="async" />}
+      {view.imageUrl && <img src={view.imageUrl} alt={view.title} loading="lazy" decoding="async" />}
       <div className="record-body">
         <div className="record-top">
-          <strong>{exhibition.title}</strong>
+          <strong>{view.title}</strong>
           <span>{FORMAT(entry.date)}</span>
         </div>
-        <p className="record-venue">{venue} · {field}</p>
-        <p className="record-meta">{'★'.repeat(entry.rating)}{'☆'.repeat(5 - entry.rating)} · 실제 {entry.time}분</p>
+        <p className="record-venue">{venue} · {field}{STATUS_LABEL[view.status]}</p>
+        <p className="record-meta">{'★'.repeat(entry.rating)}{'☆'.repeat(5 - entry.rating)} · 실제 {entry.visitMinutes}분</p>
         {entry.note && <p className="record-note">{entry.note}</p>}
         <div className="record-actions">
-          <button type="button" onClick={() => OPEN(exhibition.id)}>상세 보기</button>
+          {view.status === 'listed' && <button type="button" onClick={() => OPEN(entry.exhibitionId)}>상세 보기</button>}
           <button type="button" onClick={() => share(entry.id)}>{entry.shared ? '익명 공유 중' : '비공개'}</button>
           <button type="button" onClick={() => drop(entry.id)}>삭제</button>
         </div>
@@ -69,57 +73,57 @@ export default function Archive() {
   const map = useMemo(() => new Map(catalog.map((c) => [c.exhibition.id, c])), [catalog])
   const fields = useMemo(() => Array.from(new Set(catalog.map((c) => c.exhibition.field).filter((f): f is string => Boolean(f)))), [catalog])
   const today = useMemo(() => todayInSeoul(), [])
+  const storage = useMemo(() => browserStorage(), [])
 
-  const [records, setRecords] = useState<VisitRecord[]>(() => READ<VisitRecord[]>(RECORDS, []))
-  const [interests, setInterests] = useState<string[]>(() => READ<string[]>(INTERESTS, []))
+  // 처음 읽을 때 예전 형식(v1)이면 v2로 옮겨 저장한다
+  const [loaded] = useState(() => loadArchive(storage, (id) => map.get(id)))
+  const [archive, setArchive] = useState<ArchiveData>(loaded.data)
+  const [saveFailed, setSaveFailed] = useState(loaded.saveFailed)
   const [exhibit, setExhibit] = useState(() => catalog[0]?.exhibition.id ?? '')
   const [date, setDate] = useState(today)
   const [rating, setRating] = useState('5')
   const [time, setTime] = useState('70')
   const [note, setNote] = useState('')
   const [shared, setShared] = useState(false)
-  const [shareRetry, setShareRetry] = useState<ShareRatingInput | null>(null)
-  const [retrying, setRetrying] = useState(false)
   const stats = useSyncExternalStore(subscribeStats, getCachedStats)
-  const [picked, setPicked] = useState(() => LATEST(READ<VisitRecord[]>(RECORDS, [])))
+  // 서버에 반영하지 못한 공유 변경 (메모리에만 있음, src/lib/shareSync.ts 참고)
+  const sync = useSyncExternalStore(shareQueue.subscribe, shareQueue.getSnapshot)
+  const [picked, setPicked] = useState(() => LATEST(archive.records))
   const [view, setView] = useState(() => {
-    const [year, month] = LATEST(READ<VisitRecord[]>(RECORDS, [])).split('-').map(Number)
+    const [year, month] = LATEST(archive.records).split('-').map(Number)
     return { year, month: month - 1 }
   })
 
+  // 다른 탭에서 아카이브를 바꾸면 다시 읽는다. 오래된 상태로 저장해 다른 탭의 변경을 덮어쓰지 않게 한다
+  // (key가 null이면 다른 탭에서 localStorage.clear()를 부른 것)
   useEffect(() => {
-    try { localStorage.setItem(RECORDS, JSON.stringify(records)) } catch { return }
-  }, [records])
+    function onStorage(e: StorageEvent) {
+      if (e.key !== ARCHIVE_KEY && e.key !== null) return
+      setArchive(loadArchive(storage, (id) => map.get(id)).data)
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [storage, map])
 
-  useEffect(() => {
-    try { localStorage.setItem(INTERESTS, JSON.stringify(interests)) } catch { return }
-  }, [interests])
+  const { records, interests } = archive
+  const sorted = useMemo(() => [...records].sort(NEWEST), [records])
+  const dates = useMemo(() => new Set(records.map((r) => r.date)), [records])
+  const daily = sorted.filter((r) => r.date === picked)
 
-  const valid = useMemo(() => records.filter((r) => map.has(r.exhibitId)), [records, map])
-  const sorted = useMemo(() => [...valid].sort((a, b) => b.date.localeCompare(a.date)), [valid])
-  const dates = useMemo(() => new Set(valid.map((r) => r.date)), [valid])
-  const daily = valid.filter((r) => r.date === picked)
-
-  const liked = valid.filter((r) => r.rating >= 4)
-  const genres = Array.from(new Set(liked.flatMap((r) => {
-    const field = map.get(r.exhibitId)?.exhibition.field
-    return field ? [field] : []
-  })))
+  const liked = records.filter((r) => r.rating >= 4)
+  const genres = Array.from(new Set(liked.flatMap((r) => (r.exhibition.field ? [r.exhibition.field] : []))))
   const basis = genres.length ? genres : interests
-
   const picks = useMemo(() => {
     const candidates: Candidate[] = catalog.filter((c) => c.exhibition.end >= today).map((c) => ({ id: c.exhibition.id, venueId: c.venue?.id ?? null, field: c.exhibition.field ?? null, distanceM: null, result: 'possible' }))
-    const myRecords = valid.map((r) => {
-      const found = map.get(r.exhibitId)
-      return { ...fromArchiveEntry(r), field: found?.exhibition.field ?? null }
-    })
-    const ratingOf = (c: Candidate) => getRatingSummary(c.id, c.venueId, { stats, seed: SEED })
-    const { items } = recommendPersonal(candidates, { myRecords, interests, seenIds: valid.map((r) => r.exhibitId), ratingOf, popularVenueIds: [], limit: 4 })
+    // 분야는 전시 정보 사본에서 가져온다 (카탈로그에 있으면 읽을 때 최신으로 고쳐져 있다)
+    const myRecords = records.map((r) => ({ ...fromVisitRecord(r), field: r.exhibition.field }))
+    const ratingOf = (c: Candidate) => getRatingSummary(c.id, c.venueId, { stats, seed: SEED_RECORDS })
+    const { items } = recommendPersonal(candidates, { myRecords, interests, seenIds: records.map((r) => r.exhibitionId), ratingOf, popularVenueIds: [], limit: 4 })
     return items.flatMap((item) => {
       const entry = map.get(item.id)
       return entry ? [{ entry, reason: item.reason }] : []
     })
-  }, [catalog, today, valid, map, interests, stats])
+  }, [catalog, today, records, map, interests, stats])
 
   const first = new Date(view.year, view.month, 1).getDay()
   const last = new Date(view.year, view.month + 1, 0).getDate()
@@ -136,80 +140,88 @@ export default function Archive() {
     setView({ year: next.getFullYear(), month: next.getMonth() })
   }
 
-  // 공유 기록 전송 및 실패 시 재시도 상태 갱신
-  async function SEND_SHARE(payload: ShareRatingInput) {
-    setRetrying(true)
-    const res = await shareRating(payload)
-    setRetrying(false)
-    if (res.ok) {
-      setShareRetry(null)
-      void refreshStats()
-    } else if (res.reason !== 'disabled') {
-      setShareRetry(payload)
-    }
+  // 아카이브 상태 변경 + 브라우저 저장. 바뀐 아카이브를 돌려준다
+  function UPDATE(change: (prev: ArchiveData) => ArchiveData): ArchiveData {
+    const next = change(archive)
+    setArchive(next)
+    setSaveFailed(!saveArchive(storage, next))
+    return next
+  }
+
+  // 바뀐 기록 기준으로 한 전시의 익명 공유를 서버에 맞춘다 (공유 중인 최신 기록 upsert, 없으면 delete)
+  function SYNC(next: ArchiveData, exhibitionId: string) {
+    shareQueue.submit(planShareSync(next.records, exhibitionId))
   }
 
   // 관람 기록 검증 및 저장
   function SAVE() {
-    const score = Number(rating)
-    const mins = Number(time)
-    if (!exhibit || !date || !isValidReview({ rating: score, visitMinutes: mins })) return
+    const found = map.get(exhibit)
+    if (!found) return
 
-    const entry: VisitRecord = { id: String(Date.now()), exhibitId: exhibit, date, rating: score, time: mins, note: note.trim(), shared }
-    setRecords((prev) => [entry, ...prev])
+    // 별점·관람 시간(10~480분 정수, 소수는 반올림)·날짜 검증은 createRecord가 한다
+    const entry = createRecord({ entry: found, date, rating: Number(rating), visitMinutes: Number(time), note, shared })
+    if (!entry) return
+    const next = UPDATE((prev) => ({ ...prev, records: [entry, ...prev.records] }))
     setPicked(entry.date)
     const [year, month] = entry.date.split('-').map(Number)
     setView({ year, month: month - 1 })
     setNote('')
 
-    if (shared) {
-      const venueId = map.get(exhibit)?.venue?.id ?? null
-      void SEND_SHARE({ exhibitionId: exhibit, venueId, stars: score, minutes: mins })
-    }
+    // 공유에 동의한 기록만 서버에 보낸다 (값은 createRecord가 검증·반올림한 entry 기준)
+    if (entry.shared) SYNC(next, entry.exhibitionId)
   }
 
-  // 기록 공유 상태
+  // 기록 공유 상태 (켜기·끄기 모두 서버에 반영)
   function SHARE(id: string) {
     const target = records.find((r) => r.id === id)
     if (!target) return
-    const nextShared = !target.shared
-    const nextRecords = records.map((r) => (r.id === id ? { ...r, shared: nextShared } : r))
-    setRecords(nextRecords)
-
-    const venueId = map.get(target.exhibitId)?.venue?.id ?? null
-    if (nextShared) {
-      void SEND_SHARE({ exhibitionId: target.exhibitId, venueId, stars: target.rating, minutes: target.time })
-    } else {
-      const otherShared = nextRecords.find((r) => r.exhibitId === target.exhibitId && r.shared)
-      if (otherShared) {
-        void SEND_SHARE({ exhibitionId: otherShared.exhibitId, venueId, stars: otherShared.rating, minutes: otherShared.time })
-      } else {
-        if (shareRetry?.exhibitionId === target.exhibitId) setShareRetry(null)
-        void deleteMyShared(target.exhibitId).then((res) => { if (res.ok) void refreshStats() })
-      }
-    }
+    const next = UPDATE((prev) => ({ ...prev, records: prev.records.map((r) => (r.id === id ? { ...r, shared: !r.shared } : r)) }))
+    SYNC(next, target.exhibitionId)
   }
 
-  // 관람 기록 삭제
+  // 관람 기록 삭제 (확인 후). 공유 중이던 기록이면 서버도 맞춘다
   function DROP(id: string) {
+    if (!window.confirm('이 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.')) return
     const target = records.find((r) => r.id === id)
-    const nextRecords = records.filter((r) => r.id !== id)
-    setRecords(nextRecords)
-    if (!target?.shared) return
-
-    if (shareRetry?.exhibitionId === target.exhibitId) setShareRetry(null)
-    const otherShared = nextRecords.find((r) => r.exhibitId === target.exhibitId && r.shared)
-    if (otherShared) {
-      const venueId = map.get(otherShared.exhibitId)?.venue?.id ?? null
-      void SEND_SHARE({ exhibitionId: otherShared.exhibitId, venueId, stars: otherShared.rating, minutes: otherShared.time })
-    } else {
-      void deleteMyShared(target.exhibitId).then((res) => { if (res.ok) void refreshStats() })
-    }
+    const next = UPDATE((prev) => ({ ...prev, records: prev.records.filter((r) => r.id !== id) }))
+    if (target?.shared) SYNC(next, target.exhibitionId)
   }
 
   // 관심 분야 토글
   function TOGGLE(field: string) {
-    setInterests((prev) => (prev.includes(field) ? prev.filter((c) => c !== field) : [...prev, field]))
+    UPDATE((prev) => ({ ...prev, interests: prev.interests.includes(field) ? prev.interests.filter((c) => c !== field) : [...prev.interests, field] }))
+  }
+
+  // 아카이브 JSON 파일로 내려받기
+  function EXPORT() {
+    const now = new Date()
+    const blob = new Blob([JSON.stringify(buildExport(archive, now), null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = exportFileName(now)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    // 바로 해제하면 일부 브라우저(특히 모바일)에서 내려받기가 시작되기 전에 취소되어 1초 늦춘다
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  // 아카이브 전체 삭제 (확인 후)
+  function WIPE() {
+    if (!window.confirm(`기록 ${records.length}개와 관심 분야를 모두 삭제합니다. 익명 공유한 별점·관람 시간도 서버에서 삭제합니다. 되돌릴 수 없습니다.\n먼저 내보내기로 백업해 두십시오.`)) return
+    // 저장소에서 지우지 못했으면 화면도 그대로 둔다 (화면만 비우면 새로고침 때 기록이 되살아나 헷갈린다)
+    if (!clearArchive(storage)) {
+      window.alert('브라우저 저장소에서 삭제하지 못했습니다. 잠시 후 다시 시도하십시오.')
+      return
+    }
+    // 서버의 내 공유 행 전부 삭제. 앞서 대기 중이던 전시별 작업은 버리고, 실패하면 '전체 삭제'로 다시 시도를 기다린다
+    shareQueue.submit({ type: 'deleteAll' })
+    setSaveFailed(false)
+    setArchive(emptyArchive())
+    setPicked(today)
+    const [year, month] = today.split('-').map(Number)
+    setView({ year, month: month - 1 })
   }
 
   return (
@@ -218,6 +230,15 @@ export default function Archive() {
 
       <div className="archive-layout">
         <div className="archive-main">
+          {saveFailed && <p className="archive-warning">브라우저에 저장하지 못했습니다. 새로고침하면 바뀐 내용이 사라질 수 있으니 내보내기로 백업해 두십시오.</p>}
+          {/* 공유·철회·전체 삭제가 서버에 반영되지 않으면 조용히 넘어가지 않고 알린다 (전체 삭제 버튼은 아래쪽에 있어서, 안내가 보이도록 맨 위에 둔다) */}
+          {sync.pendingCount > 0 && (
+            <p className="archive-warning" role="alert">
+              공유 변경을 서버에 반영하지 못했습니다 ({sync.pendingCount}건).{' '}
+              <button type="button" className="text-button" disabled={sync.busy} onClick={() => shareQueue.retryAll()}>다시 시도</button>
+            </p>
+          )}
+
           <div className="panel">
             <h2>기록</h2>
             <div className="record-inputs">
@@ -248,12 +269,6 @@ export default function Archive() {
               <span>별점과 실제 관람 시간을 익명으로 공유하는 데 동의합니다. 다른 사용자가 전시를 고를 때 참고합니다. 메모와 날짜는 공유하지 않습니다.</span>
             </label>
             <button type="button" className="primary-button" onClick={SAVE}>기록 저장</button>
-            {shareRetry && (
-              <p className="hint" role="alert">
-                공유하지 못했습니다.{' '}
-                <button type="button" className="text-button" disabled={retrying} onClick={() => void SEND_SHARE(shareRetry)}>다시 시도</button>
-              </p>
-            )}
           </div>
 
           <div className="panel">
@@ -275,18 +290,23 @@ export default function Archive() {
 
             <div className="diary">
               <h3>{FORMAT(picked)} 일기</h3>
-              {daily.length ? daily.map((entry) => <ITEM key={entry.id} entry={entry} map={map} share={SHARE} drop={DROP} />) : <p className="empty-result">이 날 남긴 기록이 없어요.</p>}
+              {daily.length ? daily.map((entry) => <ITEM key={entry.id} entry={entry} found={map.get(entry.exhibitionId)} today={today} share={SHARE} drop={DROP} />) : <p className="empty-result">이 날 남긴 기록이 없어요.</p>}
             </div>
           </div>
 
           <div className="panel">
             <div className="list-heading">
               <h2>전체 기록</h2>
-              <span>{valid.length}개</span>
+              <span>{records.length}개</span>
+            </div>
+            <div className="archive-tools">
+              <button type="button" onClick={EXPORT} disabled={!records.length && !interests.length}>내보내기(JSON)</button>
+              <button type="button" onClick={WIPE} disabled={!records.length && !interests.length}>아카이브 전체 삭제</button>
+              <span>내보낸 파일에는 메모도 포함됩니다.</span>
             </div>
             {sorted.length ? (
               <div className="record-list">
-                {sorted.map((entry) => <ITEM key={entry.id} entry={entry} map={map} share={SHARE} drop={DROP} />)}
+                {sorted.map((entry) => <ITEM key={entry.id} entry={entry} found={map.get(entry.exhibitionId)} today={today} share={SHARE} drop={DROP} />)}
               </div>
             ) : (
               <p className="empty-result">아직 기록이 없습니다. 위에서 첫 기록을 남기십시오.</p>
@@ -302,7 +322,7 @@ export default function Archive() {
               <p className="recommend-basis">높게 평가한(★4 이상) 전시와 같은 분류: {genres.join(', ')}</p>
             ) : (
               <>
-                <p className="recommend-basis">{valid.length ? '★4 이상 기록이 아직 없습니다. 관심 분야를 선택하십시오.' : '기록이 없습니다. 관심 분야를 먼저 선택하십시오.'}</p>
+                <p className="recommend-basis">{records.length ? '★4 이상 기록이 아직 없습니다. 관심 분야를 선택하십시오.' : '기록이 없습니다. 관심 분야를 먼저 선택하십시오.'}</p>
                 <div className="chips">
                   {fields.map((field) => (
                     <button key={field} type="button" className={interests.includes(field) ? 'chip chosen' : 'chip'} onClick={() => TOGGLE(field)}>{field}</button>

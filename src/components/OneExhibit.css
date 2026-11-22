@@ -161,3 +161,7 @@
     max-width: 220px;
   }
 }
+/* 방문 판정 사유: 사유마다 한 줄 */
+.one-reason {
+  display: block;
+}

@@ -404,28 +404,17 @@ function judgeWithoutVenue(input: Omit<JudgeInput, 'venue'>, sessionDate: boolea
  * (플래그 on이고 그날이 회차면 SESSION_DAY)를 낸다.
  */
 export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: ResolveResult): JudgeResult {
-  const src = resolved.source;
-  const hours = input.exhibition.operatingHours ?? src?.hours;
-  if (src && src.options.useExhibitionHours && hours?.scheduleType === 'scheduled' && isValidDate(input.date)) {
-    const wd = src.venue ? effectiveWeekday(src.venue, input.date, input.holidays) : weekdayOf(input.date);
-    const trusted = trustForDate(hours, input.date, input.holidays, wd);
-    const built = build(src.venue, trusted, src.options);
+  const dated = datedVenue(input, resolved);
+  if (dated) {
+    const { hours, basis, venue } = dated;
     const sessionDate = isSessionDate(hours, input.date, input.holidays);
-    if (built.venue === null) return judgeWithoutVenue(input, sessionDate);
-    let venue = built.venue;
-    // 전시가 그날 확실히 쉬면 지정 휴관일로 막는다. 시설이 이미 쉬는 날이면 시설 사유를 그대로 둔다
-    if (trusted[wd] === 'closed' && isOpen(venue, input.date, input.holidays).status !== 'closed') {
-      venue = {
-        ...venue,
-        closed: { ...venue.closed, dates: [...(venue.closed?.dates ?? []), input.date] },
-      };
-    }
+    if (venue === null) return judgeWithoutVenue(input, sessionDate);
     const judged = judge({ ...input, venue });
     const result = sessionDate ? applySessionDay(judged) : judged;
     // 근거가 전시 문구뿐(시설 규칙이 그날을 정하지 않음)인 공휴일에 원문이 공휴일을 언급하지 않았으면
     // 그날 여는지 모른다. 그날만 따로 적힌 날짜 예외(exceptions)가 있으면 안내된 것으로 본다
     const holidayUnstated =
-      built.basis === 'exhibition' &&
+      basis === 'exhibition' &&
       input.holidays.includes(input.date) &&
       !mentionsHoliday(hours, input.exhibition.hoursText) &&
       pickDaySchedule(hours, input.date, input.holidays)?.source !== 'exception';
@@ -434,4 +423,43 @@ export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: Resolv
 
   if (resolved.venue === null) return judgeWithoutVenue(input, false);
   return judge({ ...input, venue: resolved.venue });
+}
+
+/**
+ * judgeResolved가 판정 날짜의 전시 일정으로 다시 만드는 판정용 시설. 그 경로가 아니면 null.
+ * (useExhibitionHours가 true, 일정이 'scheduled', 날짜가 올바를 때만)
+ */
+function datedVenue(
+  input: Pick<JudgeInput, 'exhibition' | 'date' | 'holidays'>,
+  resolved: ResolveResult,
+): { hours: ParsedOperatingHours; basis: ResolveBasis | null; venue: ResolvedVenue | null } | null {
+  const src = resolved.source;
+  const hours = input.exhibition.operatingHours ?? src?.hours;
+  if (!src || !src.options.useExhibitionHours || hours?.scheduleType !== 'scheduled' || !isValidDate(input.date)) {
+    return null;
+  }
+  const wd = src.venue ? effectiveWeekday(src.venue, input.date, input.holidays) : weekdayOf(input.date);
+  const trusted = trustForDate(hours, input.date, input.holidays, wd);
+  const built = build(src.venue, trusted, src.options);
+  let venue = built.venue;
+  // 전시가 그날 확실히 쉬면 지정 휴관일로 막는다. 시설이 이미 쉬는 날이면 시설 사유를 그대로 둔다
+  if (venue && trusted[wd] === 'closed' && isOpen(venue, input.date, input.holidays).status !== 'closed') {
+    venue = {
+      ...venue,
+      closed: { ...venue.closed, dates: [...(venue.closed?.dates ?? []), input.date] },
+    };
+  }
+  return { hours, basis: built.basis, venue };
+}
+
+/**
+ * 판정 날짜에 judge가 실제로 받는 시설 정보(판정용 시설이 없으면 null).
+ * 화면이 판정 사유와 같은 근거로 입장 마감 등을 보이도록 내보낸다. judgeResolved와 같은 규칙이다.
+ */
+export function venueForDate(
+  input: Pick<JudgeInput, 'exhibition' | 'date' | 'holidays'>,
+  resolved: ResolveResult,
+): ResolvedVenue | null {
+  const dated = datedVenue(input, resolved);
+  return dated ? dated.venue : resolved.venue;
 }

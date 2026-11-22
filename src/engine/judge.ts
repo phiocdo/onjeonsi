@@ -52,6 +52,22 @@ export function precheck(input: Pick<JudgeInput, 'exhibition' | 'date' | 'staySt
   return { valid: true, sStart, end, outOfPeriod: date < exhibition.start || date > exhibition.end };
 }
 
+/**
+ * 판정에 쓸 요일(wd)의 운영 구간과 구간별 입장 마감(가공 전 값). judge와 화면 표시가 같이 쓴다.
+ * 구간이 여러 개인 요일은 intervalsByDay, 아니면 hours[wd] 하나. hours[wd]가 없으면 [].
+ * 입장 마감: lastEntryByDay[wd](전시 근거) > 그날 폐관 − N(lastEntryBeforeClose) > lastEntry > 없음(undefined → 폐관 기준)
+ * 값이 ''이면 형식 오류(MISSING_LAST_ENTRY)다. 폐관보다 늦은 값은 checkWindow가 폐관 시각으로 줄인다.
+ */
+export function dayWindows(venue: ResolvedVenue, wd: Weekday): ResolvedInterval[] {
+  const hours = venue.hours?.[wd];
+  if (!hours) return [];
+  const dayLastEntry = venueLastEntry(venue, wd);
+  const multi = venue.intervalsByDay?.[wd];
+  return multi && multi.length > 0
+    ? multi.map((iv) => ({ ...iv, lastEntry: iv.lastEntry ?? dayLastEntry }))
+    : [{ open: hours.open, close: hours.close, lastEntry: venue.lastEntryByDay?.[wd] ?? dayLastEntry }];
+}
+
 /** 구간 하나를 판정한 결과. */
 interface WindowCheck {
   violations: string[];
@@ -131,16 +147,10 @@ export const judge: JudgeFn = (input) => {
     return { result: 'unknown', reasons: [op.reason], basis };
   }
 
-  // 3) 그날의 운영 구간. 구간이 여러 개인 요일은 intervalsByDay, 아니면 hours 하나.
-  // 요일은 판정에 쓸 요일(공휴일이면 holidayAs)이다.
-  // 입장 마감: lastEntryByDay[wd](전시 근거) > 그날 폐관 − N(lastEntryBeforeClose) > lastEntry > 없음(폐관 기준)
+  // 3) 그날의 운영 구간과 입장 마감(dayWindows). 요일은 판정에 쓸 요일(공휴일이면 holidayAs)이다.
+  // op가 open이면 hours[wd]가 있으므로 windows는 비지 않는다(op.open/close == hours[wd]).
   const wd = effectiveWeekday(venue, date, holidays);
-  const dayLastEntry = venueLastEntry(venue, wd);
-  const multi = venue.intervalsByDay?.[wd];
-  const windows: ResolvedInterval[] =
-    multi && multi.length > 0
-      ? multi.map((iv) => ({ ...iv, lastEntry: iv.lastEntry ?? dayLastEntry }))
-      : [{ open: op.open, close: op.close, lastEntry: venue.lastEntryByDay?.[wd] ?? dayLastEntry }];
+  const windows = dayWindows(venue, wd);
 
   const d = venue.visitMinutes ?? DEFAULT_VISIT_MINUTES;
   const checks: WindowCheck[] = [];

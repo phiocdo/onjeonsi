@@ -127,10 +127,10 @@ function CHIP({ on, run, children }: { on: boolean; run: () => void; children: R
 }
 
 // 전시 카드 및 정복 오버레이
-function CARD({ ex, time, done }: { ex: Item; time: string; done: boolean }) {
+function CARD({ ex, date, time, done }: { ex: Item; date: string; time: string; done: boolean }) {
   return (
     <div className={done ? 'conquered-card' : undefined}>
-      <OneExhibit id={ex.id} judge={ex.judge} title={ex.title} venue={ex.placeName} status={STATUS[ex.judge.result]} poster={ex.poster} lines={[ex.distance == null ? '위치 정보 없음' : `${ex.distance}m`, LINE(ex.judge, time)]} />
+      <OneExhibit id={ex.id} judge={ex.judge} date={date} title={ex.title} venue={ex.placeName} status={STATUS[ex.judge.result]} poster={ex.poster} lines={[ex.distance == null ? '위치 정보 없음' : `${ex.distance}m`, LINE(ex.judge, time)]} />
       {done && (
         <div className="conquered-veil" aria-label="정복 완료">
           <span className="conquered-stamp">관람</span>
@@ -219,7 +219,7 @@ function NearbyExhibitions() {
   const [time, setTime] = useState(init.time)
   const [stay, setStay] = useState(120)
 
-  const go = useCallback((item: Item) => OPEN(item.id, item.judge), [])
+  const go = useCallback((item: Item) => OPEN(item.id, item.judge, date), [date])
 
   const judged = useMemo(() => {
     const active = catalog.filter(({ exhibition }) => exhibition.start <= date && date <= exhibition.end)
@@ -323,7 +323,7 @@ function NearbyExhibitions() {
       {list.length ? (
         <div className="card-grid">
           {list.map((ex) => (
-            <CARD key={ex.id} ex={ex} time={time} done={done.has(ex.id)} />
+            <CARD key={ex.id} ex={ex} date={date} time={time} done={done.has(ex.id)} />
           ))}
         </div>
       ) : (

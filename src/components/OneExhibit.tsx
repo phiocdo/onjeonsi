@@ -1,5 +1,7 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { basisLabel, displayLocation, displayVenueName, getCatalog, getHolidays, judgeEntry, todayInSeoul, type CatalogEntry } from '../lib/catalog'
+import { similarExhibitions } from '../lib/similar'
+import { sharedTags, tagsOf } from '../lib/tags'
 import type { JudgeResult, Venue, Weekday } from '../types'
 import './OneExhibit.css'
 
@@ -82,9 +84,32 @@ function DETAIL(entry: CatalogEntry, passed?: JudgeResult): Detail {
   }
 }
 
+type Similar = { id: string; title: string; venue: string; poster?: string; tags: string; judge: JudgeResult; status: Status }
+
+// 비슷한 전시 카드 조립. 판정은 고른 카드에 대해서만 오늘 지금 기준으로 계산한다
+function SIMILAR(id: string | undefined): Similar[] {
+  if (!id) return []
+  const catalog = getCatalog()
+  const target = catalog.find((item) => item.exhibition.id === id)
+  if (!target) return []
+  const { date, time } = NOW()
+  const mine = tagsOf(target)
+  return similarExhibitions(target, catalog, { today: date }).map((entry) => {
+    const judge = judgeEntry(entry, { date, stayStart: time, stayEnd: '23:59' }, getHolidays())
+    const common = sharedTags(mine, tagsOf(entry)).slice(0, 2)
+    return {
+      id: entry.exhibition.id, title: entry.exhibition.title, venue: displayVenueName(entry) || EMPTY,
+      poster: entry.exhibition.imageUrl || undefined, tags: common.length ? common.join(' · ') : '같은 장소',
+      judge, status: STATUS[judge.result]
+    }
+  })
+}
+
 // 전시 상세 창
 export function WINDOW() {
   const [pick, setPick] = useState<Pick | null>(CURRENT)
+  // 상세 창이 열리거나 다른 전시로 바뀔 때만 다시 계산
+  const similar = useMemo(() => SIMILAR(pick?.id), [pick])
 
   useEffect(() => {
     LISTENERS.add(setPick)
@@ -177,6 +202,33 @@ export function WINDOW() {
                 </div>
               </div>
             </div>
+          )}
+
+          {detail && similar.length > 0 && (
+            <section className="info-block one-similar" aria-label="비슷한 전시">
+              <h3>비슷한 전시</h3>
+              <div className="one-similar-list">
+                {similar.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="one-card"
+                    onClick={(e) => { e.currentTarget.closest('.one-body')?.scrollTo({ top: 0 }); OPEN(item.id, item.judge) }}
+                  >
+                    {item.poster && (
+                      <div className="one-poster">
+                        <img src={item.poster} alt={item.title} loading="lazy" decoding="async" />
+                        <span className={`status-tag ${TAG[item.status]}`}>{item.status}</span>
+                      </div>
+                    )}
+                    {!item.poster && <span className={`tag ${TAG[item.status]} one-similar-status`}>{item.status}</span>}
+                    <strong>{item.title}</strong>
+                    <span className="one-sub">{item.venue}</span>
+                    <span className="one-source">{item.tags}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
           )}
         </div>
       </div>

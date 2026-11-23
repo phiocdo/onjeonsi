@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { calculateDistance, type Coordinate } from '../engine/distance'
 import { rankExhibitions } from '../engine/sort'
 import { readVisitedIds } from '../lib/archive'
-import { basisLabel, displayLocation, displayVenueName, getCatalog, getHolidays, judgeCatalog, todayInSeoul, type JudgedEntry } from '../lib/catalog'
+import { basisLabel, displayLocation, displayVenueName, getCatalog, getHolidays, judgeCatalog, todayInSeoul, type CatalogQuery, type JudgedEntry } from '../lib/catalog'
 import type { JudgeResult } from '../types'
 import OneExhibit, { OPEN } from '../components/OneExhibit'
 import './NearbyExhibitions.css'
@@ -127,10 +127,10 @@ function CHIP({ on, run, children }: { on: boolean; run: () => void; children: R
 }
 
 // 전시 카드 및 정복 오버레이
-function CARD({ ex, date, time, done }: { ex: Item; date: string; time: string; done: boolean }) {
+function CARD({ ex, cond, time, done }: { ex: Item; cond: CatalogQuery; time: string; done: boolean }) {
   return (
     <div className={done ? 'conquered-card' : undefined}>
-      <OneExhibit id={ex.id} judge={ex.judge} date={date} title={ex.title} venue={ex.placeName} status={STATUS[ex.judge.result]} poster={ex.poster} lines={[ex.distance == null ? '위치 정보 없음' : `${ex.distance}m`, LINE(ex.judge, time)]} />
+      <OneExhibit id={ex.id} judge={ex.judge} cond={cond} title={ex.title} venue={ex.placeName} status={STATUS[ex.judge.result]} poster={ex.poster} lines={[ex.distance == null ? '위치 정보 없음' : `${ex.distance}m`, LINE(ex.judge, time)]} />
       {done && (
         <div className="conquered-veil" aria-label="정복 완료">
           <span className="conquered-stamp">관람</span>
@@ -219,15 +219,17 @@ function NearbyExhibitions() {
   const [time, setTime] = useState(init.time)
   const [stay, setStay] = useState(120)
 
-  const go = useCallback((item: Item) => OPEN(item.id, item.judge, date), [date])
+  // 판정 조건. 목록 판정과 상세 창(목록 카드·지도 정보창·위치 없는 전시 팝업)이 같은 값을 쓴다
+  const cond = useMemo<CatalogQuery>(() => ({ date, stayStart: time, stayEnd: END(time, stay) }), [date, time, stay])
+  const go = useCallback((item: Item) => OPEN(item.id, item.judge, cond), [cond])
 
   const judged = useMemo(() => {
     const active = catalog.filter(({ exhibition }) => exhibition.start <= date && date <= exhibition.end)
-    return judgeCatalog(active, { date, stayStart: time, stayEnd: END(time, stay) }, holidays).map((j) => {
+    return judgeCatalog(active, cond, holidays).map((j) => {
       const loc = displayLocation(j.entry)
       return { j, pos: loc && loc.lat !== 0 && loc.lng !== 0 ? loc : null }
     })
-  }, [catalog, holidays, date, time, stay])
+  }, [catalog, holidays, date, cond])
 
   const all = useMemo(() => rankExhibitions(judged.filter((r): r is { j: JudgedEntry; pos: Coordinate } => r.pos !== null).map(({ j, pos }) => {
     const dist = calculateDistance(center, pos)
@@ -323,7 +325,7 @@ function NearbyExhibitions() {
       {list.length ? (
         <div className="card-grid">
           {list.map((ex) => (
-            <CARD key={ex.id} ex={ex} date={date} time={time} done={done.has(ex.id)} />
+            <CARD key={ex.id} ex={ex} cond={cond} time={time} done={done.has(ex.id)} />
           ))}
         </div>
       ) : (

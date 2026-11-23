@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { fetchStats } from '../lib/sharedRatings'
 
 type TAB_ITEM = {
   TO: string
@@ -27,6 +29,10 @@ const ACTIVE = (PATHNAME: string): TAB_ITEM => {
 export default function LAYOUT() {
   const LOCATION = useLocation()
   const ACTIVE_TAB = ACTIVE(LOCATION.pathname)
+
+  useEffect(() => {
+    void fetchStats()
+  }, [])
 
   return (
     <main className="site-shell">

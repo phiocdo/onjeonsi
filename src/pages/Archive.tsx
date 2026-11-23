@@ -1,18 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { OPEN } from '../components/OneExhibit'
 import { displayVenueName, getCatalog, todayInSeoul, type CatalogEntry } from '../lib/catalog'
 import { fromVisitRecord, getRatingSummary } from '../lib/ratings'
 import { recommendPersonal, type Candidate } from '../lib/recommend'
+import { SEED_RECORDS } from '../lib/seed'
+import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
+import { backfillShared, clearAndSync, saveAndSync, shareQueue } from '../lib/shareSync'
 import {
   ARCHIVE_KEY,
   browserStorage,
   buildExport,
-  clearArchive,
   createRecord,
   emptyArchive,
   exportFileName,
   loadArchive,
-  saveArchive,
   viewOf,
   type RecordStatus,
 } from '../lib/archive'
@@ -82,6 +83,9 @@ export default function Archive() {
   const [time, setTime] = useState('70')
   const [note, setNote] = useState('')
   const [shared, setShared] = useState(false)
+  const stats = useSyncExternalStore(subscribeStats, getCachedStats)
+  // 서버에 반영하지 못한 공유 변경 (메모리에만 있음, src/lib/shareSync.ts 참고)
+  const sync = useSyncExternalStore(shareQueue.subscribe, shareQueue.getSnapshot)
   const [picked, setPicked] = useState(() => LATEST(archive.records))
   const [view, setView] = useState(() => {
     const [year, month] = LATEST(archive.records).split('-').map(Number)
@@ -99,6 +103,11 @@ export default function Archive() {
     return () => window.removeEventListener('storage', onStorage)
   }, [storage, map])
 
+  // 서버 연동 전부터 공유 중이던 기록은 서버에 없으므로 처음 열 때 한 번 올린다 (브라우저에 표시를 남겨 다시 하지 않음)
+  useEffect(() => {
+    backfillShared(storage, loaded.data.records)
+  }, [storage, loaded])
+
   const { records, interests } = archive
   const sorted = useMemo(() => [...records].sort(NEWEST), [records])
   const dates = useMemo(() => new Set(records.map((r) => r.date)), [records])
@@ -111,13 +120,13 @@ export default function Archive() {
     const candidates: Candidate[] = catalog.filter((c) => c.exhibition.end >= today).map((c) => ({ id: c.exhibition.id, venueId: c.venue?.id ?? null, field: c.exhibition.field ?? null, distanceM: null, result: 'possible' }))
     // 분야는 전시 정보 사본에서 가져온다 (카탈로그에 있으면 읽을 때 최신으로 고쳐져 있다)
     const myRecords = records.map((r) => ({ ...fromVisitRecord(r), field: r.exhibition.field }))
-    const ratingOf = (c: Candidate) => getRatingSummary(c.id, c.venueId, { shared: [], seed: [] })
+    const ratingOf = (c: Candidate) => getRatingSummary(c.id, c.venueId, { stats, seed: SEED_RECORDS })
     const { items } = recommendPersonal(candidates, { myRecords, interests, seenIds: records.map((r) => r.exhibitionId), ratingOf, popularVenueIds: [], limit: 4 })
     return items.flatMap((item) => {
       const entry = map.get(item.id)
       return entry ? [{ entry, reason: item.reason }] : []
     })
-  }, [catalog, today, records, map, interests])
+  }, [catalog, today, records, map, interests, stats])
 
   const first = new Date(view.year, view.month, 1).getDay()
   const last = new Date(view.year, view.month + 1, 0).getDate()
@@ -134,11 +143,12 @@ export default function Archive() {
     setView({ year: next.getFullYear(), month: next.getMonth() })
   }
 
-  // 아카이브 상태 변경 + 브라우저 저장
-  function UPDATE(change: (prev: ArchiveData) => ArchiveData) {
+  // 아카이브 상태 변경 + 브라우저 저장. 저장에 성공했을 때만 syncIds 전시의 익명 공유를 서버에 맞춘다
+  // (공유 중인 최신 기록 upsert, 없으면 delete. 저장에 실패했는데 보내면 새로고침 때 기록은 사라지고 서버 행만 남는다)
+  function UPDATE(change: (prev: ArchiveData) => ArchiveData, syncIds: readonly string[] = []) {
     const next = change(archive)
     setArchive(next)
-    setSaveFailed(!saveArchive(storage, next))
+    setSaveFailed(!saveAndSync(storage, next, syncIds))
   }
 
   // 관람 기록 검증 및 저장
@@ -149,22 +159,26 @@ export default function Archive() {
     // 별점·관람 시간(10~480분 정수, 소수는 반올림)·날짜 검증은 createRecord가 한다
     const entry = createRecord({ entry: found, date, rating: Number(rating), visitMinutes: Number(time), note, shared })
     if (!entry) return
-    UPDATE((prev) => ({ ...prev, records: [entry, ...prev.records] }))
+    // 공유에 동의한 기록만 서버에 보낸다 (값은 createRecord가 검증·반올림한 entry 기준)
+    UPDATE((prev) => ({ ...prev, records: [entry, ...prev.records] }), entry.shared ? [entry.exhibitionId] : [])
     setPicked(entry.date)
     const [year, month] = entry.date.split('-').map(Number)
     setView({ year, month: month - 1 })
     setNote('')
   }
 
-  // 기록 공유 상태
+  // 기록 공유 상태 (켜기·끄기 모두 서버에 반영)
   function SHARE(id: string) {
-    UPDATE((prev) => ({ ...prev, records: prev.records.map((r) => (r.id === id ? { ...r, shared: !r.shared } : r)) }))
+    const target = records.find((r) => r.id === id)
+    if (!target) return
+    UPDATE((prev) => ({ ...prev, records: prev.records.map((r) => (r.id === id ? { ...r, shared: !r.shared } : r)) }), [target.exhibitionId])
   }
 
-  // 관람 기록 삭제 (확인 후)
+  // 관람 기록 삭제 (확인 후). 공유 중이던 기록이면 서버도 맞춘다
   function DROP(id: string) {
     if (!window.confirm('이 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.')) return
-    UPDATE((prev) => ({ ...prev, records: prev.records.filter((r) => r.id !== id) }))
+    const target = records.find((r) => r.id === id)
+    UPDATE((prev) => ({ ...prev, records: prev.records.filter((r) => r.id !== id) }), target?.shared ? [target.exhibitionId] : [])
   }
 
   // 관심 분야 토글
@@ -189,9 +203,10 @@ export default function Archive() {
 
   // 아카이브 전체 삭제 (확인 후)
   function WIPE() {
-    if (!window.confirm(`기록 ${records.length}개와 관심 분야를 모두 삭제합니다. 되돌릴 수 없습니다.\n먼저 내보내기로 백업해 두십시오.`)) return
-    // 저장소에서 지우지 못했으면 화면도 그대로 둔다 (화면만 비우면 새로고침 때 기록이 되살아나 헷갈린다)
-    if (!clearArchive(storage)) {
+    if (!window.confirm(`기록 ${records.length}개와 관심 분야를 모두 삭제합니다. 익명 공유한 별점·관람 시간도 서버에서 삭제합니다. 되돌릴 수 없습니다.\n먼저 내보내기로 백업해 두십시오.`)) return
+    // 저장소에서 지우지 못했으면 화면도 그대로 두고 서버도 부르지 않는다 (화면만 비우면 새로고침 때 기록이 되살아나 헷갈린다)
+    // 지웠으면 서버의 내 공유 행 전부 삭제. 앞서 대기 중이던 전시별 작업은 버리고, 실패하면 '전체 삭제'로 다시 시도를 기다린다
+    if (!clearAndSync(storage)) {
       window.alert('브라우저 저장소에서 삭제하지 못했습니다. 잠시 후 다시 시도하십시오.')
       return
     }
@@ -209,6 +224,13 @@ export default function Archive() {
       <div className="archive-layout">
         <div className="archive-main">
           {saveFailed && <p className="archive-warning">브라우저에 저장하지 못했습니다. 새로고침하면 바뀐 내용이 사라질 수 있으니 내보내기로 백업해 두십시오.</p>}
+          {/* 공유·철회·전체 삭제가 서버에 반영되지 않으면 조용히 넘어가지 않고 알린다 (전체 삭제 버튼은 아래쪽에 있어서, 안내가 보이도록 맨 위에 둔다) */}
+          {sync.pendingCount > 0 && (
+            <p className="archive-warning" role="alert">
+              공유 변경을 서버에 반영하지 못했습니다 ({sync.pendingCount}건).{' '}
+              <button type="button" className="text-button" disabled={sync.busy} onClick={() => shareQueue.retryAll()}>다시 시도</button>
+            </p>
+          )}
 
           <div className="panel">
             <h2>기록</h2>

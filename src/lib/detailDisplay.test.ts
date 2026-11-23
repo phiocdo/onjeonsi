@@ -5,7 +5,7 @@ import { REASONS } from '../engine/reasons';
 import semaJson from '../../data/venues/venue-sema.json';
 import exhibitionsJson from '../../data/exhibitions/auto.json';
 import { buildCatalog, judgeEntry, type CatalogEntry } from './catalog';
-import { entryLastEntryLabel, lastEntryLabel, reasonLines } from './detailDisplay';
+import { detailQuery, entryLastEntryLabel, lastEntryLabel, reasonLines, similarWithJudge } from './detailDisplay';
 
 // 2026-11-22 일요일, 2026-11-23 월요일, 2026-11-27 금요일, 2026-11-24 화요일
 const SUN = '2026-11-22';
@@ -255,5 +255,88 @@ describe('reasonLines', () => {
     expect(reasonLines({ reasons: [], basis: 'exhibition' })).toEqual(['전시 안내 기준']);
     expect(reasonLines({ reasons: [REASONS.MISSING_VENUE] })).toEqual(['시설 정보가 없습니다']);
     expect(reasonLines({ reasons: [] })).toEqual([]);
+  });
+});
+
+describe('detailQuery: 상세 창 판정 조건', () => {
+  const NOW_MON = { date: MON, time: '14:00' };
+
+  it('조건 없음 → 오늘 지금 ~ 23:59', () => {
+    expect(detailQuery(undefined, NOW_MON)).toEqual({ date: MON, stayStart: '14:00', stayEnd: '23:59' });
+    expect(detailQuery(null, NOW_MON)).toEqual({ date: MON, stayStart: '14:00', stayEnd: '23:59' });
+  });
+
+  it('날짜만 있음 → 그 날짜, 시각은 상세 창 기본값(지금 ~ 23:59)', () => {
+    expect(detailQuery({ date: MON }, NOW_MON)).toEqual({ date: MON, stayStart: '14:00', stayEnd: '23:59' });
+    expect(detailQuery({ date: SUN }, NOW_MON)).toEqual({ date: SUN, stayStart: '14:00', stayEnd: '23:59' });
+  });
+
+  it('다른 날짜 + 시간대 → 그대로 쓴다', () => {
+    expect(detailQuery({ date: FRI, stayStart: '16:00', stayEnd: '17:30' }, NOW_MON)).toEqual({
+      date: FRI,
+      stayStart: '16:00',
+      stayEnd: '17:30',
+    });
+  });
+
+  it('한쪽만 있으면 빈 쪽만 기본값으로 채운다', () => {
+    expect(detailQuery({ date: FRI, stayStart: '16:00' }, NOW_MON)).toEqual({ date: FRI, stayStart: '16:00', stayEnd: '23:59' });
+    expect(detailQuery({ date: FRI, stayEnd: '17:30' }, NOW_MON)).toEqual({ date: FRI, stayStart: '14:00', stayEnd: '17:30' });
+  });
+
+  it('결과를 다시 넣어도 같다(비슷한 전시 카드를 눌러도 기준이 바뀌지 않음)', () => {
+    const q = detailQuery({ date: SUN, stayStart: '10:00', stayEnd: '12:00' }, NOW_MON);
+    expect(detailQuery(q, { date: TUE, time: '09:00' })).toEqual(q);
+  });
+});
+
+describe('similarWithJudge: 상세 창과 같은 조건으로 비슷한 전시를 판정', () => {
+  // BASE: 월요일 휴관, 화~일 10:00~18:00. 모두 '수묵' 태그를 공유한다
+  const ex = (id: string, title: string, start = '2026-11-01', end = '2026-12-31'): Exhibition =>
+    ({ id, venueId: '', title, start, end, placeName: '가나다미술관' }) as Exhibition;
+  const list = [ex('t', '수묵 산수'), ex('a', '수묵 풍경'), ex('b', '수묵 인물'), ex('late', '수묵 신작', TUE)];
+  const catalog = buildCatalog(list, [BASE], Object.fromEntries(list.map((e) => [e.id, BASE.id])));
+  const target = catalog[0];
+  const NOW_MON = { date: MON, time: '14:00' };
+  const ids = (cards: { entry: CatalogEntry }[]) => cards.map((c) => c.entry.exhibition.id).sort();
+
+  it('조건 없음 → 오늘(월, 휴관) 지금 기준으로 판정한다', () => {
+    const q = detailQuery(undefined, NOW_MON);
+    const cards = similarWithJudge(target, catalog, q, []);
+    expect(ids(cards)).toEqual(['a', 'b']);
+    for (const c of cards) {
+      expect(c.judge).toEqual(judgeEntry(c.entry, { date: MON, stayStart: '14:00', stayEnd: '23:59' }, []));
+      expect(c.judge.result).toBe('impossible');
+    }
+  });
+
+  it('다른 날짜 + 시간대 → 그 조건으로 판정하고, 상세 창 판정과 같은 조건이다', () => {
+    const q = detailQuery({ date: SUN, stayStart: '10:00', stayEnd: '12:00' }, NOW_MON);
+    const cards = similarWithJudge(target, catalog, q, []);
+    expect(cards.length).toBeGreaterThan(0);
+    for (const c of cards) {
+      expect(c.judge.result).toBe('possible');
+      expect(c.judge).toEqual(judgeEntry(c.entry, q, []));
+    }
+    // 같은 날짜라도 시간대가 다르면 결과가 달라진다(시간대까지 같은 조건을 쓴다는 확인)
+    const evening = detailQuery({ date: SUN, stayStart: '18:30', stayEnd: '19:00' }, NOW_MON);
+    for (const c of similarWithJudge(target, catalog, evening, [])) expect(c.judge.result).toBe('impossible');
+  });
+
+  it('후보도 조건 날짜 기준이다: 화요일에 시작하는 전시는 월요일 조건엔 없고 금요일 조건엔 있다', () => {
+    expect(ids(similarWithJudge(target, catalog, detailQuery(undefined, NOW_MON), []))).not.toContain('late');
+    expect(ids(similarWithJudge(target, catalog, detailQuery({ date: FRI }, NOW_MON), []))).toContain('late');
+  });
+
+  it('카드를 눌러 연 상세 창은 같은 조건·같은 판정을 유지한다(입장 마감 표시 날짜도 같다)', () => {
+    const q = detailQuery({ date: SUN, stayStart: '10:00', stayEnd: '12:00' }, NOW_MON);
+    const card = similarWithJudge(target, catalog, q, [])[0];
+    // 카드 → OPEN(id, judge, q) → 다음 상세 창은 detailQuery(q, 지금)을 쓴다
+    const next = detailQuery(q, { date: MON, time: '15:00' });
+    expect(next).toEqual(q);
+    expect(judgeEntry(card.entry, next, [])).toEqual(card.judge);
+    expect(entryLastEntryLabel(card.entry, next.date, [])).toBe(entryLastEntryLabel(card.entry, SUN, []));
+    // 다음 상세 창의 비슷한 전시도 같은 조건으로 판정한다
+    for (const c of similarWithJudge(card.entry, catalog, next, [])) expect(c.judge).toEqual(judgeEntry(c.entry, q, []));
   });
 });

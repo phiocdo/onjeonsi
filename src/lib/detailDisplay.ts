@@ -8,7 +8,8 @@ import { dayWindows, type ResolvedVenue } from '../engine/judge';
 import { effectiveWeekday, isOpen } from '../engine/isOpen';
 import { venueForDate } from '../engine/resolveSchedule';
 import { fromMinutes, toMinutes } from '../engine/time';
-import { basisLabel, type CatalogEntry } from './catalog';
+import { basisLabel, judgeEntry, type CatalogEntry, type CatalogQuery } from './catalog';
+import { similarExhibitions } from './similar';
 
 const EMPTY = '정보 없음';
 const ASSUMED = '정보 없음 (폐관 시각 기준으로 판정)';
@@ -80,6 +81,50 @@ export function lastEntryLabel(venue: ResolvedVenue | null, date: string, holida
 export function entryLastEntryLabel(entry: CatalogEntry, date: string, holidays: string[], day = '오늘'): string {
   const venue = venueForDate({ exhibition: entry.exhibition, date, holidays }, entry.resolved);
   return lastEntryLabel(venue, date, holidays, day);
+}
+
+/**
+ * 상세 창을 열 때 넘기는 판정 조건. 넘긴 판정(judge)을 계산한 조건과 같아야 한다.
+ * stayStart/stayEnd가 없으면 detailQuery의 기본 규칙으로 채운다.
+ */
+export interface DetailCondition {
+  date: string;
+  stayStart?: string;
+  stayEnd?: string;
+}
+
+/** 상세 창 기본 머물 끝 시각 */
+const DAY_END = '23:59';
+
+/**
+ * 상세 창 판정 조건을 정한다. 상세 창의 판정·입장 마감·비슷한 전시 카드가 모두 이 결과를 쓴다.
+ * - 조건 없음 → 오늘(now.date) 지금(now.time) ~ 23:59
+ * - 날짜만 있음 → 그 날짜, 시각은 상세 창 기존 기본값(지금 ~ 23:59). 오늘이든 다른 날이든 같다
+ * - stayStart/stayEnd가 있으면 그 값을 그대로 쓴다
+ * now는 서울 기준 { date: YYYY-MM-DD, time: HH:MM }.
+ */
+export function detailQuery(cond: DetailCondition | null | undefined, now: { date: string; time: string }): CatalogQuery {
+  return {
+    date: cond?.date ?? now.date,
+    stayStart: cond?.stayStart ?? now.time,
+    stayEnd: cond?.stayEnd ?? DAY_END,
+  };
+}
+
+/**
+ * 비슷한 전시 카드와 그 판정. 후보(진행 중 여부)와 판정 모두 상세 창과 같은 조건(query)으로 계산한다.
+ * 카드를 누를 때 judge와 query를 함께 넘기면 다음 상세 창도 같은 기준을 유지한다.
+ */
+export function similarWithJudge(
+  target: CatalogEntry,
+  catalog: readonly CatalogEntry[],
+  query: CatalogQuery,
+  holidays: string[],
+): { entry: CatalogEntry; judge: JudgeResult }[] {
+  return similarExhibitions(target, catalog, { today: query.date }).map((entry) => ({
+    entry,
+    judge: judgeEntry(entry, query, holidays),
+  }));
 }
 
 /**

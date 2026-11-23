@@ -1,15 +1,19 @@
-import { useEffect, useState, type CSSProperties } from 'react'
-import { displayLocation, displayVenueName, getCatalog, getHolidays, judgeEntry, todayInSeoul, type CatalogEntry } from '../lib/catalog'
-import { entryLastEntryLabel, reasonLines } from '../lib/detailDisplay'
+import { useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { displayLocation, displayVenueName, getCatalog, getHolidays, judgeEntry, todayInSeoul, type CatalogEntry, type CatalogQuery } from '../lib/catalog'
+import { detailQuery, entryLastEntryLabel, reasonLines, similarWithJudge, type DetailCondition } from '../lib/detailDisplay'
+import { getRatingSummary } from '../lib/ratings'
+import { SEED_RECORDS } from '../lib/seed'
+import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
+import { sharedTags, tagsOf } from '../lib/tags'
 import type { JudgeResult, Venue, Weekday } from '../types'
 import './OneExhibit.css'
 
 export type Status = '가능' | '불가' | '확인 필요'
-// date: judge를 계산한 날짜(YYYY-MM-DD). 없으면 오늘(서울)로 본다
-type Pick = { id: string; judge?: JudgeResult; date?: string }
+// cond: judge를 계산한 판정 조건. 없으면 오늘(서울) 지금 기준으로 본다
+type Pick = { id: string; judge?: JudgeResult; cond?: DetailCondition }
 type Listener = (pick: Pick | null) => void
-// date: judge를 계산한 날짜. 없으면 상세 창이 오늘(서울)로 본다
-type Props = { id: string; title: string; venue: string; status: Status; judge?: JudgeResult; date?: string; poster?: string; lines?: string[] }
+// cond: judge를 계산한 판정 조건. 없으면 상세 창이 오늘(서울) 지금 기준으로 본다
+type Props = { id: string; title: string; venue: string; status: Status; judge?: JudgeResult; cond?: DetailCondition; poster?: string; lines?: string[] }
 type Detail = {
   title: string; venue: string; eyebrow: string; poster?: string; period: string; hours: string; closed: string; lastEntry: string
   entry: string; reservation: string; duration: string; status: Status; reasons: string[]; source: string; checked: string
@@ -25,9 +29,9 @@ const LISTENERS = new Set<Listener>()
 const BAR: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }
 let CURRENT: Pick | null = null
 
-// 상세 창 열기. 다른 날짜로 판정한 결과를 넘길 때는 그 날짜도 넘긴다(입장 마감 표시를 같은 날로 맞춤)
-export function OPEN(id: string, judge?: JudgeResult, date?: string) {
-  CURRENT = { id, judge, date }
+// 상세 창 열기. 판정 결과를 넘길 때는 그 판정 조건(날짜·시각)도 넘긴다(입장 마감·비슷한 전시를 같은 기준으로 맞춤)
+export function OPEN(id: string, judge?: JudgeResult, cond?: DetailCondition) {
+  CURRENT = { id, judge, cond }
   LISTENERS.forEach((fn) => fn(CURRENT))
 }
 
@@ -69,22 +73,22 @@ function DAYNAME(date: string): string {
 }
 
 // 전시 상세 정보 조립
-function DETAIL(entry: CatalogEntry, passed?: JudgeResult, passedDate?: string): Detail {
+// query: 상세 창 판정 조건(detailQuery), today: 서울 오늘 날짜
+function DETAIL(entry: CatalogEntry, passed: JudgeResult | undefined, query: CatalogQuery, today: string): Detail {
   const { exhibition: ex, venue } = entry
   const placeName = displayVenueName(entry) || EMPTY
   const loc = displayLocation(entry)
   const pos = loc && loc.lat !== 0 && loc.lng !== 0 ? loc : null
-  const now = NOW()
-  const date = passedDate ?? now.date
+  const { date } = query
   const holidays = getHolidays()
-  const judge = passed ?? judgeEntry(entry, { date, stayStart: now.time, stayEnd: '23:59' }, holidays)
+  const judge = passed ?? judgeEntry(entry, query, holidays)
   const target = venue?.name ?? placeName
 
   return {
     title: ex.title, venue: placeName, eyebrow: venue ? `${venue.name} · ${venue.gu} · ${venue.type}` : placeName, poster: ex.imageUrl || undefined,
     period: `${ex.start} ~ ${ex.end}`, hours: HOURS(venue, ex.hoursText), closed: CLOSED(venue),
     // 판정과 같은 근거(resolved)·같은 규칙으로 계산한다
-    lastEntry: entryLastEntryLabel(entry, date, holidays, date === now.date ? '오늘' : DAYNAME(date)),
+    lastEntry: entryLastEntryLabel(entry, date, holidays, date === today ? '오늘' : DAYNAME(date)),
     entry: venue?.entry ?? EMPTY, reservation: venue?.reservation ?? EMPTY, duration: venue?.visitMinutes ? `${venue.visitMinutes}분` : EMPTY,
     status: STATUS[judge.result], reasons: reasonLines(judge),
     source: venue ? `${venue.source} · 서울 열린데이터광장` : '서울 열린데이터광장',
@@ -95,9 +99,36 @@ function DETAIL(entry: CatalogEntry, passed?: JudgeResult, passedDate?: string):
   }
 }
 
+type Similar = { id: string; title: string; venue: string; poster?: string; tags: string; judge: JudgeResult; status: Status }
+
+// 비슷한 전시 카드 조립. 후보와 판정 모두 상세 창과 같은 조건(query)으로 계산한다
+function SIMILAR(id: string | undefined, query: CatalogQuery | null): Similar[] {
+  if (!id || !query) return []
+  const catalog = getCatalog()
+  const target = catalog.find((item) => item.exhibition.id === id)
+  if (!target) return []
+  const mine = tagsOf(target)
+  return similarWithJudge(target, catalog, query, getHolidays()).map(({ entry, judge }) => {
+    const common = sharedTags(mine, tagsOf(entry)).slice(0, 2)
+    return {
+      id: entry.exhibition.id, title: entry.exhibition.title, venue: displayVenueName(entry) || EMPTY,
+      poster: entry.exhibition.imageUrl || undefined, tags: common.length ? common.join(' · ') : '같은 장소',
+      judge, status: STATUS[judge.result]
+    }
+  })
+}
+
 // 전시 상세 창
 export function WINDOW() {
   const [pick, setPick] = useState<Pick | null>(CURRENT)
+  const stats = useSyncExternalStore(subscribeStats, getCachedStats)
+  // 판정 조건은 상세 창이 열리거나 다른 전시로 바뀔 때 한 번 정한다. 상세·입장 마감·비슷한 전시가 함께 쓴다
+  const basis = useMemo(() => {
+    if (!pick) return null
+    const now = NOW()
+    return { today: now.date, query: detailQuery(pick.cond, now) }
+  }, [pick])
+  const similar = useMemo(() => SIMILAR(pick?.id, basis?.query ?? null), [pick, basis])
 
   useEffect(() => {
     LISTENERS.add(setPick)
@@ -113,9 +144,13 @@ export function WINDOW() {
     return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', key) }
   }, [pick])
 
-  if (!pick) return null
+  if (!pick || !basis) return null
+  const { query, today } = basis
   const found = getCatalog().find((item) => item.exhibition.id === pick.id)
-  const detail = found ? DETAIL(found, pick.judge, pick.date) : null
+  const detail = found ? DETAIL(found, pick.judge, query, today) : null
+  const rating = found
+    ? getRatingSummary(found.exhibition.id, found.venue?.id ?? null, { stats, seed: SEED_RECORDS })
+    : null
 
   return (
     <div className="one-backdrop" role="dialog" aria-modal="true" onClick={CLOSE}>
@@ -182,8 +217,14 @@ export function WINDOW() {
                   <div className="info-block">
                     <h3>다른 관람자의 기록</h3>
                     <div className="visitor-stats">
-                      <div><strong>기록 부족</strong><span>평균 별점</span></div>
-                      <div><strong>{detail.duration}</strong><span>예상 관람 시간</span></div>
+                      <div>
+                        <strong>{rating && rating.level !== 'none' && rating.averageRating !== null ? `★ ${rating.averageRating.toFixed(1)}` : (rating?.label ?? '기록 부족')}</strong>
+                        <span>{rating && rating.level !== 'none' ? rating.label : '평균 별점'}</span>
+                      </div>
+                      <div>
+                        <strong>{rating && rating.level !== 'none' && rating.medianMinutes !== null ? `${rating.medianMinutes}분` : detail.duration}</strong>
+                        <span>{rating && rating.level !== 'none' && rating.medianMinutes !== null ? '실제 관람 시간' : '예상 관람 시간'}</span>
+                      </div>
                       <div><strong>정보 없음</strong><span>혼잡도</span></div>
                     </div>
                   </div>
@@ -191,15 +232,42 @@ export function WINDOW() {
               </div>
             </div>
           )}
+
+          {detail && similar.length > 0 && (
+            <section className="info-block one-similar" aria-label="비슷한 전시">
+              <h3>비슷한 전시</h3>
+              <div className="one-similar-list">
+                {similar.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="one-card"
+                    onClick={(e) => { e.currentTarget.closest('.one-body')?.scrollTo({ top: 0 }); OPEN(item.id, item.judge, query) }}
+                  >
+                    {item.poster && (
+                      <div className="one-poster">
+                        <img src={item.poster} alt={item.title} loading="lazy" decoding="async" />
+                        <span className={`status-tag ${TAG[item.status]}`}>{item.status}</span>
+                      </div>
+                    )}
+                    {!item.poster && <span className={`tag ${TAG[item.status]} one-similar-status`}>{item.status}</span>}
+                    <strong>{item.title}</strong>
+                    <span className="one-sub">{item.venue}</span>
+                    <span className="one-source">{item.tags}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-export default function OneExhibit({ id, title, venue, status, judge, date, poster, lines = [] }: Props) {
+export default function OneExhibit({ id, title, venue, status, judge, cond, poster, lines = [] }: Props) {
   return (
-    <button type="button" className="one-card" onClick={() => OPEN(id, judge, date)}>
+    <button type="button" className="one-card" onClick={() => OPEN(id, judge, cond)}>
       <div className="one-poster">
         {poster ? <img src={poster} alt={title} loading="lazy" decoding="async" /> : <div className="poster-empty">포스터 없음</div>}
         <span className={`status-tag ${TAG[status]}`}>{status}</span>

@@ -140,7 +140,30 @@
   gap: 12px;
 }
 
+/* 비슷한 전시: .info-block·.one-card·.one-poster·.tag를 그대로 쓰고 배치만 정한다 */
+.one-similar {
+  margin-top: 24px;
+}
+
+.one-similar-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.one-similar .one-poster {
+  aspect-ratio: 4 / 3;
+}
+
+.one-similar-status {
+  align-self: flex-start;
+}
+
 @media (max-width: 720px) {
+  .one-similar-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .one-backdrop {
     align-items: flex-end;
     padding: 0;

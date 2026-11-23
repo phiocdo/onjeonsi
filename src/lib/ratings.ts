@@ -1,13 +1,19 @@
 /**
  * 공유 별점·관람 시간 읽기 (F-08). 데이터를 인자로 받는 순수 함수만 둔다.
  *
- * 화면에서 쓰는 방법:
- *   const seed = seedJson.map(fromSeedReview)            // data/reviews/seed.json
- *   const s = getRatingSummary(ex.id, venueId, { shared: [], seed })
+ * 화면에서 쓰는 방법 (OneExhibit.tsx, Archive.tsx):
+ *   const stats = useSyncExternalStore(subscribeStats, getCachedStats)   // src/lib/sharedRatings.ts (서버 집계)
+ *   const s = getRatingSummary(ex.id, venueId, { stats, seed: SEED_RECORDS }) // src/lib/seed.ts
  *   s.level !== 'none' ? `★ ${s.averageRating} · ${s.medianMinutes}분 · ${s.label}` : s.label
  *
- * - shared: 여러 사람의 공유 기록. 지금은 서버가 없어 빈 배열이고, 나중에 서버 집계가 생기면 여기에 넣는다.
+ * 읽기 순서: 서버 전시 통계(stats) → 공유 기록(shared)의 그 전시 → 서버 시설 통계 → 공유 기록의 그 시설
+ *   → 시드(seed)의 그 전시, 없으면 그 시설 → 기록 부족. 자세한 기준은 getRatingSummary 주석.
+ *
+ * - stats: 서버(shared_ratings)의 전시별·시설별 사전 집계. 사용자가 익명 공유한 기록이 모두 들어가므로
+ *   이 브라우저에서 내가 공유한 기록도 포함된다(따로 더하지 않는다).
+ * - shared: 개별 공유 기록 목록. 지금 화면은 넘기지 않으며, 집계 전 기록을 직접 넣는 경우(테스트 등)에 쓴다.
  * - 내 기록(VisitRecord)은 집계에 넣지 않는다. fromVisitRecord는 추천(recommend.ts)의 myRecords용이다.
+ *   (공유한 내 기록은 위처럼 서버 통계로만 들어간다)
  * - 집계 계산과 3건 기준은 src/engine/stats.ts(summarizeReviews, MIN_COUNT)를 그대로 쓴다.
  */
 import {
@@ -148,8 +154,10 @@ const NONE: RatingSummary = {
 
 /**
  * 한 전시의 별점·관람 시간 요약. 읽기 순서:
- * ① 공유 통계(stats)/shared의 그 전시 → ② 공유 통계(stats)/shared의 그 시설 → ③ seed의 그 전시, 없으면 그 시설 → ④ 기록 부족.
- * 각 단계는 유효한 기록(별점 1~5 정수, 관람 시간 10~480분)이 MIN_COUNT(3)건 이상일 때만 쓴다.
+ * ① 서버 전시 통계(stats.exhibitions) → ② shared의 그 전시 → ③ 서버 시설 통계(stats.venues) → ④ shared의 그 시설
+ * → ⑤ seed의 그 전시 → ⑥ seed의 그 시설 → ⑦ 기록 부족.
+ * 서버 통계는 isValidAggregatedStat(건수 MIN_COUNT 이상, 값 범위)를 통과할 때, 기록 목록(shared·seed)은
+ * 유효한 기록(별점 1~5 정수, 관람 시간 10~480분)이 MIN_COUNT(3)건 이상일 때만 쓴다.
  */
 export function getRatingSummary(
   exhibitionId: string,

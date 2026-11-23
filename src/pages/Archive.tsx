@@ -5,17 +5,15 @@ import { fromVisitRecord, getRatingSummary } from '../lib/ratings'
 import { recommendPersonal, type Candidate } from '../lib/recommend'
 import { SEED_RECORDS } from '../lib/seed'
 import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
-import { planShareSync, shareQueue } from '../lib/shareSync'
+import { backfillShared, clearAndSync, saveAndSync, shareQueue } from '../lib/shareSync'
 import {
   ARCHIVE_KEY,
   browserStorage,
   buildExport,
-  clearArchive,
   createRecord,
   emptyArchive,
   exportFileName,
   loadArchive,
-  saveArchive,
   viewOf,
   type RecordStatus,
 } from '../lib/archive'
@@ -105,6 +103,11 @@ export default function Archive() {
     return () => window.removeEventListener('storage', onStorage)
   }, [storage, map])
 
+  // 서버 연동 전부터 공유 중이던 기록은 서버에 없으므로 처음 열 때 한 번 올린다 (브라우저에 표시를 남겨 다시 하지 않음)
+  useEffect(() => {
+    backfillShared(storage, loaded.data.records)
+  }, [storage, loaded])
+
   const { records, interests } = archive
   const sorted = useMemo(() => [...records].sort(NEWEST), [records])
   const dates = useMemo(() => new Set(records.map((r) => r.date)), [records])
@@ -140,17 +143,12 @@ export default function Archive() {
     setView({ year: next.getFullYear(), month: next.getMonth() })
   }
 
-  // 아카이브 상태 변경 + 브라우저 저장. 바뀐 아카이브를 돌려준다
-  function UPDATE(change: (prev: ArchiveData) => ArchiveData): ArchiveData {
+  // 아카이브 상태 변경 + 브라우저 저장. 저장에 성공했을 때만 syncIds 전시의 익명 공유를 서버에 맞춘다
+  // (공유 중인 최신 기록 upsert, 없으면 delete. 저장에 실패했는데 보내면 새로고침 때 기록은 사라지고 서버 행만 남는다)
+  function UPDATE(change: (prev: ArchiveData) => ArchiveData, syncIds: readonly string[] = []) {
     const next = change(archive)
     setArchive(next)
-    setSaveFailed(!saveArchive(storage, next))
-    return next
-  }
-
-  // 바뀐 기록 기준으로 한 전시의 익명 공유를 서버에 맞춘다 (공유 중인 최신 기록 upsert, 없으면 delete)
-  function SYNC(next: ArchiveData, exhibitionId: string) {
-    shareQueue.submit(planShareSync(next.records, exhibitionId))
+    setSaveFailed(!saveAndSync(storage, next, syncIds))
   }
 
   // 관람 기록 검증 및 저장
@@ -161,30 +159,26 @@ export default function Archive() {
     // 별점·관람 시간(10~480분 정수, 소수는 반올림)·날짜 검증은 createRecord가 한다
     const entry = createRecord({ entry: found, date, rating: Number(rating), visitMinutes: Number(time), note, shared })
     if (!entry) return
-    const next = UPDATE((prev) => ({ ...prev, records: [entry, ...prev.records] }))
+    // 공유에 동의한 기록만 서버에 보낸다 (값은 createRecord가 검증·반올림한 entry 기준)
+    UPDATE((prev) => ({ ...prev, records: [entry, ...prev.records] }), entry.shared ? [entry.exhibitionId] : [])
     setPicked(entry.date)
     const [year, month] = entry.date.split('-').map(Number)
     setView({ year, month: month - 1 })
     setNote('')
-
-    // 공유에 동의한 기록만 서버에 보낸다 (값은 createRecord가 검증·반올림한 entry 기준)
-    if (entry.shared) SYNC(next, entry.exhibitionId)
   }
 
   // 기록 공유 상태 (켜기·끄기 모두 서버에 반영)
   function SHARE(id: string) {
     const target = records.find((r) => r.id === id)
     if (!target) return
-    const next = UPDATE((prev) => ({ ...prev, records: prev.records.map((r) => (r.id === id ? { ...r, shared: !r.shared } : r)) }))
-    SYNC(next, target.exhibitionId)
+    UPDATE((prev) => ({ ...prev, records: prev.records.map((r) => (r.id === id ? { ...r, shared: !r.shared } : r)) }), [target.exhibitionId])
   }
 
   // 관람 기록 삭제 (확인 후). 공유 중이던 기록이면 서버도 맞춘다
   function DROP(id: string) {
     if (!window.confirm('이 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.')) return
     const target = records.find((r) => r.id === id)
-    const next = UPDATE((prev) => ({ ...prev, records: prev.records.filter((r) => r.id !== id) }))
-    if (target?.shared) SYNC(next, target.exhibitionId)
+    UPDATE((prev) => ({ ...prev, records: prev.records.filter((r) => r.id !== id) }), target?.shared ? [target.exhibitionId] : [])
   }
 
   // 관심 분야 토글
@@ -210,13 +204,12 @@ export default function Archive() {
   // 아카이브 전체 삭제 (확인 후)
   function WIPE() {
     if (!window.confirm(`기록 ${records.length}개와 관심 분야를 모두 삭제합니다. 익명 공유한 별점·관람 시간도 서버에서 삭제합니다. 되돌릴 수 없습니다.\n먼저 내보내기로 백업해 두십시오.`)) return
-    // 저장소에서 지우지 못했으면 화면도 그대로 둔다 (화면만 비우면 새로고침 때 기록이 되살아나 헷갈린다)
-    if (!clearArchive(storage)) {
+    // 저장소에서 지우지 못했으면 화면도 그대로 두고 서버도 부르지 않는다 (화면만 비우면 새로고침 때 기록이 되살아나 헷갈린다)
+    // 지웠으면 서버의 내 공유 행 전부 삭제. 앞서 대기 중이던 전시별 작업은 버리고, 실패하면 '전체 삭제'로 다시 시도를 기다린다
+    if (!clearAndSync(storage)) {
       window.alert('브라우저 저장소에서 삭제하지 못했습니다. 잠시 후 다시 시도하십시오.')
       return
     }
-    // 서버의 내 공유 행 전부 삭제. 앞서 대기 중이던 전시별 작업은 버리고, 실패하면 '전체 삭제'로 다시 시도를 기다린다
-    shareQueue.submit({ type: 'deleteAll' })
     setSaveFailed(false)
     setArchive(emptyArchive())
     setPicked(today)

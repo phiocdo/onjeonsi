@@ -1,131 +1,95 @@
-.one-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #e2e4e8;
-  border-radius: 14px;
-  background: #ffffff;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.one-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(17, 17, 17, 0.08);
-}
-
-.one-poster {
-  position: relative;
-  aspect-ratio: 3 / 4;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #f2f4f7;
-}
-
-.one-poster img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.one-sub {
-  font-size: 0.9rem;
-  color: #4b5563;
-}
-
-.one-meta {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #111111;
-}
-
-.one-source {
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
 .one-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
   align-items: center;
+  background: rgba(17, 17, 17, 0.55);
+  display: flex;
+  inset: 0;
   justify-content: center;
   padding: 20px;
-  background: rgba(17, 17, 17, 0.55);
-}
-
-.one-window {
-  display: flex;
-  flex-direction: column;
-  width: min(920px, 100%);
-  max-height: 88vh;
-  border: 2px solid #111111;
-  border-radius: 16px;
-  background: #ffffff;
-  box-shadow: 0 20px 50px rgba(17, 17, 17, 0.28);
-  overflow: hidden;
+  position: fixed;
+  z-index: 1000;
 }
 
 .one-bar {
-  padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
   background: #f8f9fa;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 16px;
 }
 
 .one-bar-title {
+  color: #111111;
   font-size: 0.92rem;
   font-weight: 700;
+}
+
+.one-body {
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.one-card {
+  background: #ffffff;
+  border: 1px solid #e2e4e8;
+  border-radius: 14px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  gap: 6px;
+  height: 100%;
+  padding: 12px;
+  text-align: left;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+}
+
+.one-card .status-tag.impossible,
+.one-window .tag.impossible,
+.one-window .result-text.impossible {
+  background: Crimson;
+  color: #ffffff;
+}
+
+.one-card .status-tag.possible,
+.one-window .tag.possible,
+.one-window .result-text.possible {
+  background: PaleGreen;
   color: #111111;
 }
 
+.one-card .status-tag.check,
+.one-card .status-tag.unknown,
+.one-window .tag.check,
+.one-window .tag.unknown,
+.one-window .result-text.check,
+.one-window .result-text.unknown {
+  background: LemonChiffon;
+  color: #111111;
+}
+
+.one-card:hover {
+  box-shadow: 0 8px 20px rgba(17, 17, 17, 0.08);
+  transform: translateY(-2px);
+}
+
 .one-close {
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
+  background: #ffffff;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  background: #ffffff;
   color: #111111;
+  cursor: pointer;
+  display: inline-flex;
   font-size: 1rem;
   font-weight: 700;
-  cursor: pointer;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
 }
 
 .one-close:hover {
   background: #111111;
   color: #ffffff;
-}
-
-.one-body {
-  padding: 20px;
-  overflow-y: auto;
-}
-
-.one-layout {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 24px;
-}
-
-.one-poster-box {
-  aspect-ratio: 3 / 4;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #f2f4f7;
-}
-
-.one-poster-box img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .one-content {
@@ -134,45 +98,99 @@
   gap: 16px;
 }
 
+.one-layout {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: 240px 1fr;
+}
+
+.one-meta {
+  color: #111111;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.one-poster {
+  aspect-ratio: 3 / 4;
+  background: #f2f4f7;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.one-poster img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.one-poster-box {
+  aspect-ratio: 3 / 4;
+  background: #f2f4f7;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.one-poster-box img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.one-reason {
+  display: block;
+}
+
 .one-sections {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* 비슷한 전시: .info-block·.one-card·.one-poster·.tag를 그대로 쓰고 배치만 정한다 */
 .one-similar {
   margin-top: 24px;
-}
-
-.one-similar-list {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
 }
 
 .one-similar .one-poster {
   aspect-ratio: 4 / 3;
 }
 
+.one-similar-list {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .one-similar-status {
   align-self: flex-start;
 }
 
-@media (max-width: 720px) {
-  .one-similar-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.one-source {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
 
+.one-sub {
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.one-window {
+  background: #ffffff;
+  border: 2px solid #111111;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(17, 17, 17, 0.28);
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  overflow: hidden;
+  width: min(920px, 100%);
+}
+
+@media (max-width: 720px) {
   .one-backdrop {
     align-items: flex-end;
     padding: 0;
-  }
-
-  .one-window {
-    width: 100%;
-    max-height: 92vh;
-    border-radius: 18px 18px 0 0;
   }
 
   .one-layout,
@@ -183,8 +201,14 @@
   .one-poster-box {
     max-width: 220px;
   }
-}
-/* 방문 판정 사유: 사유마다 한 줄 */
-.one-reason {
-  display: block;
+
+  .one-similar-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .one-window {
+    border-radius: 18px 18px 0 0;
+    max-height: 92vh;
+    width: 100%;
+  }
 }

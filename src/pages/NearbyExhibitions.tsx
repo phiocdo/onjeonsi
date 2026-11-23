@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { flushSync } from 'react-dom'
-import { createRoot } from 'react-dom/client'
 import { calculateDistance, type Coordinate } from '../engine/distance'
 import { rankExhibitions } from '../engine/sort'
 import { readVisitedIds } from '../lib/archive'
@@ -11,7 +9,6 @@ import './NearbyExhibitions.css'
 
 interface LatLng { getLat: () => number; getLng: () => number }
 interface Layer { setMap: (map: unknown) => void }
-interface InfoBox { close: () => void; setContent: (el: HTMLElement) => void; setPosition: (pos: LatLng) => void; open: (map: unknown) => void }
 interface Region { region_type: string; region_2depth_name: string; region_3depth_name: string }
 interface Kakao {
   maps: {
@@ -20,7 +17,6 @@ interface Kakao {
     LatLng: new (lat: number, lng: number) => LatLng
     Circle: new (opt: object) => Layer
     CustomOverlay: new (opt: object) => Layer
-    InfoWindow: new (opt: object) => InfoBox
     event: { addListener: (target: unknown, type: string, fn: (e: { latLng: LatLng }) => void) => void }
     services?: { Status: { OK: string }; Geocoder: new () => { coord2RegionCode: (lng: number, lat: number, fn: (res: Region[], status: string) => void) => void } }
   }
@@ -35,6 +31,7 @@ type Item = { id: string; title: string; placeName: string; poster?: string; lat
 type Spot = 'here' | 'home' | 'pick'
 type Merit = 'AM' | 'PM'
 type Opt<T> = { value: T; label: string }
+type Group = { key: string; items: Item[] }
 
 const BASE: Coordinate = { lat: 37.5759, lng: 126.9768 }
 const RADII = [500, 1000, 2000]
@@ -44,8 +41,9 @@ const MINUTES = [0, 10, 20, 30, 40, 50]
 const MERITS: Opt<Merit>[] = [{ value: 'AM', label: '오전' }, { value: 'PM', label: '오후' }]
 const ZOOM: Record<number, number> = { 500: 5, 1000: 6, 2000: 7 }
 const STATUS: Record<JudgeResult['result'], Status> = { possible: '가능', impossible: '불가', unknown: '확인 필요' }
+const LEGEND = [{ cls: 'possible', label: '가능' }, { cls: 'unknown', label: '확인 필요' }, { cls: 'impossible', label: '불가' }, { cls: 'out', label: '반경 밖' }]
 
-// 서울 현재 날짜와 분할 시각 반환
+// 서울 현재 날짜 및 분할 시각 반환
 function NOW() {
   const now = new Date()
   const date = todayInSeoul(now)
@@ -58,7 +56,7 @@ function NOW() {
   return { y, m, d, ap, h12, min }
 }
 
-// 연월 기준 일수 배열 생성
+// 연/월 기준 일 수 배열
 function DAYS(y: number, m: number) {
   const last = new Date(y, m, 0).getDate()
   return Array.from({ length: last }, (_, i) => i + 1)
@@ -74,7 +72,7 @@ function LOOP(len: number, idx: number, diff: number) {
   return (idx + diff + len) % len
 }
 
-// 오전오후와 12시간제 시각의 24시간제 변환
+// 오전/오후 및 24시간 변환
 function CLOCK(ap: Merit, h12: number, min: number) {
   const base = h12 % 12
   const hh = ap === 'PM' ? base + 12 : base
@@ -86,13 +84,13 @@ function CONQUERED(): Set<string> {
   return readVisitedIds()
 }
 
-// 판정 결과 화면용 항목 생성
+// 판정 결과 화면용 항목
 function ITEM({ entry, result }: JudgedEntry, pos: Coordinate | null, dist: number | null, inside: boolean): Item {
   const { exhibition } = entry
   return { id: exhibition.id, title: exhibition.title, placeName: displayVenueName(entry) || '장소 미상', poster: exhibition.imageUrl || undefined, lat: pos?.lat ?? null, lng: pos?.lng ?? null, distance: dist ?? undefined, in: inside, judge: result }
 }
 
-// 판정 결과 안내 문구 생성
+// 판정 결과 안내 문구
 function LINE(res: JudgeResult, time: string): string {
   const basis = basisLabel(res.basis)
   const tail = basis ? ` · ${basis}` : ''
@@ -102,15 +100,16 @@ function LINE(res: JudgeResult, time: string): string {
 }
 
 // 동일 좌표 기준 전시 묶음 생성
-function GROUP(list: Item[]) {
-  return Object.values(list.reduce<Record<string, Item[]>>((acc, ex) => {
+function GROUP(list: Item[]): Group[] {
+  const map = list.reduce<Record<string, Item[]>>((acc, ex) => {
     const key = ex.lat == null || ex.lng == null ? ex.placeName : `${ex.lat},${ex.lng}`
     ;(acc[key] ||= []).push(ex)
     return acc
-  }, {}))
+  }, {})
+  return Object.entries(map).map(([key, items]) => ({ key, items }))
 }
 
-// 지도 핀 대표 상태 판별
+// 지도 핀 대표 상태
 function PIN(items: Item[]) {
   const inside = items.filter((x) => x.in)
   if (!inside.length) return 'out'
@@ -133,12 +132,12 @@ function LOOK(on: boolean): CSSProperties {
   return on ? { backgroundColor: '#111111', borderColor: '#111111', color: '#ffffff', fontWeight: 800, boxShadow: '0 2px 6px rgba(0, 0, 0, 0.14)', transform: 'translateY(-1px)' } : { backgroundColor: '#ffffff', borderColor: '#111111', color: '#111111', fontWeight: 700 }
 }
 
-// 선택 가능 칩 버튼 렌더링
+// 선택 가능 칩 버튼
 function CHIP({ on, run, children }: { on: boolean; run: () => void; children: ReactNode }) {
   return <button type="button" className={on ? 'chip chosen' : 'chip'} style={LOOK(on)} aria-pressed={on} onClick={run}>{children}</button>
 }
 
-// 화살표 조절형 선택 상자 렌더링
+// 화살표 조절형 선택 상자
 function STEP<T extends string | number>({ name, value, list, set }: { name: string; value: T; list: Opt<T>[]; set: (next: T) => void }) {
   const idx = Math.max(0, list.findIndex((o) => o.value === value))
   const move = (diff: number) => set(list[LOOP(list.length, idx, diff)].value)
@@ -155,7 +154,7 @@ function STEP<T extends string | number>({ name, value, list, set }: { name: str
   )
 }
 
-// 전시 카드 및 관람 오버레이 렌더링
+// 전시 카드 및 관람 오버레이
 function CARD({ ex, cond, time, done }: { ex: Item; cond: CatalogQuery; time: string; done: boolean }) {
   return (
     <div className={done ? 'card-slot conquered-card' : 'card-slot'}>
@@ -169,23 +168,39 @@ function CARD({ ex, cond, time, done }: { ex: Item; cond: CatalogQuery; time: st
   )
 }
 
-// 장소별 전시 말풍선 렌더링
-function INFO({ items, pick }: { items: Item[]; pick: (item: Item) => void }) {
+// 지도 오른쪽 장소 상세 패널
+function PANEL({ group, pick }: { group: Group | null; pick: (item: Item) => void }) {
+  if (!group) {
+    return (
+      <aside className="map-panel" aria-label="선택한 장소 전시 목록">
+        <p className="map-panel-empty">지도에서 원을 누르세요.<br />해당 위치의 전시 목록이 표시됩니다.</p>
+      </aside>
+    )
+  }
+  const { items } = group
   return (
-    <div className="info-box">
-      <strong>{items[0].placeName}</strong>
-      {items.map((item) => (
-        <button key={item.id} type="button" className="info-row" onClick={() => pick(item)}>
-          <span className={item.in ? `badge ${item.judge.result}` : 'badge out'}>{item.in ? STATUS[item.judge.result] : '반경 밖'}</span>
-          <span>{item.title}</span>
-        </button>
-      ))}
-    </div>
+    <aside className="map-panel" aria-label="선택한 장소 전시 목록">
+      <div className="map-panel-head">
+        <strong>{items[0].placeName}</strong>
+        <span>{items.length}건</span>
+      </div>
+      <div className="map-panel-list">
+        {items.map((item) => (
+          <button key={item.id} type="button" className="map-panel-row" onClick={() => pick(item)}>
+            <div className="map-panel-row-top">
+              <span className={item.in ? `badge ${item.judge.result}` : 'badge out'}>{item.in ? STATUS[item.judge.result] : '반경 밖'}</span>
+              <span>{item.distance == null ? '' : `${item.distance}m`}</span>
+            </div>
+            <span className="map-panel-title">{item.title}</span>
+          </button>
+        ))}
+      </div>
+    </aside>
   )
 }
 
-// 지도 반경 원과 핀 오버레이 배치
-function MARK(map: InstanceType<Kakao['maps']['Map']>, center: Coordinate, radius: number, spots: Item[][], go: (item: Item) => void) {
+// 지도 반경 동그라미 및 시설 동그라미 배치
+function MARK(map: InstanceType<Kakao['maps']['Map']>, center: Coordinate, radius: number, spots: Group[], activeKey: string | null, pickSpot: (key: string | null) => void) {
   const sdk = window.kakao?.maps
   if (!sdk) return () => {}
   const layers: Layer[] = []
@@ -198,34 +213,23 @@ function MARK(map: InstanceType<Kakao['maps']['Map']>, center: Coordinate, radiu
   layers.push(new sdk.Circle({ center: pos, radius, strokeWeight: 2, strokeColor: '#111111', strokeOpacity: 0.85, fillColor: '#d5ff36', fillOpacity: 0.25, map }))
   layers.push(new sdk.CustomOverlay({ position: pos, content: dot, zIndex: 10, map }))
 
-  const info = new sdk.InfoWindow({ removable: true })
-  const host = document.createElement('div')
-  const root = createRoot(host)
-  let openId: string | null = null
-
-  spots.forEach((items) => {
+  spots.forEach(({ key, items }) => {
     const state = PIN(items)
+    const active = activeKey === key
     const position = new sdk.LatLng(items[0].lat!, items[0].lng!)
     const pin = document.createElement('div')
-    pin.className = `pin ${state}`
-    if (items.length > 1) pin.textContent = String(items.length)
+    pin.className = `pin ${state}${active ? ' active' : ''}`
+    pin.textContent = String(items.length)
 
-    layers.push(new sdk.CustomOverlay({ position, content: pin, yAnchor: 0.5, clickable: true, zIndex: state === 'out' ? 2 : 5, map }))
+    layers.push(new sdk.CustomOverlay({ position, content: pin, yAnchor: 0.5, clickable: true, zIndex: active ? 20 : state === 'out' ? 2 : 5, map }))
     ;['mousedown', 'touchstart'].forEach((t) => pin.addEventListener(t, (e) => e.stopPropagation()))
-
-    const spotId = items[0].id
     pin.addEventListener('click', (e) => {
       e.stopPropagation()
-      if (openId === spotId) { info.close(); openId = null; return }
-      flushSync(() => root.render(<INFO items={items} pick={go} />))
-      info.setContent(host)
-      info.setPosition(position)
-      info.open(map)
-      openId = spotId
+      pickSpot(activeKey === key ? null : key)
     })
   })
 
-  return () => { info.close(); layers.forEach((o) => o.setMap(null)); queueMicrotask(() => root.unmount()) }
+  return () => { layers.forEach((o) => o.setMap(null)) }
 }
 
 function NearbyExhibitions() {
@@ -242,6 +246,7 @@ function NearbyExhibitions() {
   const [label, setLabel] = useState('종로구 세종로')
   const [radius, setRadius] = useState(1000)
   const [spot, setSpot] = useState<Spot>('home')
+  const [pickedKey, setPickedKey] = useState<string | null>(null)
   const [year, setYear] = useState(init.y)
   const [month, setMonth] = useState(init.m)
   const [day, setDay] = useState(init.d)
@@ -282,10 +287,12 @@ function NearbyExhibitions() {
 
   const near = useMemo(() => all.filter((ex) => ex.in), [all])
   const spots = useMemo(() => GROUP(all), [all])
+  const picked = useMemo(() => spots.find((s) => s.key === pickedKey) ?? null, [spots, pickedKey])
 
   const MOVE = useCallback((next: Coordinate, fallback: string, at: Spot) => {
     setSpot(at)
     setCenter(next)
+    setPickedKey(null)
     DONG(next, fallback, setLabel)
   }, [])
 
@@ -308,8 +315,8 @@ function NearbyExhibitions() {
 
   useEffect(() => {
     if (!mapRef.current) return
-    return MARK(mapRef.current, center, radius, spots, go)
-  }, [ready, center, radius, spots, go])
+    return MARK(mapRef.current, center, radius, spots, pickedKey, setPickedKey)
+  }, [ready, center, radius, spots, pickedKey])
 
   return (
     <section className="nearby">
@@ -328,7 +335,7 @@ function NearbyExhibitions() {
           </div>
 
           <div className="nearby-plan-row">
-            <span className="nearby-plan-label">가능 시간</span>
+            <span className="nearby-plan-label">가능한 시간</span>
             <div className="nearby-plan-fields">
               <STEP name="시작 오전 오후" value={startMerit} list={MERITS} set={setStartMerit} />
               <STEP name="시작 시" value={startHour} list={hourOpts} set={setStartHour} />
@@ -350,16 +357,28 @@ function NearbyExhibitions() {
         </div>
       </div>
 
-      <div className="map-box">
-        <div ref={boxRef} className="map" />
-        {fail && <p className="map-error">지도를 불러오지 못했습니다.</p>}
+      <div className="map-stage">
+        <div className="map-box">
+          <div ref={boxRef} className="map" />
+          {fail && <p className="map-error">지도를 불러오지 못했습니다.</p>}
 
-        <div className="map-controls">
-          <CHIP on={spot === 'here'} run={LOCATE}>현재 위치</CHIP>
-          {RADII.map((r) => (
-            <CHIP key={r} on={r === radius} run={() => setRadius(r)}>{r < 1000 ? `${r}m` : `${r / 1000}km`}</CHIP>
-          ))}
+          <div className="map-controls">
+            <CHIP on={spot === 'here'} run={LOCATE}>현재 위치</CHIP>
+            {RADII.map((r) => (
+              <CHIP key={r} on={r === radius} run={() => setRadius(r)}>{r < 1000 ? `${r}m` : `${r / 1000}km`}</CHIP>
+            ))}
+            <div className="map-legend" aria-label="핀 색상 안내">
+              {LEGEND.map((l) => (
+                <span key={l.cls} className="legend-item">
+                  <i className={`legend-dot ${l.cls}`} />
+                  {l.label}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
+
+        <PANEL group={picked} pick={go} />
       </div>
 
       <div className="filter-row nearby-count">

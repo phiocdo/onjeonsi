@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "exhibitionId": "auto-seoul-160056",
+    "venueId": "venue-sema",
+    "rating": 5,
+    "visitMinutes": 120
+  },
+  {
+    "exhibitionId": "auto-seoul-160108",
+    "venueId": "venue-mmca",
+    "rating": 4,
+    "visitMinutes": 180
+  },
+  {
+    "exhibitionId": "auto-seoul-160085",
+    "venueId": "venue-craft-museum",
+    "rating": 5,
+    "visitMinutes": 90
+  },
+  {
+    "exhibitionId": "auto-seoul-160231",
+    "venueId": "venue-seoul-history-museum",
+    "rating": 3,
+    "visitMinutes": 60
+  }
+]

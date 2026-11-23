@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { basisLabel, displayLocation, displayVenueName, getCatalog, getHolidays, judgeEntry, todayInSeoul, type CatalogEntry } from '../lib/catalog'
+import { getRatingSummary } from '../lib/ratings'
+import { SEED_RECORDS } from '../lib/seed'
+import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
 import { similarExhibitions } from '../lib/similar'
 import { sharedTags, tagsOf } from '../lib/tags'
 import type { JudgeResult, Venue, Weekday } from '../types'
@@ -108,6 +111,7 @@ function SIMILAR(id: string | undefined): Similar[] {
 // 전시 상세 창
 export function WINDOW() {
   const [pick, setPick] = useState<Pick | null>(CURRENT)
+  const stats = useSyncExternalStore(subscribeStats, getCachedStats)
   // 상세 창이 열리거나 다른 전시로 바뀔 때만 다시 계산
   const similar = useMemo(() => SIMILAR(pick?.id), [pick])
 
@@ -128,6 +132,9 @@ export function WINDOW() {
   if (!pick) return null
   const found = getCatalog().find((item) => item.exhibition.id === pick.id)
   const detail = found ? DETAIL(found, pick.judge) : null
+  const rating = found
+    ? getRatingSummary(found.exhibition.id, found.venue?.id ?? null, { stats, seed: SEED_RECORDS })
+    : null
 
   return (
     <div className="one-backdrop" role="dialog" aria-modal="true" onClick={CLOSE}>
@@ -194,8 +201,14 @@ export function WINDOW() {
                   <div className="info-block">
                     <h3>다른 관람자의 기록</h3>
                     <div className="visitor-stats">
-                      <div><strong>기록 부족</strong><span>평균 별점</span></div>
-                      <div><strong>{detail.duration}</strong><span>예상 관람 시간</span></div>
+                      <div>
+                        <strong>{rating && rating.level !== 'none' && rating.averageRating !== null ? `★ ${rating.averageRating.toFixed(1)}` : (rating?.label ?? '기록 부족')}</strong>
+                        <span>{rating && rating.level !== 'none' ? rating.label : '평균 별점'}</span>
+                      </div>
+                      <div>
+                        <strong>{rating && rating.level !== 'none' && rating.medianMinutes !== null ? `${rating.medianMinutes}분` : detail.duration}</strong>
+                        <span>{rating && rating.level !== 'none' && rating.medianMinutes !== null ? '실제 관람 시간' : '예상 관람 시간'}</span>
+                      </div>
                       <div><strong>정보 없음</strong><span>혼잡도</span></div>
                     </div>
                   </div>

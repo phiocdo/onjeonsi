@@ -26,6 +26,7 @@ import {
   type ShareRatingResult,
 } from './sharedRatings';
 import { supabase } from './supabase';
+import { normalizeTags } from './userTags';
 
 export type ShareAction =
   | { type: 'upsert'; payload: ShareRatingInput }
@@ -41,6 +42,7 @@ export const DELETE_ALL_KEY = '전체 삭제';
  * 바뀐 뒤의 기록 목록(nextRecords)을 보고 한 전시의 서버 작업을 정한다.
  * 그 전시에 공유 중인 기록이 있으면 가장 최근 기록(createdAt 기준, 같으면 목록에서 앞의 것)의 값으로 upsert,
  * 없으면 delete. 시설 id는 기록할 때 복사해 둔 record.exhibition.venueId를 쓴다(끝난 전시도 유지).
+ * 태그도 그 기록의 것을 보낸다. 저장·다시 시도(replanFromRecords)·예전 기록 올리기(backfillShared)가 모두 이 함수를 거친다.
  */
 export function planShareSync(nextRecords: readonly VisitRecord[], exhibitionId: string): ShareAction {
   let latest: VisitRecord | undefined;
@@ -56,6 +58,8 @@ export function planShareSync(nextRecords: readonly VisitRecord[], exhibitionId:
       venueId: latest.exhibition.venueId,
       stars: latest.rating,
       minutes: latest.visitMinutes,
+      // 그 최신 공유 기록의 태그만 (비공개 기록의 태그는 섞지 않는다). 메모·날짜는 보내지 않는다
+      tags: normalizeTags(latest.tags ?? []),
     },
   };
 }

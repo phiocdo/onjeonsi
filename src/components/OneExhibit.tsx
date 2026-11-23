@@ -6,6 +6,7 @@ import { SEED_RECORDS } from '../lib/seed'
 import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
 import { sharedTags, tagsOf } from '../lib/tags'
 import type { JudgeResult, Venue, Weekday } from '../types'
+import ExhibitKeywords from './ExhibitKeywords'
 import './OneExhibit.css'
 
 export type Status = '가능' | '불가' | '확인 필요'
@@ -174,6 +175,7 @@ export function WINDOW() {
                   <div>
                     <p className="eyebrow">{detail.eyebrow}</p>
                     <h2>{detail.title}</h2>
+                    <ExhibitKeywords id={pick.id} />
                     {!detail.hasCoord && <p className="subtle">좌표 정보가 등록되지 않은 전시입니다.</p>}
                   </div>
                   <span className={`tag ${TAG[detail.status]}`}>{detail.status}</span>
@@ -274,6 +276,7 @@ export default function OneExhibit({ id, title, venue, status, judge, cond, post
       </div>
       <strong>{title}</strong>
       <span className="one-sub">{venue}</span>
+      <ExhibitKeywords id={id} />
       {lines.filter(Boolean).map((line, index) => (
         <span key={index} className={index === 0 ? 'one-meta' : 'one-source'}>{line}</span>
       ))}

@@ -121,6 +121,15 @@ describe('snapshotOf / createRecord', () => {
     expect(r?.visitMinutes).toBe(46);
   });
 
+  it('태그는 정리해서 넣고, 정리한 태그가 없으면 필드를 두지 않는다', () => {
+    const base = { entry: ENTRY, date: '2026-11-20', rating: 5, visitMinutes: 70, note: '', shared: true };
+    expect(createRecord({ ...base, tags: ['#사진맛집', '사진맛집', '  조용  함 ', '가'.repeat(16)] }, NOW)?.tags).toEqual(['사진맛집', '조용 함']);
+    const none = createRecord({ ...base, tags: ['!!', ''] }, NOW);
+    expect(none).not.toBeNull();
+    expect(none && 'tags' in none).toBe(false);
+    expect('tags' in validRecord()).toBe(false);
+  });
+
   it('별점·관람 시간·날짜가 틀리면 null', () => {
     const base = { entry: ENTRY, date: '2026-11-20', rating: 5, visitMinutes: 70, note: '', shared: false };
     expect(createRecord({ ...base, rating: 6 }, NOW)).toBeNull();
@@ -242,6 +251,24 @@ describe('normalizeRecord', () => {
     expect(normalizeRecord({ ...base, createdAt: 'garbage' }, nothing)?.createdAt).toBe('2026-11-19T15:00:00.000Z');
     expect(normalizeRecord(base, nothing)?.createdAt).toBe('2026-11-19T15:00:00.000Z');
   });
+
+  it('태그는 읽을 때 다시 정리하고, 잘못된 태그만 버린다 (기록은 살린다)', () => {
+    const base = { id: 'a', exhibitionId: 'x', date: '2026-11-20', rating: 5, visitMinutes: 80, note: '', shared: false };
+    expect(normalizeRecord({ ...base, tags: ['#Date', 'date', 7, '가'.repeat(16), 'a', 'b', 'c', 'd', 'e'] }, nothing)?.tags).toEqual(['date', 'a', 'b', 'c', 'd']);
+    for (const tags of [undefined, null, 'date', [], ['!!']]) {
+      const r = normalizeRecord({ ...base, tags }, nothing);
+      expect(r).not.toBeNull();
+      expect(r && 'tags' in r).toBe(false);
+    }
+  });
+
+  it('태그가 있는 기록도 저장한 그대로 읽는다 (버전은 2 그대로)', () => {
+    const s = new MemoryStorage();
+    const r = createRecord({ entry: ENTRY, date: '2026-11-20', rating: 4, visitMinutes: 60, note: '', shared: true, tags: ['조용함'] }, NOW, 't1');
+    expect(saveArchive(s, { version: 2, records: [r!], interests: [] })).toBe(true);
+    expect(loadArchive(s, lookup).data.records[0]).toEqual(r);
+    expect(JSON.parse(s.getItem(ARCHIVE_KEY)!).version).toBe(2);
+  });
 });
 
 // ─── 화면 표시 ───────────────────────────────────────────
@@ -283,6 +310,18 @@ describe('buildExport / exportFileName', () => {
 
   it('빈 아카이브도 스키마를 통과한다', () => {
     expect(validate(buildExport({ version: 2, records: [], interests: [] }, NOW))).toBe(true);
+  });
+
+  it('태그가 있는 기록도 스키마를 통과한다', () => {
+    const r = createRecord({ entry: ENTRY, date: '2026-11-20', rating: 4, visitMinutes: 60, note: '', shared: true, tags: ['사진 찍기 좋음', '조용함', '가'.repeat(15)] }, NOW, 't1');
+    expect(validate(buildExport({ version: 2, records: [r!], interests: [] }, NOW)), JSON.stringify(validate.errors)).toBe(true);
+  });
+
+  it('스키마는 태그 6개, 16자 태그, 빈 태그, 중복 태그를 막는다', () => {
+    const r = validRecord();
+    for (const tags of [['a', 'b', 'c', 'd', 'e', 'f'], ['가'.repeat(16)], [''], ['a', 'a']]) {
+      expect(validate(buildExport({ version: 2, records: [{ ...r, tags }], interests: [] }, NOW))).toBe(false);
+    }
   });
 
   it('스키마는 소수 관람 시간을 막는다', () => {

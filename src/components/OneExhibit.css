@@ -188,3 +188,32 @@
 .one-reason {
   display: block;
 }
+
+/* 키워드 (ExhibitKeywords): 사용자 태그 '#태그'는 진하게, 주제 태그는 회색 */
+.one-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.one-head .one-keywords {
+  margin-top: 8px;
+}
+
+.one-keyword {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.one-keyword.user {
+  background: #eef2ff;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.one-keyword.topic {
+  background: #f3f4f6;
+  color: #6b7280;
+}

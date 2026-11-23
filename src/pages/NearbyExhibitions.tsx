@@ -32,6 +32,7 @@ type Spot = 'here' | 'home' | 'pick'
 type Merit = 'AM' | 'PM'
 type Opt<T> = { value: T; label: string }
 type Group = { key: string; items: Item[] }
+type Time = { ap: Merit; h12: number; min: number }
 
 const BASE: Coordinate = { lat: 37.5759, lng: 126.9768 }
 const RADII = [500, 1000, 2000]
@@ -43,20 +44,26 @@ const ZOOM: Record<number, number> = { 500: 5, 1000: 6, 2000: 7 }
 const STATUS: Record<JudgeResult['result'], Status> = { possible: '가능', impossible: '불가', unknown: '확인 필요' }
 const LEGEND = [{ cls: 'possible', label: '가능' }, { cls: 'unknown', label: '확인 필요' }, { cls: 'impossible', label: '불가' }, { cls: 'out', label: '반경 밖' }]
 
-// 서울 현재 날짜 및 분할 시각 반환
+// 오전/오후 및 시/분 분리
+function SPLIT(total: number): Time {
+  const clamped = Math.min(Math.max(0, total), 23 * 60 + 50)
+  const hh = Math.floor(clamped / 60)
+  const min = Math.floor((clamped % 60) / 10) * 10
+  return { ap: hh >= 12 ? 'PM' : 'AM', h12: hh % 12 === 0 ? 12 : hh % 12, min }
+}
+
+// 서울 현재 날짜 및 초기 시작/종료 시각 반환
 function NOW() {
   const now = new Date()
   const date = todayInSeoul(now)
   const [y, m, d] = date.split('-').map(Number)
   const raw = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })
   const [hh, mm] = raw.split(':').map(Number)
-  const ap: Merit = hh >= 12 ? 'PM' : 'AM'
-  const h12 = hh % 12 === 0 ? 12 : hh % 12
-  const min = Math.floor(mm / 10) * 10
-  return { y, m, d, ap, h12, min }
+  const startTotal = hh * 60 + Math.floor(mm / 10) * 10
+  return { y, m, d, start: SPLIT(startTotal), end: SPLIT(startTotal + 120) }
 }
 
-// 연/월 기준 일 수 배열
+// 연/월 기준 일 수
 function DAYS(y: number, m: number) {
   const last = new Date(y, m, 0).getDate()
   return Array.from({ length: last }, (_, i) => i + 1)
@@ -67,7 +74,7 @@ function PAD(n: number) {
   return String(n).padStart(2, '0')
 }
 
-// 순환 인덱스 계산
+// 순환 index 계산
 function LOOP(len: number, idx: number, diff: number) {
   return (idx + diff + len) % len
 }
@@ -90,7 +97,7 @@ function ITEM({ entry, result }: JudgedEntry, pos: Coordinate | null, dist: numb
   return { id: exhibition.id, title: exhibition.title, placeName: displayVenueName(entry) || '장소 미상', poster: exhibition.imageUrl || undefined, lat: pos?.lat ?? null, lng: pos?.lng ?? null, distance: dist ?? undefined, in: inside, judge: result }
 }
 
-// 판정 결과 안내 문구
+// 판정 결과 안내
 function LINE(res: JudgeResult, time: string): string {
   const basis = basisLabel(res.basis)
   const tail = basis ? ` · ${basis}` : ''
@@ -99,7 +106,7 @@ function LINE(res: JudgeResult, time: string): string {
   return `${res.lastEntryAssumed ? `${entry} (입장 마감 정보 없음)` : entry}${tail}`
 }
 
-// 동일 좌표 기준 전시 묶음 생성
+// 동일 좌표 기준 전시 묶음
 function GROUP(list: Item[]): Group[] {
   const map = list.reduce<Record<string, Item[]>>((acc, ex) => {
     const key = ex.lat == null || ex.lng == null ? ex.placeName : `${ex.lat},${ex.lng}`
@@ -117,7 +124,7 @@ function PIN(items: Item[]) {
   return best.judge.result
 }
 
-// 좌표 기반 법정동 이름 조회
+// 법정동 이름
 function DONG(pos: Coordinate, fallback: string, done: (name: string) => void) {
   const svc = window.kakao?.maps?.services
   if (!svc) { done(fallback); return }
@@ -127,7 +134,7 @@ function DONG(pos: Coordinate, fallback: string, done: (name: string) => void) {
   })
 }
 
-// 선택 상태별 칩 스타일 반환
+// 선택 상태별 칩 스타일
 function LOOK(on: boolean): CSSProperties {
   return on ? { backgroundColor: '#111111', borderColor: '#111111', color: '#ffffff', fontWeight: 800, boxShadow: '0 2px 6px rgba(0, 0, 0, 0.14)', transform: 'translateY(-1px)' } : { backgroundColor: '#ffffff', borderColor: '#111111', color: '#111111', fontWeight: 700 }
 }
@@ -137,7 +144,7 @@ function CHIP({ on, run, children }: { on: boolean; run: () => void; children: R
   return <button type="button" className={on ? 'chip chosen' : 'chip'} style={LOOK(on)} aria-pressed={on} onClick={run}>{children}</button>
 }
 
-// 화살표 조절형 선택 상자
+// 화살표 조절 선택 상자
 function STEP<T extends string | number>({ name, value, list, set }: { name: string; value: T; list: Opt<T>[]; set: (next: T) => void }) {
   const idx = Math.max(0, list.findIndex((o) => o.value === value))
   const move = (diff: number) => set(list[LOOP(list.length, idx, diff)].value)
@@ -250,12 +257,12 @@ function NearbyExhibitions() {
   const [year, setYear] = useState(init.y)
   const [month, setMonth] = useState(init.m)
   const [day, setDay] = useState(init.d)
-  const [startMerit, setStartMerit] = useState<Merit>(init.ap)
-  const [startHour, setStartHour] = useState(init.h12)
-  const [startMinute, setStartMinute] = useState(init.min)
-  const [endMerit, setEndMerit] = useState<Merit>(init.ap)
-  const [endHour, setEndHour] = useState(init.h12)
-  const [endMinute, setEndMinute] = useState(init.min)
+  const [startMerit, setStartMerit] = useState<Merit>(init.start.ap)
+  const [startHour, setStartHour] = useState(init.start.h12)
+  const [startMinute, setStartMinute] = useState(init.start.min)
+  const [endMerit, setEndMerit] = useState<Merit>(init.end.ap)
+  const [endHour, setEndHour] = useState(init.end.h12)
+  const [endMinute, setEndMinute] = useState(init.end.min)
 
   const yearOpts = useMemo(() => [init.y - 1, init.y, init.y + 1].map((y) => ({ value: y, label: String(y) })), [init.y])
   const monthOpts = useMemo(() => MONTHS.map((m) => ({ value: m, label: String(m) })), [])
@@ -268,6 +275,7 @@ function NearbyExhibitions() {
   const date = useMemo(() => `${year}-${PAD(month)}-${PAD(safeDay)}`, [year, month, safeDay])
   const stayStart = useMemo(() => CLOCK(startMerit, startHour, startMinute), [startMerit, startHour, startMinute])
   const stayEnd = useMemo(() => CLOCK(endMerit, endHour, endMinute), [endMerit, endHour, endMinute])
+  const invalidTime = stayEnd <= stayStart
 
   const cond = useMemo<CatalogQuery>(() => ({ date, stayStart, stayEnd }), [date, stayStart, stayEnd])
   const go = useCallback((item: Item) => OPEN(item.id, item.judge, cond), [cond])
@@ -348,6 +356,7 @@ function NearbyExhibitions() {
               <STEP name="종료 분" value={endMinute} list={minOpts} set={setEndMinute} />
               <span>분까지</span>
             </div>
+            {invalidTime && <p className="time-warning" role="alert" style={{ color: '#c4372b', fontSize: 12, fontWeight: 700, margin: '6px 0 0', width: '100%' }}>종료 시각은 시작보다 늦어야 합니다.</p>}
           </div>
         </div>
 

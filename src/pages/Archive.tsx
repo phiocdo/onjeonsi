@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { OPEN } from '../components/OneExhibit'
+import TagInput, { TagList } from '../components/TagInput'
 import { displayVenueName, getCatalog, todayInSeoul, type CatalogEntry } from '../lib/catalog'
 import { fromVisitRecord, getRatingSummary } from '../lib/ratings'
 import { recommendPersonal, type Candidate } from '../lib/recommend'
@@ -56,6 +57,7 @@ function ITEM({ entry, found, today, share, drop }: { entry: VisitRecord; found:
         <p className="record-venue">{venue} · {field}{STATUS_LABEL[view.status]}</p>
         <p className="record-meta">{'★'.repeat(entry.rating)}{'☆'.repeat(5 - entry.rating)} · 실제 {entry.visitMinutes}분</p>
         {entry.note && <p className="record-note">{entry.note}</p>}
+        <TagList tags={entry.tags} />
         <div className="record-actions">
           {view.status === 'listed' && <button type="button" onClick={() => OPEN(entry.exhibitionId)}>상세 보기</button>}
           <button type="button" onClick={() => share(entry.id)}>{entry.shared ? '익명 공유 중' : '비공개'}</button>
@@ -82,6 +84,7 @@ export default function Archive() {
   const [rating, setRating] = useState('5')
   const [time, setTime] = useState('70')
   const [note, setNote] = useState('')
+  const [tags, setTags] = useState<string[]>([])
   const [shared, setShared] = useState(false)
   const stats = useSyncExternalStore(subscribeStats, getCachedStats)
   // 서버에 반영하지 못한 공유 변경 (메모리에만 있음, src/lib/shareSync.ts 참고)
@@ -157,7 +160,7 @@ export default function Archive() {
     if (!found) return
 
     // 별점·관람 시간(10~480분 정수, 소수는 반올림)·날짜 검증은 createRecord가 한다
-    const entry = createRecord({ entry: found, date, rating: Number(rating), visitMinutes: Number(time), note, shared })
+    const entry = createRecord({ entry: found, date, rating: Number(rating), visitMinutes: Number(time), note, shared, tags })
     if (!entry) return
     // 공유에 동의한 기록만 서버에 보낸다 (값은 createRecord가 검증·반올림한 entry 기준)
     UPDATE((prev) => ({ ...prev, records: [entry, ...prev.records] }), entry.shared ? [entry.exhibitionId] : [])
@@ -165,6 +168,7 @@ export default function Archive() {
     const [year, month] = entry.date.split('-').map(Number)
     setView({ year, month: month - 1 })
     setNote('')
+    setTags([])
   }
 
   // 기록 공유 상태 (켜기·끄기 모두 서버에 반영)
@@ -203,7 +207,7 @@ export default function Archive() {
 
   // 아카이브 전체 삭제 (확인 후)
   function WIPE() {
-    if (!window.confirm(`기록 ${records.length}개와 관심 분야를 모두 삭제합니다. 익명 공유한 별점·관람 시간도 서버에서 삭제합니다. 되돌릴 수 없습니다.\n먼저 내보내기로 백업해 두십시오.`)) return
+    if (!window.confirm(`기록 ${records.length}개와 관심 분야를 모두 삭제합니다. 익명 공유한 별점·관람 시간·태그도 서버에서 삭제합니다. 되돌릴 수 없습니다.\n먼저 내보내기로 백업해 두십시오.`)) return
     // 저장소에서 지우지 못했으면 화면도 그대로 두고 서버도 부르지 않는다 (화면만 비우면 새로고침 때 기록이 되살아나 헷갈린다)
     // 지웠으면 서버의 내 공유 행 전부 삭제. 앞서 대기 중이던 전시별 작업은 버리고, 실패하면 '전체 삭제'로 다시 시도를 기다린다
     if (!clearAndSync(storage)) {
@@ -257,9 +261,10 @@ export default function Archive() {
               </label>
             </div>
             <textarea placeholder="오늘의 관람 메모" value={note} onChange={(e) => setNote(e.target.value)} />
+            <TagInput value={tags} onChange={setTags} />
             <label className="check-row">
               <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
-              <span>별점과 실제 관람 시간을 익명으로 공유하는 데 동의합니다. 다른 사용자가 전시를 고를 때 참고합니다. 메모와 날짜는 공유하지 않습니다.</span>
+              <span>별점·실제 관람 시간·태그를 익명으로 공유하는 데 동의합니다. 메모와 날짜는 공유하지 않습니다.</span>
             </label>
             <button type="button" className="primary-button" onClick={SAVE}>기록 저장</button>
           </div>

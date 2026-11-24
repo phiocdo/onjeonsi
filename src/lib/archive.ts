@@ -7,6 +7,8 @@
  * - 잘못된 기록(형식이 다르거나 별점·관람 시간이 범위를 벗어난 것)은 읽을 때 버린다.
  *   화면 입력으로는 만들 수 없는 값이라 저장소를 직접 고친 경우에만 생긴다.
  * - 읽을 때 카탈로그에 전시가 있으면 전시 정보 사본을 최신으로 고친다. 그래서 화면과 내보내기가 같다.
+ * - 사용자 태그(tags)는 선택 필드다. 태그가 있을 때만 필드를 두므로 ARCHIVE_VERSION은 2 그대로다
+ *   (태그를 모르는 예전 화면도 v2로 읽고, 태그만 무시한다).
  */
 import { isValidReview } from '../engine/stats';
 import {
@@ -17,6 +19,7 @@ import {
   type VisitRecord,
 } from '../types/records';
 import { displayVenueName, todayInSeoul, type CatalogEntry } from './catalog';
+import { normalizeTags } from './userTags';
 
 export const ARCHIVE_KEY = 'onjeonsi:archive';
 /** v1 화면이 쓰던 키. 옮긴 뒤 지운다 */
@@ -75,6 +78,17 @@ export interface NewRecordInput {
   visitMinutes: number;
   note: string;
   shared: boolean;
+  // 사용자 태그. normalizeTags로 정리해 넣는다(잘못된 태그는 버리고 기록은 만든다)
+  tags?: readonly string[];
+}
+
+/**
+ * 태그 필드. 정리한 태그가 있을 때만 { tags }를 돌려준다.
+ * 태그가 없으면 필드를 두지 않아, 태그를 쓰지 않은 기록은 저장·내보내기 모양이 예전(#72까지)과 똑같다.
+ */
+function tagsField(raw: unknown): Pick<VisitRecord, 'tags'> {
+  const tags = normalizeTags(raw);
+  return tags.length ? { tags } : {};
 }
 
 /** 입력값으로 기록 한 건을 만든다. 형식이 틀리면 null */
@@ -89,6 +103,7 @@ export function createRecord(input: NewRecordInput, now: Date = new Date(), id: 
     note: input.note.trim(),
     shared: input.shared,
     createdAt: now.toISOString(),
+    ...tagsField(input.tags),
   };
   return isValidRecord(record) ? record : null;
 }
@@ -186,6 +201,8 @@ export function normalizeRecord(raw: unknown, lookup: CatalogLookup): VisitRecor
     note: typeof raw.note === 'string' ? raw.note : '',
     shared: raw.shared === true,
     createdAt: toIso(raw.createdAt) ?? fallbackCreatedAt(id, date),
+    // 태그는 다시 정리한다. 잘못된 태그만 버리고 기록은 살린다(태그는 선택 필드라 기록 전체를 버릴 이유가 없다)
+    ...tagsField(raw.tags),
   };
   return isValidRecord(record) ? record : null;
 }

@@ -32,16 +32,18 @@ function makeMockClient() {
   const eq = vi.fn().mockResolvedValue({ error: null });
   const del = vi.fn().mockReturnValue({ eq });
   const from = vi.fn().mockReturnValue({ upsert, delete: del });
+  // rpc: 별점 통계(get_rating_stats), tagRpc: 태그 통계(get_tag_stats). 클라이언트의 rpc는 이름으로 나눠 부른다
   const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
+  const tagRpc = vi.fn().mockResolvedValue({ data: [], error: null });
   const getSession = vi.fn().mockResolvedValue({ data: { session: null }, error: null });
   const signInAnonymously = vi.fn().mockResolvedValue({ data: { session: { user: { id: 'anon-1' } } }, error: null });
 
   const client: MockSupabase = {
-    rpc,
+    rpc: vi.fn((name: string) => (name === 'get_tag_stats' ? tagRpc(name) : rpc(name))),
     auth: { getSession, signInAnonymously },
     from,
   };
-  return { client, rpc, getSession, signInAnonymously, from, upsert, del, eq };
+  return { client, rpc, tagRpc, getSession, signInAnonymously, from, upsert, del, eq };
 }
 
 beforeEach(() => {
@@ -214,6 +216,158 @@ describe('fetchStats', () => {
   });
 });
 
+describe('fetchStats 태그 통계', () => {
+  const RATING_ROW = { scope: 'exhibition', id: 'ex-1', count: 5, avg_stars: 4.4, median_minutes: 60 };
+
+  it('rpc 성공 → 전시 id별 [{ tag, users }] Map (users 많은 순, 잘못된 행·1명 태그는 버림)', async () => {
+    const { client, tagRpc } = makeMockClient();
+    tagRpc.mockResolvedValue({
+      data: [
+        { exhibition_id: 'ex-1', tag: '조용함', users: 2 },
+        { exhibition_id: 'ex-1', tag: '사진 찍기 좋음', users: '4' },
+        { exhibition_id: 'ex-2', tag: '데이트', users: 3 },
+        { exhibition_id: 'ex-2', tag: '혼자', users: 1 },
+        { exhibition_id: 'ex-2', tag: '가'.repeat(16), users: 9 },
+        { exhibition_id: '', tag: 'x', users: 5 },
+        { exhibition_id: 'ex-3', tag: 7, users: 5 },
+        null,
+      ],
+      error: null,
+    });
+    mockClient = client;
+
+    const stats = await fetchStats();
+    expect(tagRpc).toHaveBeenCalledWith('get_tag_stats');
+    expect(stats.tags.get('ex-1')).toEqual([
+      { tag: '사진 찍기 좋음', users: 4 },
+      { tag: '조용함', users: 2 },
+    ]);
+    expect(stats.tags.get('ex-2')).toEqual([{ tag: '데이트', users: 3 }]);
+    expect(stats.tags.has('ex-3')).toBe(false);
+    expect(getCachedStats()).toBe(stats);
+  });
+
+  it('태그 rpc 실패(에러·예외·시간 초과) → 빈 Map, 별점 통계는 그대로', async () => {
+    for (const fail of ['error', 'reject'] as const) {
+      resetStatsCache();
+      const { client, rpc, tagRpc } = makeMockClient();
+      rpc.mockResolvedValue({ data: [RATING_ROW], error: null });
+      if (fail === 'error') tagRpc.mockResolvedValue({ data: null, error: { message: 'no function' } });
+      else tagRpc.mockRejectedValue(new Error('network'));
+      mockClient = client;
+
+      const stats = await fetchStats();
+      expect(stats.tags.size).toBe(0);
+      expect(stats.exhibitions.get('ex-1')?.count).toBe(5);
+    }
+  });
+
+  it('별점 rpc만 실패 → 태그 통계는 반영된다', async () => {
+    const { client, rpc, tagRpc } = makeMockClient();
+    rpc.mockResolvedValue({ data: null, error: { message: 'db error' } });
+    tagRpc.mockResolvedValue({ data: [{ exhibition_id: 'ex-1', tag: '조용함', users: 2 }], error: null });
+    mockClient = client;
+
+    const stats = await fetchStats();
+    expect(stats.exhibitions.size).toBe(0);
+    expect(stats.tags.get('ex-1')).toEqual([{ tag: '조용함', users: 2 }]);
+  });
+
+  it('실패한 쪽만 다음 fetchStats 때 다시 받는다', async () => {
+    const { client, rpc, tagRpc } = makeMockClient();
+    rpc.mockResolvedValue({ data: [RATING_ROW], error: null });
+    tagRpc.mockResolvedValueOnce({ data: null, error: { message: 'x' } }).mockResolvedValue({ data: [{ exhibition_id: 'ex-1', tag: '조용함', users: 2 }], error: null });
+    mockClient = client;
+
+    await fetchStats();
+    const again = await fetchStats();
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(tagRpc).toHaveBeenCalledTimes(2);
+    expect(again.tags.get('ex-1')).toHaveLength(1);
+    expect(again.exhibitions.get('ex-1')?.count).toBe(5);
+
+    // 둘 다 받았으면 다시 부르지 않는다
+    expect(await fetchStats()).toBe(again);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(tagRpc).toHaveBeenCalledTimes(2);
+  });
+
+  it('태그 rpc가 시간 초과여도 별점은 바로 반영되고, 태그는 늦게 성공하면 그때 알린다', async () => {
+    vi.useFakeTimers();
+    const { client, rpc, tagRpc } = makeMockClient();
+    rpc.mockResolvedValue({ data: [RATING_ROW], error: null });
+    let resolveTags!: (v: unknown) => void;
+    tagRpc.mockImplementation(() => new Promise((resolve) => { resolveTags = resolve; }));
+    mockClient = client;
+    const listener = vi.fn();
+    const unsubscribe = subscribeStats(listener);
+
+    const pending = fetchStats();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getCachedStats().exhibitions.get('ex-1')?.count).toBe(5);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect((await pending).tags.size).toBe(0);
+
+    resolveTags({ data: [{ exhibition_id: 'ex-1', tag: '조용함', users: 2 }], error: null });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(getCachedStats().tags.get('ex-1')).toEqual([{ tag: '조용함', users: 2 }]);
+    expect(getCachedStats().exhibitions.get('ex-1')?.count).toBe(5);
+    unsubscribe();
+  });
+
+  it('getCachedStats는 상태가 그대로면 같은 참조, 빈 결과끼리는 알리지도 바꾸지도 않는다', async () => {
+    const initial = getCachedStats();
+    expect(getCachedStats()).toBe(initial);
+    expect(initial.tags.size).toBe(0);
+
+    const { client, rpc } = makeMockClient();
+    rpc.mockResolvedValue({ data: null, error: { message: 'x' } });
+    mockClient = client;
+    const listener = vi.fn();
+    const unsubscribe = subscribeStats(listener);
+    await fetchStats();
+    // 별점 실패 + 빈 태그 → 바뀐 것이 없다
+    expect(getCachedStats()).toBe(initial);
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+
+    // 초기화하면 처음 빈 값(같은 모듈 상수)으로 돌아간다
+    resetStatsCache();
+    expect(getCachedStats()).toBe(initial);
+  });
+
+  it('refreshStats는 둘 다 다시 받는다', async () => {
+    const { client, rpc, tagRpc } = makeMockClient();
+    mockClient = client;
+    await fetchStats();
+    await refreshStats();
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(tagRpc).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('shareRating 태그', () => {
+  it('정리한 태그만 보낸다 (최대 5개, 잘못된 것은 버림)', async () => {
+    const { client, upsert } = makeMockClient();
+    mockClient = client;
+    await shareRating({ exhibitionId: 'ex-1', venueId: null, stars: 4, minutes: 60, tags: ['#조용함', '조용함', 'Date', '가'.repeat(16), '!!', 'a', 'b', 'c', 'd'] });
+    expect((upsert.mock.calls[0][0] as { tags: string[] }).tags).toEqual(['조용함', 'date', 'a', 'b', 'c']);
+  });
+
+  it('메모 같은 다른 값은 보내지 않는다', async () => {
+    const { client, upsert } = makeMockClient();
+    mockClient = client;
+    const input = { exhibitionId: 'ex-1', venueId: null, stars: 4, minutes: 60, tags: ['조용함'], note: '비밀 메모' };
+    await shareRating(input);
+    const sent = upsert.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.keys(sent).sort()).toEqual(['exhibition_id', 'minutes', 'stars', 'tags', 'venue_id']);
+    expect(JSON.stringify(sent)).not.toContain('비밀 메모');
+  });
+});
+
 describe('shareRating', () => {
   it('동시에 두 번 공유해도 익명 로그인은 한 번만 한다', async () => {
     const { client, getSession, signInAnonymously, upsert } = makeMockClient();
@@ -278,11 +432,12 @@ describe('shareRating', () => {
         venue_id: 'venue-sema',
         stars: 4,
         minutes: 90,
+        tags: [],
       },
       { onConflict: 'exhibition_id,user_id' },
     );
     const sentRow = upsert.mock.calls[0][0] as Record<string, unknown>;
-    expect(Object.keys(sentRow).sort()).toEqual(['exhibition_id', 'minutes', 'stars', 'venue_id']);
+    expect(Object.keys(sentRow).sort()).toEqual(['exhibition_id', 'minutes', 'stars', 'tags', 'venue_id']);
     expect('user_id' in sentRow).toBe(false);
   });
 
@@ -306,6 +461,7 @@ describe('shareRating', () => {
         venue_id: null,
         stars: 5,
         minutes: 120,
+        tags: [],
       },
       { onConflict: 'exhibition_id,user_id' },
     );

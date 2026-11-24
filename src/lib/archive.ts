@@ -129,7 +129,8 @@ function isValidRecord(r: VisitRecord): boolean {
   );
 }
 
-function readSnapshot(v: unknown): ExhibitionSnapshot | null {
+/** 저장된 전시 정보 사본을 읽는다. 제목이 없으면 null. 찜 목록(saved.ts)도 쓴다 */
+export function readSnapshot(v: unknown): ExhibitionSnapshot | null {
   if (!isObject(v) || typeof v.title !== 'string' || v.title === '') return null;
   return {
     title: v.title,
@@ -142,8 +143,8 @@ function readSnapshot(v: unknown): ExhibitionSnapshot | null {
   };
 }
 
-/** 시각 값을 ISO 8601(UTC)로 맞춘다. 읽을 수 없으면 null */
-function toIso(v: unknown): string | null {
+/** 시각 값을 ISO 8601(UTC)로 맞춘다. 읽을 수 없으면 null. 찜 목록(saved.ts)도 쓴다 */
+export function toIso(v: unknown): string | null {
   if (typeof v !== 'string' && typeof v !== 'number') return null;
   const t = new Date(v);
   return Number.isNaN(t.getTime()) ? null : t.toISOString();

@@ -1,0 +1,32 @@
+/* 북마크(가볼 전시) 모아보기 */
+.saved-page h1 {
+  margin-bottom: 8px;
+}
+
+/* 다른 기기에서는 안 보인다는 안내라 흐리게 두지 않는다 */
+.saved-note {
+  margin: 0 0 20px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 찜 버튼을 포스터 위에 띄우려고 카드를 감싼다 */
+.saved-card {
+  position: relative;
+  min-width: 0;
+}
+
+/* 곧 끝나는 전시는 기간 줄을 강조한다 */
+.saved-card.soon .one-meta {
+  color: #d4382c;
+  font-weight: 800;
+}
+
+.saved-gone {
+  margin-top: 48px;
+}
+
+.saved-wipe {
+  margin-top: 32px;
+}

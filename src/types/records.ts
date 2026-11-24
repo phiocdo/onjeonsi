@@ -1,7 +1,8 @@
 /**
- * 관람 기록(아카이브)과 공유 평가의 타입.
- * 형식은 schema/personal-records-export.schema.json, schema/shared-reviews-seed.schema.json과 같다.
- * 기록을 읽고 저장하고 내보내는 함수는 src/lib/archive.ts에 있다.
+ * 관람 기록(아카이브), 찜(가볼 전시), 공유 평가의 타입.
+ * 관람 기록·공유 평가 형식은 schema/personal-records-export.schema.json, schema/shared-reviews-seed.schema.json과 같다.
+ * 찜은 내보내지 않아 스키마가 없다(브라우저 localStorage에만 있다).
+ * 기록을 읽고 저장하고 내보내는 함수는 src/lib/archive.ts에, 찜은 src/lib/saved.ts에 있다.
  */
 
 /**
@@ -54,6 +55,29 @@ export interface ArchiveData {
   records: VisitRecord[];
   // 관심 분야. 값은 전시의 field와 같은 종류
   interests: string[];
+}
+
+// ─── 찜(가볼 전시) ─────────────────────────────────────────
+// 읽고 저장하는 함수는 src/lib/saved.ts에 있다. 아카이브와 다른 키(onjeonsi:saved)에 저장한다.
+
+/** 찜 저장 형식 버전. 아카이브(ARCHIVE_VERSION)와 따로 센다 */
+export const SAVED_VERSION = 1;
+
+/** 찜한 전시 한 건 */
+export interface SavedItem {
+  // 전시 id (auto.json의 id)
+  exhibitionId: string;
+  // 찜한 시각, ISO 8601
+  savedAt: string;
+  // 찜할 때 복사해 둔 전시 정보. 끝난 전시가 카탈로그에서 빠져도 목록에 보여 주려고 둔다
+  exhibition: ExhibitionSnapshot;
+}
+
+/** localStorage에 저장하는 찜 목록 전체 */
+export interface SavedData {
+  version: typeof SAVED_VERSION;
+  // 찜한 순서 (먼저 찜한 것이 앞)
+  items: SavedItem[];
 }
 
 /** 내보내기 파일. 저장 형식에 내보낸 시각을 더한 것 */

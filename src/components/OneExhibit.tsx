@@ -7,6 +7,7 @@ import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
 import { sharedTags, tagsOf } from '../lib/tags'
 import type { JudgeResult, Venue, Weekday } from '../types'
 import ExhibitKeywords from './ExhibitKeywords'
+import SaveButton from './SaveButton'
 import './OneExhibit.css'
 
 export type Status = '가능' | '불가' | '확인 필요'
@@ -150,6 +151,7 @@ export function WINDOW() {
       <div className="one-window" onClick={(e) => e.stopPropagation()}>
         <div className="one-bar" style={BAR}>
           <span className="one-bar-title">{detail ? detail.venue : '전시 상세'}</span>
+          {found && <SaveButton entry={found} className="push" />}
           <button type="button" className="one-close" aria-label="닫기" onClick={CLOSE}>✕</button>
         </div>
 

@@ -73,11 +73,27 @@ npm run dev
 | 파일 | 내용 | 만드는 방법 |
 | --- | --- | --- |
 | `data/exhibitions/auto.json` | 종로·중구 전시 | 서울시 API 자동 수집 |
+| `data/exhibitions/manual.json` | 서울시 API에 없는 전시 (지금은 국립현대미술관 서울관) | 사람이 직접 추가 |
 | `data/holidays/holidays.json` | 공휴일 | 공공데이터포털 자동 수집 |
 | `data/venues/` | 시설 운영 정보 | 사람이 직접 조사 (작성 중) |
 
-운영시간·휴관일은 API로 제공되지 않아 손으로 조사합니다. 그래서 시설 데이터만
+운영시간·휴관일은 API로 제공되지 않아 손으로 조사합니다. 그래서 시설 데이터는
 수동이고, 각 항목에 출처(`source`)와 확인 날짜(`verified`)를 남깁니다.
+
+### 사람이 채우는 전시 (`manual.json`)
+
+서울시 API에 없는 전시를 손으로 추가하는 파일입니다. 화면은 `auto.json` 뒤에 이 파일을 붙여 씁니다.
+
+- 형식은 `auto.json`과 같습니다(`schema/exhibitions.schema.json`).
+- **추가만 합니다.** `id`는 `manual-`로 시작해야 하고(예: 한국문화정보원 API의 `seq`를 써서 `manual-kcisa-364451`), 한 번 정하면 바꾸지 않습니다. 찜·관람 기록이 이 `id`로 저장됩니다.
+- 끝난 전시는 화면에 나오지 않습니다. 파일에서는 사람이 정리합니다.
+- 같은 전시가 서울시 API로도 수집되면 자동 수집 쪽만 나오고 `manual.json` 쪽은 빠집니다(제목·기간·시설이 같으면 같은 전시로 봄). 그때는 `manual.json`에서 지웁니다.
+- **운영시간은 `operatingHours`에 직접 씁니다.** 해석기를 거치지 않으므로 문구를 잘못 읽을 일이 없습니다.
+  `hoursText`에는 공식 안내 문구를 화면 표시용으로 남기고, 휴관일은 `exceptions`에 날짜별로 `{ "isOpen": false, "intervals": [] }`로 씁니다.
+- 시설에 연결되면 판정은 전시와 시설 중 좁은 쪽을 씁니다. 시설보다 늦게 여는 날을 빠뜨리면 그날 저녁이 "불가"가 됩니다.
+- 운영시간을 시설 파일(`data/venues/`)에만 맡기려면 `scheduleType`을 `"unknown"`으로 두고 7개 요일을 `{ "isOpen": false, "intervals": [] }`로 씁니다.
+  이때 `placeName`이 시설 이름·별칭과 맞아 시설에 연결되어야 합니다. 연결되지 않으면 늘 "확인 필요"가 나옵니다.
+- 고친 뒤 `npm run validate`로 검사합니다.
 
 ### 수집 스크립트 실행
 

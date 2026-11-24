@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "전시 목록 (data/exhibitions/auto.json)",
-  "description": "수집 스크립트가 만드는 파일이라 최상위의 모르는 키는 허용한다(필드가 늘어도 배포가 멈추지 않게). 해석기가 만드는 operatingHours 안쪽은 정해진 키만 허용한다. 선택 항목은 null도 허용한다. 파일 전체가 배열이라고 가정했다. 스키마로 검사하지 못하는 것: id가 겹치는지, open이 close보다 이른지, start가 end보다 이른지.",
+  "title": "전시 목록 (data/exhibitions/auto.json, manual.json)",
+  "description": "수집 스크립트가 만드는 파일이라 최상위의 모르는 키는 허용한다(필드가 늘어도 배포가 멈추지 않게). 사람이 쓰는 manual.json의 모르는 키는 validate-data.ts가 따로 막는다. 해석기가 만드는 operatingHours 안쪽은 정해진 키만 허용한다. 선택 항목은 null도 허용한다. 파일 전체가 배열이라고 가정했다. 스키마로 검사하지 못하는 것: id가 겹치는지, open이 close보다 이른지, start가 end보다 이른지.",
   "type": "array",
   "items": {
     "type": "object",

@@ -24,10 +24,59 @@ const ROOT = path.resolve(__dirname, '..');
  * 시설은 수집하지 않고 저장소에 있는 값이라, 어긋나면 배포 워크플로가 되돌려도 그대로 실패해
  * 배포가 멈춘다. 시설 파일은 스키마를 통과해야 머지한다는 팀 규칙과 같다.
  */
-type Target = { schema: string; data: string } | { schema: string; dir: string };
+type Target = ({ schema: string; data: string } | { schema: string; dir: string }) & {
+  /** 스키마로 못 잡는 것을 더 본다. 어긋난 곳마다 한 줄씩 돌려준다 */
+  check?: (data: unknown) => string[];
+};
+
+/** 사람이 채우는 전시의 id 머리. 자동 수집 전시(auto-seoul-…)와 겹치지 않게 한다 */
+const MANUAL_ID_PREFIX = 'manual-';
+
+/**
+ * 전시 스키마에 정의된 최상위 키.
+ * 스키마는 수집 필드가 늘어도 배포가 멈추지 않게 모르는 키를 허용하지만,
+ * 사람이 쓰는 manual.json에서는 모르는 키가 곧 오타(예: placename)라서 따로 막는다.
+ */
+function exhibitionKeys(): Set<string> {
+  const schema = readJson('schema/exhibitions.schema.json') as { items?: { properties?: Record<string, unknown> } };
+  return new Set(Object.keys(schema.items?.properties ?? {}));
+}
+
+/**
+ * data/exhibitions/manual.json(사람이 채우는 전시)에서 스키마로 못 잡는 것을 본다.
+ * 형식은 auto.json과 같아서 스키마는 같은 것을 쓴다.
+ * - id는 'manual-'로 시작한다 (추가만 하고 자동 수집 전시를 덮어쓰지 않는다는 규칙)
+ * - id가 파일 안에서 겹치지 않는다
+ * - 시작일이 종료일보다 늦지 않다
+ * - 스키마에 없는 최상위 키(오타)가 없다
+ */
+function checkManualExhibitions(data: unknown): string[] {
+  if (!Array.isArray(data)) return [];
+  const known = exhibitionKeys();
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  data.forEach((item, index) => {
+    const { id, start, end } = (item ?? {}) as { id?: unknown; start?: unknown; end?: unknown };
+    const where = typeof id === 'string' ? `/${index} (${id})` : `/${index}`;
+    if (item && typeof item === 'object') {
+      const unknownKeys = Object.keys(item).filter((key) => !known.has(key));
+      if (unknownKeys.length) problems.push(`${where} 스키마에 없는 키입니다(오타인지 확인): ${unknownKeys.join(', ')}`);
+    }
+    if (typeof id === 'string') {
+      if (!id.startsWith(MANUAL_ID_PREFIX)) problems.push(`${where} id는 '${MANUAL_ID_PREFIX}'로 시작해야 합니다`);
+      if (seen.has(id)) problems.push(`${where} id가 겹칩니다`);
+      seen.add(id);
+    }
+    if (typeof start === 'string' && typeof end === 'string' && start > end) {
+      problems.push(`${where} 시작일(${start})이 종료일(${end})보다 늦습니다`);
+    }
+  });
+  return problems;
+}
 
 const TARGETS: Target[] = [
   { schema: 'schema/exhibitions.schema.json', data: 'data/exhibitions/auto.json' },
+  { schema: 'schema/exhibitions.schema.json', data: 'data/exhibitions/manual.json', check: checkManualExhibitions },
   { schema: 'schema/holidays.schema.json', data: 'data/holidays/holidays.json' },
   { schema: 'schema/venue.schema.json', dir: 'data/venues' }
 ];
@@ -114,7 +163,12 @@ function idMismatch(file: string, data: unknown): string | null {
 }
 
 /** 파일 하나를 검사하고 어긋난 곳을 출력한다. count 는 통과했을 때 보여줄 건수 */
-function validateFile(file: string, validate: ValidateFunction, checkId: boolean): { ok: boolean; count: string } {
+function validateFile(
+  file: string,
+  validate: ValidateFunction,
+  checkId: boolean,
+  check?: (data: unknown) => string[],
+): { ok: boolean; count: string } {
   let data: unknown;
   try {
     data = readJson(file);
@@ -126,10 +180,11 @@ function validateFile(file: string, validate: ValidateFunction, checkId: boolean
   const count = Array.isArray(data) ? `${data.length}건` : '1건';
   const errors = validate(data) ? [] : groupErrors(validate.errors ?? []);
   const idError = checkId ? idMismatch(file, data) : null;
-  if (!errors.length && !idError) return { ok: true, count };
+  const extra = [...(idError ? [idError] : []), ...(check?.(data) ?? [])];
+  if (!errors.length && !extra.length) return { ok: true, count };
 
-  console.error(`❌ ${file} (${count}) — 어긋난 곳 ${errors.length + (idError ? 1 : 0)}군데`);
-  if (idError) console.error(`   · ${idError}`);
+  console.error(`❌ ${file} (${count}) — 어긋난 곳 ${errors.length + extra.length}군데`);
+  for (const problem of extra) console.error(`   · ${problem}`);
   for (const error of errors.slice(0, MAX_SHOWN)) {
     console.error(`   · ${describe(error, data)}`);
   }
@@ -157,7 +212,7 @@ function validateAll(): boolean {
       continue;
     }
 
-    const results = files.map((file) => validateFile(file, validate, 'dir' in target));
+    const results = files.map((file) => validateFile(file, validate, 'dir' in target, target.check));
     if (results.some((r) => !r.ok)) {
       allPassed = false;
       continue;

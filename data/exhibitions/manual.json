@@ -1,0 +1,165 @@
+[
+  {
+    "id": "manual-kcisa-364451",
+    "venueId": "",
+    "title": "올해의 작가상 2026",
+    "start": "2026-07-24",
+    "end": "2026-12-06",
+    "field": "전시/미술",
+    "placeName": "국립현대미술관 서울관",
+    "hoursText": "월·화·목·금·일 10:00~18:00, 수·토 10:00~21:00 (18:00~21:00 야간개장) / 휴관: 1월 1일, 설날, 추석, 임시 휴관 12월 1일",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "tue": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "wed": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "21:00" } ] },
+        "thu": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "fri": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "sat": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "21:00" } ] },
+        "sun": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] }
+      },
+      "holiday": null,
+      "exceptions": [
+        { "date": "2026-12-01", "schedule": { "isOpen": false, "intervals": [] } }
+      ]
+    },
+    "link": "https://www.mmca.go.kr/",
+    "imageUrl": "https://www.culture.go.kr/upload/ucms/oneCltInfo/2026/202607/c3ad9d7727864bab98c12659bad530b6.png",
+    "detailUrl": "https://www.mmca.go.kr/exhibitions/exhibitionsDetail.do?exhFlag=2&exhId=202512310002018",
+    "lat": 37.5786274905286,
+    "lng": 126.98010361777375,
+    "fetchedAt": "2026-11-24T05:10:25Z"
+  },
+  {
+    "id": "manual-kcisa-364982",
+    "venueId": "",
+    "title": "MMCA×LG OLED 시리즈 2026",
+    "start": "2026-07-31",
+    "end": "2026-11-29",
+    "field": "전시/미술",
+    "placeName": "국립현대미술관 서울관",
+    "hoursText": "월·화·목·금·일 10:00~18:00, 수·토 10:00~21:00 (18:00~21:00 야간개장) / 휴관: 1월 1일, 설날, 추석, 임시 휴관 12월 1일",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "tue": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "wed": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "21:00" } ] },
+        "thu": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "fri": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "sat": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "21:00" } ] },
+        "sun": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] }
+      },
+      "holiday": null,
+      "exceptions": []
+    },
+    "link": "https://www.mmca.go.kr/",
+    "imageUrl": "https://www.culture.go.kr/upload/ucms/oneCltInfo/2026/202608/96695e3738dd4945bc847b34c8c7610d.png",
+    "detailUrl": "https://www.mmca.go.kr/exhibitions/exhibitionsDetail.do?exhFlag=2&exhId=202601060002028",
+    "lat": 37.5786274905286,
+    "lng": 126.98010361777375,
+    "fetchedAt": "2026-11-24T05:14:43Z"
+  },
+  {
+    "id": "manual-kcisa-366251",
+    "venueId": "",
+    "title": "서도호",
+    "start": "2026-08-27",
+    "end": "2027-02-09",
+    "field": "전시/미술",
+    "placeName": "국립현대미술관 서울관",
+    "hoursText": "월·화·목·금·일 10:00~18:00, 수·토 10:00~21:00 (18:00~21:00 야간개장) / 휴관: 1월 1일, 설날, 추석, 임시 휴관 12월 1일",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "tue": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "wed": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "21:00" } ] },
+        "thu": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "fri": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "sat": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "21:00" } ] },
+        "sun": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] }
+      },
+      "holiday": null,
+      "exceptions": [
+        { "date": "2026-12-01", "schedule": { "isOpen": false, "intervals": [] } },
+        { "date": "2027-01-01", "schedule": { "isOpen": false, "intervals": [] } },
+        { "date": "2027-02-07", "schedule": { "isOpen": false, "intervals": [] } }
+      ]
+    },
+    "link": "https://www.mmca.go.kr/",
+    "imageUrl": "https://www.culture.go.kr/upload/ucms/oneCltInfo/2026/202608/4de3578f241748189727d679d8e04ce5.png",
+    "detailUrl": "https://www.mmca.go.kr/exhibitions/exhibitionsDetail.do?exhFlag=2&exhId=202601200002041",
+    "lat": 37.5786274905286,
+    "lng": 126.98010361777375,
+    "fetchedAt": "2026-11-24T05:14:42Z"
+  },
+  {
+    "id": "manual-kcisa-407873",
+    "venueId": "",
+    "title": "서도호의 현장들",
+    "start": "2026-11-11",
+    "end": "2027-01-10",
+    "field": "전시/미술",
+    "placeName": "국립현대미술관 서울관",
+    "hoursText": "월·화·목·금·일 10:00~18:00, 수·토 10:00~21:00 (18:00~21:00 야간개장) / 휴관: 1월 1일, 설날, 추석, 임시 휴관 12월 1일",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "tue": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "wed": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "21:00" } ] },
+        "thu": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "fri": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "sat": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "21:00" } ] },
+        "sun": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] }
+      },
+      "holiday": null,
+      "exceptions": [
+        { "date": "2026-12-01", "schedule": { "isOpen": false, "intervals": [] } },
+        { "date": "2027-01-01", "schedule": { "isOpen": false, "intervals": [] } }
+      ]
+    },
+    "link": "https://www.mmca.go.kr/",
+    "imageUrl": "https://www.culture.go.kr/upload/ucms/oneCltInfo/2026/202611/01a40f8daade46d5b64827fef273a63d.png",
+    "detailUrl": "https://www.mmca.go.kr/exhibitions/exhibitionsDetail.do?exhFlag=1&exhId=202610270002108",
+    "lat": 37.5786274905286,
+    "lng": 126.98010361777375,
+    "fetchedAt": "2026-11-24T05:10:26Z"
+  },
+  {
+    "id": "manual-kcisa-365700",
+    "venueId": "",
+    "title": "읽기의 기술: 종이에서 픽셀로",
+    "start": "2026-11-20",
+    "end": "2027-04-04",
+    "field": "전시/미술",
+    "placeName": "국립현대미술관 서울관",
+    "hoursText": "월·화·목·금·일 10:00~18:00, 수·토 10:00~21:00 (18:00~21:00 야간개장) / 휴관: 1월 1일, 설날, 추석, 임시 휴관 12월 1일",
+    "operatingHours": {
+      "scheduleType": "scheduled",
+      "weekdays": {
+        "mon": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "tue": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "wed": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "21:00" } ] },
+        "thu": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "fri": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] },
+        "sat": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "21:00" } ] },
+        "sun": { "isOpen": true, "intervals": [ { "open": "10:00", "close": "18:00" } ] }
+      },
+      "holiday": null,
+      "exceptions": [
+        { "date": "2026-12-01", "schedule": { "isOpen": false, "intervals": [] } },
+        { "date": "2027-01-01", "schedule": { "isOpen": false, "intervals": [] } },
+        { "date": "2027-02-07", "schedule": { "isOpen": false, "intervals": [] } }
+      ]
+    },
+    "link": "https://www.mmca.go.kr/",
+    "imageUrl": "https://www.culture.go.kr/upload/ucms/oneCltInfo/2026/202611/97d437f3d8cf4abcad893fa0146db1c6.png",
+    "detailUrl": "https://www.mmca.go.kr/exhibitions/exhibitionsDetail.do?exhFlag=2&exhId=202601160002037",
+    "lat": 37.5786274905286,
+    "lng": 126.98010361777375,
+    "fetchedAt": "2026-11-24T05:14:43Z"
+  }
+]

@@ -7,11 +7,11 @@ JSON 데이터 파일의 형식을 정의한 JSON Schema(draft-07) 파일입니�
 
 | 파일 | 대상 |
 |---|---|
-| `exhibitions.schema.json` | `data/exhibitions/auto.json` (수집 스크립트가 만드는 전시 목록) |
+| `exhibitions.schema.json` | `data/exhibitions/auto.json` (수집 스크립트가 만드는 전시 목록), `data/exhibitions/manual.json` (사람이 채우는 전시. 형식이 같다. `id`가 `manual-`로 시작하는지·겹치지 않는지·시작일이 종료일보다 늦지 않은지는 `validate-data.ts`가 따로 검사) |
 | `holidays.schema.json` | `data/holidays/holidays.json` (공휴일 `YYYY-MM-DD` 배열) |
 | `venue.schema.json` | `data/venues/*.json` (시설마다 파일 하나. 파일 이름과 `id`가 같은지는 `validate-data.ts`가 따로 검사) |
 
-위 세 가지는 `npm run validate`와 배포 워크플로가 검사합니다. 시설 파일은 수집하지 않는 값이라,
+위 파일들은 `npm run validate`와 배포 워크플로가 검사합니다. 시설 파일과 `manual.json`은 수집하지 않는 값이라,
 스키마에 어긋나면 배포가 멈춥니다.
 
 ## 추가 예정
@@ -29,7 +29,7 @@ JSON 데이터 파일의 형식을 정의한 JSON Schema(draft-07) 파일입니�
 
 ## 스키마로 잡지 못하는 것
 
-- id 중복, 날짜 오름차순, 시작일이 종료일보다 이른지는 검사하지 못합니다.
+- id 중복, 날짜 오름차순, 시작일이 종료일보다 이른지는 검사하지 못합니다(`manual.json`의 id 중복·시작일은 `validate-data.ts`가 검사).
 - 운영시간 구간의 `open`이 `close`보다 이른지도 검사하지 못합니다.
 - 없는 날짜(예: `2026-02-30`)도 형식만 맞으면 통과합니다.
 - 전시 파일 최상위의 모르는 키는 허용하므로 그 값은 검사하지 않습니다(수집 필드가 늘어도 배포가 멈추지 않게).

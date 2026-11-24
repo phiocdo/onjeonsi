@@ -93,12 +93,20 @@ jobs:
         run: |
           ex=$(node -e "console.log(JSON.parse(require('fs').readFileSync('data/exhibitions/auto.json','utf8')).length)")
           ho=$(node -e "console.log(JSON.parse(require('fs').readFileSync('data/holidays/holidays.json','utf8')).length)")
+          # 사람이 추가한 전시는 수집하지 않으므로 따로 센다. 끝난 전시는 화면에서 빠지므로 진행·예정 건수도 같이 적는다
+          manual=$(node -e "
+            const list = JSON.parse(require('fs').readFileSync('data/exhibitions/manual.json', 'utf8'));
+            const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+            const active = list.filter((e) => e.end >= today).length;
+            console.log(active + ' (파일 ' + list.length + '건 중 끝난 ' + (list.length - active) + '건 제외)');
+          ")
           {
             echo "## 데이터 수집 결과"
             echo ""
             echo "| 항목 | 수집 결과 | 배포에 쓴 건수 |"
             echo "| --- | --- | --- |"
-            echo "| 전시 | $EXHIBITIONS_OUTCOME | $ex |"
+            echo "| 전시 (서울시 API, auto.json) | $EXHIBITIONS_OUTCOME | $ex |"
+            echo "| 전시 (사람이 추가, manual.json) | 수집 안 함 | $manual |"
             echo "| 공휴일 | $HOLIDAYS_OUTCOME | $ho |"
             echo ""
             echo "저장소의 data/는 자동 갱신되지 않습니다. 갱신하려면 collected-data 아티팩트를 받아 PR로 올립니다."

@@ -36,10 +36,13 @@ export interface VisitRecord {
   visitMinutes: number;
   // 개인 메모. 빈 문자열 허용. 공유하지 않는다
   note: string;
-  // 별점·관람 시간 익명 공유 동의
+  // 별점·관람 시간·태그 익명 공유 동의
   shared: boolean;
   // 기록을 만든 시각, ISO 8601
   createdAt: string;
+  // 사용자 태그 (src/lib/userTags.ts의 normalizeTags를 거친 값, 최대 5개). 태그가 없으면 필드를 두지 않는다.
+  // 공유에 동의한 기록이면 익명으로 서버에 보낸다. #71의 주제 태그(src/lib/tags.ts)와 다르다
+  tags?: string[];
 }
 
 /** 저장 형식 버전. 형식이 바뀌면 올리고 src/lib/archive.ts에서 예전 형식을 옮긴다 */

@@ -66,7 +66,7 @@ describe('planShareSync', () => {
     ];
     expect(planShareSync(records, 'ex-1')).toEqual({
       type: 'upsert',
-      payload: { exhibitionId: 'ex-1', venueId: 'venue-ended', stars: 5, minutes: 120 },
+      payload: { exhibitionId: 'ex-1', venueId: 'venue-ended', stars: 5, minutes: 120, tags: [] },
     });
   });
 
@@ -93,13 +93,107 @@ describe('planShareSync', () => {
     ];
     expect(planShareSync(records, 'ex-1')).toEqual({
       type: 'upsert',
-      payload: { exhibitionId: 'ex-1', venueId: 'venue-a', stars: 3, minutes: 60 },
+      payload: { exhibitionId: 'ex-1', venueId: 'venue-a', stars: 3, minutes: 60, tags: [] },
     });
     expect(planShareSync(records.slice(0, 1), 'ex-1')).toEqual({ type: 'delete', exhibitionId: 'ex-1' });
   });
 });
 
-const upsert = (exhibitionId: string, stars = 4): ShareJob => ({
+describe('planShareSync 태그', () => {
+  it('공유하면 그 최신 공유 기록의 태그를 정리해서 넣는다', () => {
+    const records = [
+      record({ id: 'old', exhibitionId: 'ex-1', tags: ['예전'], createdAt: '2026-11-01T10:00:00.000Z' }),
+      record({ id: 'new', exhibitionId: 'ex-1', tags: ['#조용함', '조용함', 'Date'], createdAt: '2026-11-02T10:00:00.000Z' }),
+    ];
+    expect(planShareSync(records, 'ex-1')).toMatchObject({ type: 'upsert', payload: { tags: ['조용함', 'date'] } });
+  });
+
+  it('비공개 기록의 태그는 더 최신이어도 나가지 않는다', () => {
+    const records = [
+      record({ id: 'pub', exhibitionId: 'ex-1', tags: ['공개 태그'], createdAt: '2026-11-01T10:00:00.000Z' }),
+      record({ id: 'priv', exhibitionId: 'ex-1', shared: false, tags: ['비공개 태그'], createdAt: '2026-11-05T10:00:00.000Z' }),
+    ];
+    const plan = planShareSync(records, 'ex-1');
+    expect(plan).toMatchObject({ type: 'upsert', payload: { tags: ['공개 태그'] } });
+    expect(JSON.stringify(plan)).not.toContain('비공개 태그');
+    // 비공개 기록만 남으면 delete라 태그가 나갈 길이 없다
+    expect(planShareSync(records.slice(1), 'ex-1')).toEqual({ type: 'delete', exhibitionId: 'ex-1' });
+  });
+
+  it('태그가 없는 기록은 빈 배열 (서버의 예전 태그를 지운다)', () => {
+    expect(planShareSync([record({ id: 'a', exhibitionId: 'ex-1' })], 'ex-1')).toMatchObject({ payload: { tags: [] } });
+  });
+
+  it('메모와 날짜는 payload에 없다', () => {
+    const plan = planShareSync([record({ id: 'a', exhibitionId: 'ex-1', note: '비밀 메모', date: '2026-11-03', tags: ['조용함'] })], 'ex-1');
+    if (plan.type !== 'upsert') throw new Error('upsert여야 함');
+    expect(Object.keys(plan.payload).sort()).toEqual(['exhibitionId', 'minutes', 'stars', 'tags', 'venueId']);
+    expect(JSON.stringify(plan)).not.toContain('비밀 메모');
+    expect(JSON.stringify(plan)).not.toContain('2026-11-03');
+  });
+
+  it('예전 기록 올리기와 다시 시도 재계산도 같은 태그를 보낸다', () => {
+    const records = [record({ id: 'a', exhibitionId: 'ex-1', tags: ['조용함'] }), record({ id: 'b', exhibitionId: 'ex-2', shared: false, tags: ['비공개'] })];
+    const submit = vi.fn<(job: ShareJob) => void>();
+    const map = new Map<string, string>();
+    backfillShared({ getItem: (k) => map.get(k) ?? null, setItem: (k, v) => void map.set(k, v) }, records, { enabled: true, queue: { submit }, now: new Date(0) });
+    expect(submit.mock.calls.map(([job]) => job)).toEqual([{ type: 'upsert', payload: expect.objectContaining({ exhibitionId: 'ex-1', tags: ['조용함'] }) }]);
+    expect(replanFromRecords(records, ['ex-1', 'ex-2'])).toEqual([
+      { type: 'upsert', payload: expect.objectContaining({ exhibitionId: 'ex-1', tags: ['조용함'] }) },
+      { type: 'delete', exhibitionId: 'ex-2' },
+    ]);
+  });
+});
+
+describe('planShareSync 전시 기간 밖 기록', () => {
+  // 발견 경위: 12/21에 시작하는 전시에 11/23 관람 기록이 공유됐다
+  const notStarted = { ...record({ id: 'x', exhibitionId: 'ex-1' }).exhibition, start: '2026-12-21', end: '2026-12-29' };
+  const before = record({ id: 'before', exhibitionId: 'ex-1', date: '2026-11-23', exhibition: notStarted, rating: 1, createdAt: '2026-11-23T10:00:00.000Z' });
+
+  it('기간 밖 공유 기록만 있으면 upsert 없이 delete (기록은 그대로 둔다)', () => {
+    const records = [before];
+    expect(planShareSync(records, 'ex-1', '2026-11-23')).toEqual({ type: 'delete', exhibitionId: 'ex-1' });
+    expect(records[0]).toBe(before);
+    expect(before.shared).toBe(true);
+  });
+
+  it('종료일 뒤 기록도 빠진다', () => {
+    const ended = { ...notStarted, start: '2026-10-01', end: '2026-11-10' };
+    expect(planShareSync([record({ id: 'a', exhibitionId: 'ex-1', date: '2026-11-11', exhibition: ended })], 'ex-1', '2026-11-23')).toEqual({ type: 'delete', exhibitionId: 'ex-1' });
+  });
+
+  it('같은 전시에 기간 안 기록이 있으면 (더 오래됐어도) 그 기록 기준으로 upsert', () => {
+    const inside = record({ id: 'in', exhibitionId: 'ex-1', date: '2026-12-22', exhibition: notStarted, rating: 5, createdAt: '2026-11-01T10:00:00.000Z' });
+    expect(planShareSync([before, inside], 'ex-1', '2026-12-30')).toEqual({
+      type: 'upsert',
+      payload: { exhibitionId: 'ex-1', venueId: 'venue-a', stars: 5, minutes: 60, tags: [] },
+    });
+  });
+
+  it('공유에서는 FUTURE를 보지 않는다 (기간 안이면 오늘 이후 날짜도 나간다)', () => {
+    expect(planShareSync([record({ id: 'a', exhibitionId: 'ex-1', date: '2026-11-24' })], 'ex-1', '2026-11-23')).toMatchObject({ type: 'upsert' });
+  });
+
+  it('기간 정보가 없는 기록은 기간 검사를 하지 않는다', () => {
+    const unknown = { ...notStarted, start: null, end: null };
+    expect(planShareSync([record({ id: 'a', exhibitionId: 'ex-1', date: '2020-01-01', exhibition: unknown })], 'ex-1', '2026-11-23')).toMatchObject({ type: 'upsert' });
+  });
+
+  it('저장·예전 기록 올리기·다시 시도 재계산 모두 같은 경로로 빠진다', () => {
+    const records = [before];
+    const submit = vi.fn<(job: ShareJob) => void>();
+    const mem = new Map<string, string>();
+    const storage: ArchiveStorage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => void mem.set(k, v), removeItem: (k) => void mem.delete(k) };
+    expect(saveAndSync(storage, { ...emptyArchive(), records }, ['ex-1'], { submit })).toBe(true);
+    backfillShared(storage, records, { enabled: true, queue: { submit }, now: new Date(0) });
+    const deleteOnly = { type: 'delete', exhibitionId: 'ex-1' };
+    expect(submit.mock.calls.map(([job]) => job)).toEqual([deleteOnly, deleteOnly]);
+    expect(replanFromRecords(records, ['ex-1'])).toEqual([deleteOnly]);
+    expect(replanFromRecords(records, [DELETE_ALL_KEY])).toEqual([{ type: 'deleteAll' }, deleteOnly]);
+  });
+});
+
+const upsert =(exhibitionId: string, stars = 4): ShareJob => ({
   type: 'upsert',
   payload: { exhibitionId, venueId: null, stars, minutes: 60 },
 });
@@ -408,7 +502,7 @@ describe('다시 시도 시 저장소의 지금 기록으로 다시 계산', () 
     q.retryAll();
     await q.idle();
     expect(run.mock.calls.map(([job]) => job)).toEqual([
-      { type: 'upsert', payload: { exhibitionId: 'ex-1', venueId: 'venue-a', stars: 1, minutes: 60 } },
+      { type: 'upsert', payload: { exhibitionId: 'ex-1', venueId: 'venue-a', stars: 1, minutes: 60, tags: [] } },
     ]);
   });
 
@@ -447,7 +541,7 @@ describe('다시 시도 시 저장소의 지금 기록으로 다시 계산', () 
     await q.idle();
     expect(run.mock.calls.map(([job]) => job)).toEqual([
       { type: 'deleteAll' },
-      { type: 'upsert', payload: { exhibitionId: 'ex-7', venueId: 'venue-a', stars: 5, minutes: 60 } },
+      { type: 'upsert', payload: { exhibitionId: 'ex-7', venueId: 'venue-a', stars: 5, minutes: 60, tags: [] } },
     ]);
     expect(q.getSnapshot().pendingCount).toBe(0);
   });
@@ -469,7 +563,7 @@ describe('다시 시도 시 저장소의 지금 기록으로 다시 계산', () 
     await q.idle();
     expect(run.mock.calls.map(([job]) => job)).toEqual([
       { type: 'deleteAll' },
-      { type: 'upsert', payload: { exhibitionId: 'ex-5', venueId: 'venue-a', stars: 3, minutes: 60 } },
+      { type: 'upsert', payload: { exhibitionId: 'ex-5', venueId: 'venue-a', stars: 3, minutes: 60, tags: [] } },
     ]);
     expect(q.getSnapshot().pendingCount).toBe(0);
   });

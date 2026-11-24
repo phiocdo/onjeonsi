@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Exhibition, Venue } from '../types';
 import { REASONS } from '../engine/reasons';
 import type { VenueLinks } from '../engine/matchVenue';
-import exhibitionsJson from '../../data/exhibitions/auto.json';
+import { loadBundledExhibitions } from './manualExhibitions';
 import linksJson from '../../data/venue-links.json';
 import {
   basisLabel,
@@ -228,14 +228,14 @@ describe('getCatalog (실제 데이터)', () => {
   it('스모크: 오류 없이 전시 수만큼 항목을 만든다', () => {
     const catalog = getCatalog();
     expect(Array.isArray(catalog)).toBe(true);
-    expect(catalog).toHaveLength(exhibitionsJson.length);
+    expect(catalog).toHaveLength(loadBundledExhibitions(todayInSeoul(), getVenues(), linksJson as VenueLinks).length);
   });
 
   it('SHOW_EXHIBITION_HOURS 값을 buildCatalog의 useExhibitionHours로 넘긴다', () => {
     // getCatalog와 같은 입력으로 스위치 값 그대로 / 반대로 만든 카탈로그와 비교한다.
     // 반대 값과 달라야 비교가 의미 있으므로 실제 데이터에 근거가 바뀌는 전시가 있는지도 본다
-    const exhibitions = exhibitionsJson as unknown as Exhibition[];
     const links = linksJson as VenueLinks;
+    const exhibitions = loadBundledExhibitions(todayInSeoul(), getVenues(), links);
     const summary = (entries: CatalogEntry[]) =>
       entries.map((e) => [e.exhibition.id, e.resolved.basis, e.resolved.source?.options.useExhibitionHours ?? null]);
     const withFlag = (on: boolean) => buildCatalog(exhibitions, getVenues(), links, { useExhibitionHours: on });

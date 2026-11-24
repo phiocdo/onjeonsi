@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import exhibitionsJson from '../../data/exhibitions/auto.json';
 import { calculateDistance, type Coordinate } from '../engine/distance';
 import { rankExhibitions } from '../engine/sort';
 import type { Exhibition, JudgeResult, Venue } from '../types';
-import { displayLocation, getCatalog, getHolidays, judgeCatalog, type CatalogEntry, type JudgedEntry } from './catalog';
+import { displayLocation, getCatalog, getHolidays, getVenues, judgeCatalog, todayInSeoul, type CatalogEntry, type JudgedEntry } from './catalog';
+import { loadBundledExhibitions } from './manualExhibitions';
+import type { VenueLinks } from '../engine/matchVenue';
+import linksJson from '../../data/venue-links.json';
 import type { AggregatedStat } from './ratings';
 import type { TagStats } from './sharedRatings';
 import {
@@ -306,17 +308,18 @@ describe('filterListItems / filterOptions', () => {
   });
 });
 
-describe('실제 데이터 (auto.json)', () => {
+describe('실제 데이터 (auto.json + manual.json)', () => {
   it('세 정렬 모두 항목을 잃지 않는다', () => {
     const js = judgeCatalog(getCatalog(), { date: '2026-11-23', stayStart: '14:00', stayEnd: '16:00' }, getHolidays());
     const items = buildListItems(js, { origin: ORIGIN });
-    expect(items).toHaveLength(exhibitionsJson.length);
-    expect(items).toHaveLength(49);
+    // manual.json은 끝난 전시를 빼므로 건수가 날짜에 따라 달라진다 → 고정 숫자 대신 번들 전시 수와 비교
+    const total = loadBundledExhibitions(todayInSeoul(), getVenues(), linksJson as VenueLinks).length;
+    expect(items).toHaveLength(total);
     expect(hasAnyDistance(items)).toBe(true);
     const all = [...ids(items)].sort();
     for (const key of ['default', 'popular', 'distance'] as const) {
       const out = sortListItems(items, key);
-      expect(out).toHaveLength(49);
+      expect(out).toHaveLength(total);
       expect([...ids(out)].sort()).toEqual(all);
     }
     // 공유 통계가 없으면 인기순 = 기본순

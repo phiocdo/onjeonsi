@@ -16,7 +16,7 @@ import {
   type ResolveOptions,
   type ResolveResult,
 } from '../engine/resolveSchedule';
-import exhibitionsJson from '../../data/exhibitions/auto.json';
+import { loadBundledExhibitions } from './manualExhibitions';
 import holidaysJson from '../../data/holidays/holidays.json';
 
 export interface CatalogEntry {
@@ -172,9 +172,6 @@ const linkModules = import.meta.glob<VenueLinks>('/data/venue-links.json', {
   import: 'default',
 });
 
-// auto.json에는 lat: null이 있어 Exhibition(lat?: number)과 정확히 맞지 않는다.
-// 좌표는 displayLocation / matchVenue에서 Number.isFinite로 다시 검사한다.
-const bundledExhibitions = exhibitionsJson as Exhibition[];
 const bundledHolidays: string[] = holidaysJson;
 
 let venuesCache: Venue[] | null = null;
@@ -204,7 +201,9 @@ function getLinks(): VenueLinks {
 /** 번들된 데이터로 만든 카탈로그. 처음 부를 때 한 번만 계산한다. */
 export function getCatalog(): CatalogEntry[] {
   if (catalogCache === null) {
-    catalogCache = buildCatalog(bundledExhibitions, getVenues(), getLinks(), {
+    // auto.json + 사람이 채운 manual.json. 끝난 전시·자동 수집과 겹치는 전시를 빼는 규칙은 manualExhibitions.ts
+    const exhibitions = loadBundledExhibitions(todayInSeoul(), getVenues(), getLinks());
+    catalogCache = buildCatalog(exhibitions, getVenues(), getLinks(), {
       useExhibitionHours: SHOW_EXHIBITION_HOURS,
     });
   }

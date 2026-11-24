@@ -10,11 +10,10 @@ import ExhibitKeywords from './ExhibitKeywords'
 import './OneExhibit.css'
 
 export type Status = '가능' | '불가' | '확인 필요'
-// cond: judge를 계산한 판정 조건. 없으면 오늘(서울) 지금 기준으로 본다
 type Pick = { id: string; judge?: JudgeResult; cond?: DetailCondition }
 type Listener = (pick: Pick | null) => void
-// cond: judge를 계산한 판정 조건. 없으면 상세 창이 오늘(서울) 지금 기준으로 본다
 type Props = { id: string; title: string; venue: string; status: Status; judge?: JudgeResult; cond?: DetailCondition; poster?: string; lines?: string[] }
+type Similar = { id: string; title: string; venue: string; poster?: string; tags: string; judge: JudgeResult; status: Status }
 type Detail = {
   title: string; venue: string; eyebrow: string; poster?: string; period: string; hours: string; closed: string; lastEntry: string
   entry: string; reservation: string; duration: string; status: Status; reasons: string[]; source: string; checked: string
@@ -26,11 +25,12 @@ const ORDER: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const DAY: Record<Weekday, string> = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토', sun: '일' }
 const STATUS: Record<JudgeResult['result'], Status> = { possible: '가능', impossible: '불가', unknown: '확인 필요' }
 const TAG: Record<Status, string> = { 가능: 'possible', 불가: 'impossible', '확인 필요': 'unknown' }
+const TONE: Record<Status, CSSProperties> = { 가능: { backgroundColor: 'PaleGreen', color: '#111111' }, 불가: { backgroundColor: 'Crimson', color: '#ffffff' }, '확인 필요': { backgroundColor: 'LemonChiffon', color: '#111111' } }
 const LISTENERS = new Set<Listener>()
 const BAR: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }
 let CURRENT: Pick | null = null
 
-// 상세 창 열기. 판정 결과를 넘길 때는 그 판정 조건(날짜·시각)도 넘긴다(입장 마감·비슷한 전시를 같은 기준으로 맞춤)
+// 상세 창 열기
 export function OPEN(id: string, judge?: JudgeResult, cond?: DetailCondition) {
   CURRENT = { id, judge, cond }
   LISTENERS.forEach((fn) => fn(CURRENT))
@@ -42,7 +42,7 @@ export function CLOSE() {
   LISTENERS.forEach((fn) => fn(CURRENT))
 }
 
-// 서울 현재 날짜와 시각 조회
+// 서울 현재 날짜/시각 조회
 function NOW() {
   const now = new Date()
   return { date: todayInSeoul(now), time: now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' }) }
@@ -66,15 +66,14 @@ function CLOSED(venue: Venue | null): string {
   return parts.length ? parts.join(' · ') : EMPTY
 }
 
-// 'YYYY-MM-DD' → '11/23(월)'
+// 날짜 문자열 월/일 그리고 요일 표기
 function DAYNAME(date: string): string {
   const [y, m, d] = date.split('-').map(Number)
   const wd = ORDER[(new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7]
   return `${m}/${d}(${DAY[wd]})`
 }
 
-// 전시 상세 정보 조립
-// query: 상세 창 판정 조건(detailQuery), today: 서울 오늘 날짜
+// 전시 상세 정보
 function DETAIL(entry: CatalogEntry, passed: JudgeResult | undefined, query: CatalogQuery, today: string): Detail {
   const { exhibition: ex, venue } = entry
   const placeName = displayVenueName(entry) || EMPTY
@@ -88,7 +87,6 @@ function DETAIL(entry: CatalogEntry, passed: JudgeResult | undefined, query: Cat
   return {
     title: ex.title, venue: placeName, eyebrow: venue ? `${venue.name} · ${venue.gu} · ${venue.type}` : placeName, poster: ex.imageUrl || undefined,
     period: `${ex.start} ~ ${ex.end}`, hours: HOURS(venue, ex.hoursText), closed: CLOSED(venue),
-    // 판정과 같은 근거(resolved)·같은 규칙으로 계산한다
     lastEntry: entryLastEntryLabel(entry, date, holidays, date === today ? '오늘' : DAYNAME(date)),
     entry: venue?.entry ?? EMPTY, reservation: venue?.reservation ?? EMPTY, duration: venue?.visitMinutes ? `${venue.visitMinutes}분` : EMPTY,
     status: STATUS[judge.result], reasons: reasonLines(judge),
@@ -100,9 +98,7 @@ function DETAIL(entry: CatalogEntry, passed: JudgeResult | undefined, query: Cat
   }
 }
 
-type Similar = { id: string; title: string; venue: string; poster?: string; tags: string; judge: JudgeResult; status: Status }
-
-// 비슷한 전시 카드 조립. 후보와 판정 모두 상세 창과 같은 조건(query)으로 계산한다
+// 유사 전시 카드 목록
 function SIMILAR(id: string | undefined, query: CatalogQuery | null): Similar[] {
   if (!id || !query) return []
   const catalog = getCatalog()
@@ -119,11 +115,9 @@ function SIMILAR(id: string | undefined, query: CatalogQuery | null): Similar[] 
   })
 }
 
-// 전시 상세 창
 export function WINDOW() {
   const [pick, setPick] = useState<Pick | null>(CURRENT)
   const stats = useSyncExternalStore(subscribeStats, getCachedStats)
-  // 판정 조건은 상세 창이 열리거나 다른 전시로 바뀔 때 한 번 정한다. 상세·입장 마감·비슷한 전시가 함께 쓴다
   const basis = useMemo(() => {
     if (!pick) return null
     const now = NOW()
@@ -149,9 +143,7 @@ export function WINDOW() {
   const { query, today } = basis
   const found = getCatalog().find((item) => item.exhibition.id === pick.id)
   const detail = found ? DETAIL(found, pick.judge, query, today) : null
-  const rating = found
-    ? getRatingSummary(found.exhibition.id, found.venue?.id ?? null, { stats, seed: SEED_RECORDS })
-    : null
+  const rating = found ? getRatingSummary(found.exhibition.id, found.venue?.id ?? null, { stats, seed: SEED_RECORDS }) : null
 
   return (
     <div className="one-backdrop" role="dialog" aria-modal="true" onClick={CLOSE}>
@@ -178,7 +170,7 @@ export function WINDOW() {
                     <ExhibitKeywords id={pick.id} />
                     {!detail.hasCoord && <p className="subtle">좌표 정보가 등록되지 않은 전시입니다.</p>}
                   </div>
-                  <span className={`tag ${TAG[detail.status]}`}>{detail.status}</span>
+                  <span className={`tag ${TAG[detail.status]}`} style={TONE[detail.status]}>{detail.status}</span>
                 </div>
 
                 <div className="one-sections">
@@ -203,7 +195,7 @@ export function WINDOW() {
 
                   <div className="info-block">
                     <h3>방문 판정</h3>
-                    <strong className={`result-text ${TAG[detail.status]}`}>{detail.status}</strong>
+                    <strong className={`result-text ${TAG[detail.status]}`} style={TONE[detail.status]}>{detail.status}</strong>
                     <p>{detail.reasons.map((line, index) => <span key={index} className="one-reason">{line}</span>)}</p>
                     <div className="source-info">
                       <span>출처: {detail.source}</span>
@@ -240,19 +232,14 @@ export function WINDOW() {
               <h3>비슷한 전시</h3>
               <div className="one-similar-list">
                 {similar.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="one-card"
-                    onClick={(e) => { e.currentTarget.closest('.one-body')?.scrollTo({ top: 0 }); OPEN(item.id, item.judge, query) }}
-                  >
+                  <button key={item.id} type="button" className="one-card" onClick={(e) => { e.currentTarget.closest('.one-body')?.scrollTo({ top: 0 }); OPEN(item.id, item.judge, query) }}>
                     {item.poster && (
                       <div className="one-poster">
                         <img src={item.poster} alt={item.title} loading="lazy" decoding="async" />
-                        <span className={`status-tag ${TAG[item.status]}`}>{item.status}</span>
+                        <span className={`status-tag ${TAG[item.status]}`} style={TONE[item.status]}>{item.status}</span>
                       </div>
                     )}
-                    {!item.poster && <span className={`tag ${TAG[item.status]} one-similar-status`}>{item.status}</span>}
+                    {!item.poster && <span className={`tag ${TAG[item.status]} one-similar-status`} style={TONE[item.status]}>{item.status}</span>}
                     <strong>{item.title}</strong>
                     <span className="one-sub">{item.venue}</span>
                     <span className="one-source">{item.tags}</span>
@@ -267,12 +254,12 @@ export function WINDOW() {
   )
 }
 
-export default function OneExhibit({ id, title, venue, status, judge, cond, poster, lines = [] }: Props) {
+function OneExhibit({ id, title, venue, status, judge, cond, poster, lines = [] }: Props) {
   return (
     <button type="button" className="one-card" onClick={() => OPEN(id, judge, cond)}>
       <div className="one-poster">
         {poster ? <img src={poster} alt={title} loading="lazy" decoding="async" /> : <div className="poster-empty">포스터 없음</div>}
-        <span className={`status-tag ${TAG[status]}`}>{status}</span>
+        <span className={`status-tag ${TAG[status]}`} style={TONE[status]}>{status}</span>
       </div>
       <strong>{title}</strong>
       <span className="one-sub">{venue}</span>
@@ -283,3 +270,5 @@ export default function OneExhibit({ id, title, venue, status, judge, cond, post
     </button>
   )
 }
+
+export default OneExhibit

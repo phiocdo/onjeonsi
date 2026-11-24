@@ -29,6 +29,7 @@ const TAG: Record<Status, string> = { 가능: 'possible', 불가: 'impossible', 
 const TONE: Record<Status, CSSProperties> = { 가능: { backgroundColor: 'PaleGreen', color: '#111111' }, 불가: { backgroundColor: 'Crimson', color: '#ffffff' }, '확인 필요': { backgroundColor: 'LemonChiffon', color: '#111111' } }
 const LISTENERS = new Set<Listener>()
 const BAR: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }
+const WIDE: CSSProperties = { gridColumn: '1 / -1' }
 let CURRENT: Pick | null = null
 
 // 상세 창 열기
@@ -43,7 +44,7 @@ export function CLOSE() {
   LISTENERS.forEach((fn) => fn(CURRENT))
 }
 
-// 서울 현재 날짜/시각 조회
+// 서울 현재 날짜와 시각 반환
 function NOW() {
   const now = new Date()
   return { date: todayInSeoul(now), time: now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' }) }
@@ -67,7 +68,7 @@ function CLOSED(venue: Venue | null): string {
   return parts.length ? parts.join(' · ') : EMPTY
 }
 
-// 날짜 문자열 월/일 그리고 요일 표기
+// 날짜 문자열 월/일 및 요일 변환
 function DAYNAME(date: string): string {
   const [y, m, d] = date.split('-').map(Number)
   const wd = ORDER[(new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7]
@@ -99,7 +100,7 @@ function DETAIL(entry: CatalogEntry, passed: JudgeResult | undefined, query: Cat
   }
 }
 
-// 유사 전시 카드 목록
+// 유사 전시 목록 생성
 function SIMILAR(id: string | undefined, query: CatalogQuery | null): Similar[] {
   if (!id || !query) return []
   const catalog = getCatalog()
@@ -116,6 +117,7 @@ function SIMILAR(id: string | undefined, query: CatalogQuery | null): Similar[] 
   })
 }
 
+// 전시 상세 모달 창
 export function WINDOW() {
   const [pick, setPick] = useState<Pick | null>(CURRENT)
   const stats = useSyncExternalStore(subscribeStats, getCachedStats)
@@ -150,29 +152,33 @@ export function WINDOW() {
     <div className="one-backdrop" role="dialog" aria-modal="true" onClick={CLOSE}>
       <div className="one-window" onClick={(e) => e.stopPropagation()}>
         <div className="one-bar" style={BAR}>
-          <span className="one-bar-title">{detail ? detail.venue : '전시 상세'}</span>
+          <span className="one-bar-title">{detail ? detail.title : '전시 상세'}</span>
           {found && <SaveButton entry={found} className="push" />}
           <button type="button" className="one-close" aria-label="닫기" onClick={CLOSE}>✕</button>
         </div>
 
         <div className="one-body">
           {!detail ? (
-            <p className="empty-result">전시를 찾을 수 없어요.</p>
+            <p className="empty-result">전시를 찾을 수 없습니다.</p>
           ) : (
             <div className="one-layout">
-              <div className="one-poster-box">
-                {detail.poster ? <img src={detail.poster} alt={detail.title} decoding="async" /> : <div className="poster-empty">포스터 없음</div>}
+              <div className="one-poster-col">
+                <div className="one-poster-box">
+                  {detail.poster ? <img src={detail.poster} alt={detail.title} decoding="async" /> : <div className="poster-empty">포스터 없음</div>}
+                </div>
+                <div className="link-row">
+                  {detail.official && <a href={detail.official} target="_blank" rel="noreferrer">공식 홈페이지 ↗</a>}
+                  {detail.portal && <a href={detail.portal} target="_blank" rel="noreferrer">서울문화포털 ↗</a>}
+                  <a href={detail.mapUrl} target="_blank" rel="noreferrer">카카오맵 ↗</a>
+                </div>
               </div>
 
               <div className="one-content">
-                <div className="one-head" style={BAR}>
-                  <div>
-                    <p className="eyebrow">{detail.eyebrow}</p>
-                    <h2>{detail.title}</h2>
-                    <ExhibitKeywords id={pick.id} />
-                    {!detail.hasCoord && <p className="subtle">좌표 정보가 등록되지 않은 전시입니다.</p>}
-                  </div>
-                  <span className={`tag ${TAG[detail.status]}`} style={TONE[detail.status]}>{detail.status}</span>
+                <div className="one-head">
+                  <p className="eyebrow">{detail.eyebrow}</p>
+                  <h2>{detail.title}</h2>
+                  <ExhibitKeywords id={pick.id} />
+                  {!detail.hasCoord && <p className="subtle">좌표 정보가 등록되지 않은 전시입니다.</p>}
                 </div>
 
                 <div className="one-sections">
@@ -183,12 +189,6 @@ export function WINDOW() {
                       <dt>요일별 운영</dt><dd>{detail.hours}</dd>
                       <dt>휴관</dt><dd>{detail.closed}</dd>
                       <dt>입장 마감</dt><dd>{detail.lastEntry}</dd>
-                    </dl>
-                  </div>
-
-                  <div className="info-block">
-                    <h3>관람 안내</h3>
-                    <dl>
                       <dt>입장 방식</dt><dd>{detail.entry}</dd>
                       <dt>예약 여부</dt><dd>{detail.reservation}</dd>
                       <dt>예상 관람 시간</dt><dd>{detail.duration}</dd>
@@ -203,14 +203,9 @@ export function WINDOW() {
                       <span>출처: {detail.source}</span>
                       <span>확인일: {detail.checked}</span>
                     </div>
-                    <div className="link-row">
-                      {detail.official && <a href={detail.official} target="_blank" rel="noreferrer">공식 홈페이지 ↗</a>}
-                      {detail.portal && <a href={detail.portal} target="_blank" rel="noreferrer">서울문화포털 ↗</a>}
-                      <a href={detail.mapUrl} target="_blank" rel="noreferrer">카카오맵 ↗</a>
-                    </div>
                   </div>
 
-                  <div className="info-block">
+                  <div className="info-block wide" style={WIDE}>
                     <h3>다른 관람자의 기록</h3>
                     <div className="visitor-stats">
                       <div>
@@ -221,7 +216,6 @@ export function WINDOW() {
                         <strong>{rating && rating.level !== 'none' && rating.medianMinutes !== null ? `${rating.medianMinutes}분` : detail.duration}</strong>
                         <span>{rating && rating.level !== 'none' && rating.medianMinutes !== null ? '실제 관람 시간' : '예상 관람 시간'}</span>
                       </div>
-                      <div><strong>정보 없음</strong><span>혼잡도</span></div>
                     </div>
                   </div>
                 </div>

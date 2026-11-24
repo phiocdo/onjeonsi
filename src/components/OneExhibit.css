@@ -19,6 +19,9 @@
   color: #111111;
   font-size: 0.92rem;
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .one-body {
@@ -80,6 +83,7 @@
   color: #111111;
   cursor: pointer;
   display: inline-flex;
+  flex-shrink: 0;
   font-size: 1rem;
   font-weight: 700;
   height: 32px;
@@ -96,6 +100,34 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.one-head .one-keywords {
+  margin-top: 8px;
+}
+
+.one-keyword {
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  padding: 1px 7px;
+}
+
+.one-keyword.topic {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.one-keyword.user {
+  background: #eef2ff;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.one-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .one-layout {
@@ -129,12 +161,25 @@
   background: #f2f4f7;
   border-radius: 12px;
   overflow: hidden;
+  width: 100%;
 }
 
 .one-poster-box img {
   height: 100%;
   object-fit: cover;
   width: 100%;
+}
+
+.one-poster-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.one-poster-col .link-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .one-reason {
@@ -145,6 +190,10 @@
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.one-sections .info-block.wide {
+  grid-column: 1 / -1;
 }
 
 .one-similar {
@@ -198,51 +247,17 @@
     grid-template-columns: 1fr;
   }
 
-  .one-poster-box {
+  .one-poster-col {
     max-width: 220px;
   }
-    .one-similar-list {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
 
-    .one-window {
-      border-radius: 18px 18px 0 0;
-      max-height: 92vh;
-      width: 100%;
-    }
+  .one-similar-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* 방문 판정 사유: 사유마다 한 줄 */
-  .one-reason {
-    display: block;
+  .one-window {
+    border-radius: 18px 18px 0 0;
+    max-height: 92vh;
+    width: 100%;
   }
-
-  /* 키워드 (ExhibitKeywords): 사용자 태그 '#태그'는 진하게, 주제
-  태그는 회색 */
-  .one-keywords {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .one-head .one-keywords {
-    margin-top: 8px;
-  }
-
-  .one-keyword {
-    padding: 1px 7px;
-    border-radius: 999px;
-    font-size: 0.75rem;
-    line-height: 1.6;
-  }
-
-  .one-keyword.user {
-    background: #eef2ff;
-    color: #1f2937;
-    font-weight: 600;
-  }
-
-  .one-keyword.topic {
-    background: #f3f4f6;
-    color: #6b7280;
-  }
+}

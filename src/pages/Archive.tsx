@@ -18,6 +18,7 @@ import {
   viewOf,
   type RecordStatus,
 } from '../lib/archive'
+import { allowedVisitRange, visitDateProblem, visitFormNotice } from '../lib/visitDate'
 import type { ArchiveData, VisitRecord } from '../types/records'
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토']
@@ -115,6 +116,10 @@ export default function Archive() {
   const sorted = useMemo(() => [...records].sort(NEWEST), [records])
   const dates = useMemo(() => new Set(records.map((r) => r.date)), [records])
   const daily = sorted.filter((r) => r.date === picked)
+  // 고른 전시의 기간·오늘 기준 관람일 범위와 문제 문구 (src/lib/visitDate.ts)
+  const period = map.get(exhibit)?.exhibition ?? {}
+  const range = allowedVisitRange(period, today)
+  const dateNotice = visitFormNotice(date, period, today)
 
   const liked = records.filter((r) => r.rating >= 4)
   const genres = Array.from(new Set(liked.flatMap((r) => (r.exhibition.field ? [r.exhibition.field] : []))))
@@ -158,6 +163,8 @@ export default function Archive() {
   function SAVE() {
     const found = map.get(exhibit)
     if (!found) return
+    // 화면에서 버튼을 막아도 한 번 더 검사한다 (전시 기간 밖·오늘 이후 날짜는 저장하지 않음)
+    if (visitDateProblem(date, found.exhibition, today)) return
 
     // 별점·관람 시간(10~480분 정수, 소수는 반올림)·날짜 검증은 createRecord가 한다
     const entry = createRecord({ entry: found, date, rating: Number(rating), visitMinutes: Number(time), note, shared, tags })
@@ -247,7 +254,7 @@ export default function Archive() {
               </label>
               <label>
                 관람일
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                <input type="date" value={date} min={range.min} max={range.max} onChange={(e) => setDate(e.target.value)} />
               </label>
               <label>
                 별점
@@ -266,7 +273,8 @@ export default function Archive() {
               <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
               <span>별점·실제 관람 시간·태그를 익명으로 공유하는 데 동의합니다. 메모와 날짜는 공유하지 않습니다.</span>
             </label>
-            <button type="button" className="primary-button" onClick={SAVE}>기록 저장</button>
+            {dateNotice && <p className="archive-warning" role="status">{dateNotice}</p>}
+            <button type="button" className="primary-button" onClick={SAVE} disabled={dateNotice !== null}>기록 저장</button>
           </div>
 
           <div className="panel">

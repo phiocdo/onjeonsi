@@ -47,7 +47,8 @@ function duration(n: number): string {
  * - 그날 휴관 → '오늘 휴관'
  * - 정보가 없어 폐관 기준으로 판정 → '정보 없음 (폐관 시각 기준으로 판정)'
  * - 폐관 − N 규칙(lastEntryBeforeClose)과 값이 맞으면 기준을 함께: 요일마다 같으면
- *   '폐관 1시간 전 (17:00)', 요일별로 다르면 '오늘 17:00 (폐관 1시간 전)'
+ *   '폐관 1시간 전 (17:00)', 요일별로 다르면 '오늘 17:00 (폐관 1시간 전)'.
+ *   N이 0이면 '폐관 N분 전' 대신 '폐관 시각까지': '폐관 시각까지 (18:00)', '오늘 21:00 (폐관 시각까지)'
  * - 그 밖(lastEntry 고정·전시 안내)은 시각만: 요일마다 같으면 '17:00', 다르면 '오늘 17:00'
  * 구간이 여러 개인 날은 구간별 값을 ' / '로 잇는다. day는 '오늘' 자리에 들어갈 말이다.
  */
@@ -68,7 +69,7 @@ export function lastEntryLabel(venue: ResolvedVenue | null, date: string, holida
   const byRule =
     typeof n === 'number' && Number.isFinite(n) && n >= 0 &&
     today.every((e) => e.kind === 'time' && e.time === fromMinutes(Math.max(0, e.close - Math.round(n))));
-  const rule = byRule ? `폐관 ${duration(Math.round(n))} 전` : null;
+  const rule = !byRule ? null : Math.round(n) === 0 ? '폐관 시각까지' : `폐관 ${duration(Math.round(n))} 전`;
 
   const key = keyOf(today);
   const uniform = WEEKDAYS.filter((d) => venue.hours?.[d]).every((d) => keyOf(entriesFor(venue, d)) === key);

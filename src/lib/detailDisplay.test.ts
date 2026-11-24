@@ -3,6 +3,7 @@ import type { Exhibition, ParsedOperatingHours, Venue } from '../types';
 import type { ResolvedVenue } from '../engine/judge';
 import { REASONS } from '../engine/reasons';
 import semaJson from '../../data/venues/venue-sema.json';
+import mmcaJson from '../../data/venues/venue-mmca.json';
 import exhibitionsJson from '../../data/exhibitions/auto.json';
 import { buildCatalog, judgeEntry, type CatalogEntry } from './catalog';
 import { detailQuery, entryLastEntryLabel, lastEntryLabel, reasonLines, similarWithJudge } from './detailDisplay';
@@ -14,6 +15,7 @@ const TUE = '2026-11-24';
 const FRI = '2026-11-27';
 
 const SEMA = semaJson as unknown as Venue;
+const MMCA = mmcaJson as unknown as Venue;
 const LISSON = (exhibitionsJson as Exhibition[]).find((e) => e.id === 'auto-seoul-159756')!;
 
 const BASE: Venue = {
@@ -118,6 +120,30 @@ describe('lastEntryLabel: lastEntryBeforeClose (서울시립미술관)', () => {
   it('day 인자로 "오늘" 자리를 바꾼다', () => {
     expect(entryLastEntryLabel(sema, SUN, [], '11/22(일)')).toBe('11/22(일) 17:00 (폐관 1시간 전)');
     expect(entryLastEntryLabel(sema, MON, [], '11/23(월)')).toBe('11/23(월) 휴관');
+  });
+});
+
+describe('lastEntryLabel: lastEntryBeforeClose가 0 (폐관 시각까지)', () => {
+  it('요일마다 같으면 폐관 시각까지 (18:00)', () => {
+    expect(entryLastEntryLabel(entryOf({ ...BASE, lastEntryBeforeClose: 0 } as Venue), SUN, [])).toBe('폐관 시각까지 (18:00)');
+  });
+
+  it('요일별로 다르면 오늘 21:00 (폐관 시각까지)', () => {
+    const v = { ...BASE, hours: { ...BASE.hours, wed: { open: '10:00', close: '21:00' } }, lastEntryBeforeClose: 0 } as Venue;
+    expect(entryLastEntryLabel(entryOf(v), '2026-11-25', [])).toBe('오늘 21:00 (폐관 시각까지)');
+    expect(entryLastEntryLabel(entryOf(v), SUN, [])).toBe('오늘 18:00 (폐관 시각까지)');
+  });
+
+  it('N > 0 문구는 그대로', () => {
+    expect(entryLastEntryLabel(entryOf({ ...BASE, lastEntryBeforeClose: 60 } as Venue), SUN, [])).toBe('폐관 1시간 전 (17:00)');
+  });
+
+  it('국립현대미술관 서울(venue-mmca.json): 수 21:00, 월 18:00', () => {
+    const mmca = entryOf(MMCA, { ...EX, placeName: '국립현대미술관 서울' });
+    expect(mmca.venue?.id).toBe('venue-mmca');
+    expect(entryLastEntryLabel(mmca, '2026-11-25', [])).toBe('오늘 21:00 (폐관 시각까지)');
+    expect(entryLastEntryLabel(mmca, MON, [])).toBe('오늘 18:00 (폐관 시각까지)');
+    expect(entryLastEntryLabel(mmca, '2026-11-25', [], '11/25(수)')).toBe('11/25(수) 21:00 (폐관 시각까지)');
   });
 });
 

@@ -125,8 +125,14 @@ export default function Saved() {
       <p className="saved-note">북마크한 전시는 이 브라우저에만 저장돼요. 다른 기기나 브라우저에서는 보이지 않아요.</p>
       {failed && <p className="archive-warning" role="alert">브라우저에 저장하지 못했습니다. 잠시 후 다시 시도하십시오.</p>}
 
+      {/* 배지 뜻 풀이. 기준(지금부터 2시간)은 내 주변 화면의 기본값과 같다 */}
+      <p className="saved-basis">
+        ‘가능’·‘불가’는 지금({query.stayStart})부터 2시간 안, 즉 {query.stayEnd}까지 가서 관람을 마칠 수 있는지를 알려 줘요.
+        ‘확인 필요’는 운영 정보가 충분하지 않아 가기 전에 직접 확인해 봐야 하는 전시예요.
+      </p>
+
       <div className="filter-row">
-        <span className="count">{active.length}개 전시 · 곧 끝나는 순 · 판정은 {query.stayStart}~{query.stayEnd} 기준 (내 주변과 같음)</span>
+        <span className="count">전시 {active.length}개 · 끝나는 날이 가까운 순서</span>
       </div>
 
       {judged.length ? (

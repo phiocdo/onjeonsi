@@ -79,7 +79,7 @@ export default function SavedMenu() {
         <div id={panelId} className="saved-menu-panel">
           <div className="saved-menu-head">
             <strong>가볼 전시</strong>
-            <span>{view.rows.length ? `곧 끝나는 순 · ${view.query.stayStart}~${view.query.stayEnd} 기준` : ''}</span>
+            <span>{view.rows.length ? '끝나는 날이 가까운 순서' : ''}</span>
           </div>
 
           {view.rows.length ? (
@@ -117,6 +117,10 @@ export default function SavedMenu() {
           )}
 
           {extra && <p className="saved-menu-more">{extra}</p>}
+          {/* 배지 뜻 풀이. 기준(지금부터 2시간)은 내 주변 화면의 기본값과 같다 */}
+          {view.rows.length > 0 && (
+            <p className="saved-menu-basis">‘가능’·‘불가’는 지금부터 2시간 안({view.query.stayEnd}까지)에 가서 관람을 마칠 수 있는지예요.</p>
+          )}
           <Link className="saved-menu-all" to="/saved" onClick={() => setOpen(false)}>전체 보기 →</Link>
         </div>
       )}

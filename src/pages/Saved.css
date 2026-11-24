@@ -5,10 +5,18 @@
 
 /* 다른 기기에서는 안 보인다는 안내라 흐리게 두지 않는다 */
 .saved-note {
-  margin: 0 0 20px;
+  margin: 0 0 8px;
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
+}
+
+/* 가능·불가 배지 뜻 풀이 */
+.saved-basis {
+  margin: 0 0 20px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 /* 찜 버튼을 포스터 위에 띄우려고 카드를 감싼다 */

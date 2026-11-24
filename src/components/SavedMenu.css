@@ -1,0 +1,238 @@
+/* 상단 북마크 버튼과 펼침 패널 */
+.saved-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.saved-menu-button {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.saved-menu-button:hover,
+.saved-menu-button.open {
+  background: var(--surface-soft);
+}
+
+.saved-menu-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* 개수 배지 */
+.saved-menu-count {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--point);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* 버튼 아래 오른쪽 끝에 맞춰 펼친다 */
+.saved-menu-panel {
+  position: absolute;
+  top: calc(100% + 14px);
+  right: -10px;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(70vh, 540px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  text-align: left;
+}
+
+.saved-menu-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.saved-menu-head span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.saved-menu-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.saved-menu-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.saved-menu-item:hover {
+  background: var(--surface-soft);
+}
+
+.saved-menu-item img,
+.saved-menu-thumb {
+  width: 44px;
+  height: 58px;
+  object-fit: cover;
+  background: var(--surface-soft);
+}
+
+.saved-menu-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.saved-menu-text > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-menu-text strong {
+  font-size: 13px;
+}
+
+.saved-menu-text span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.saved-menu-text .saved-menu-period {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.saved-menu-text .saved-menu-period.soon {
+  color: #d4382c;
+}
+
+.saved-menu-item .tag {
+  padding: 2px 6px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* 판정 색은 카드·상세 창·내 주변과 같게 (공통 .tag.possible은 강조색이라 여기서 다시 정한다) */
+.saved-menu-item .tag.possible {
+  background: PaleGreen;
+  color: #111111;
+}
+
+.saved-menu-item .tag.impossible {
+  background: Crimson;
+  color: #ffffff;
+}
+
+.saved-menu-item .tag.unknown {
+  background: LemonChiffon;
+  color: #111111;
+}
+
+.saved-menu-empty {
+  margin: 0;
+  padding: 18px 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.saved-menu-more {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.saved-menu-basis {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.saved-menu-all {
+  display: block;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.saved-menu-all:hover {
+  text-decoration: underline;
+}
+
+/* 휴대폰 폭에서는 위쪽 줄에 탭과 '팀'만으로도 자리가 꽉 차서, 오른쪽 아래에 띄우고 패널을 위로 펼친다 */
+@media (max-width: 480px) {
+  .saved-menu {
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    z-index: 20;
+  }
+
+  .saved-menu-button {
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  .saved-menu-button svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .saved-menu-count {
+    top: -3px;
+    right: -3px;
+  }
+
+  .saved-menu-panel {
+    top: auto;
+    right: 0;
+    bottom: calc(100% + 10px);
+    width: min(340px, calc(100vw - 32px));
+    max-height: min(65vh, 520px);
+  }
+}

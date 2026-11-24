@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { fetchStats } from '../lib/sharedRatings'
+import SavedMenu from './SavedMenu'
 
 type TAB = {
   TO: string
@@ -54,6 +55,7 @@ export default function LAYOUT() {
         </nav>
 
         <nav className="team-bar" aria-label="프로젝트 정보">
+          <SavedMenu />
           <NavLink to={TEAM.TO} className={LINK}>
             {TEAM.LABEL}
           </NavLink>

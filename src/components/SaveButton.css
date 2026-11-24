@@ -1,0 +1,59 @@
+/* 북마크 버튼 */
+.save-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.save-button {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--text);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  line-height: 1;
+}
+
+.save-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.save-button:hover {
+  background: var(--surface-soft);
+}
+
+.save-button.on {
+  background: var(--point);
+}
+
+/* 카드 포스터 오른쪽 위에 띄운다. 감싸는 요소에 position: relative가 있어야 한다 */
+.save-wrap.overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+}
+
+/* 가로 줄(flex)에서 오른쪽 끝으로 민다 */
+.save-wrap.push {
+  margin-left: auto;
+}
+
+.save-error {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 7;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+}

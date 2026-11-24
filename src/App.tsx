@@ -5,6 +5,7 @@ import NearbyExhibitions from './pages/NearbyExhibitions'
 import Hannune from './pages/Hannune'
 import WhenToGo from './pages/When'
 import Archive from './pages/Archive'
+import Saved from './pages/Saved'
 import Team from './pages/Team'
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/overview" element={<Hannune />} />
           <Route path="/when" element={<WhenToGo />} />
           <Route path="/archive" element={<Archive />} />
+          <Route path="/saved" element={<Saved />} />
           <Route path="/team" element={<Team />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

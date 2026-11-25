@@ -219,7 +219,8 @@ function readClosureAfter(after: string): string {
  *   "당일", "공휴일", "평일", "매월" -> 요일이 아닌 낱말
  * 다음도 요일이 아니다. 읽으면 매주 그 요일이 닫혀 틀린 "불가"가 나온다.
  *   - 뒤에 다른 한글이 붙어 낱말을 이루는 경우: "일부", "일시", "수리", "월말"
- *     (조사 "은·는·도·에·만", "및·과·와", "휴관" 의 '휴', "요일" 의 '요', "월정기휴관" 의 '정기' 는 낱말로 보지 않는다)
+ *     (조사 "은·는·도·에·만", "및·과·와", "휴관" 의 '휴', "요일" 의 '요', "월정기휴관" 의 '정기' 는 낱말로 보지 않는다.
+ *      "토,일공휴일" 의 '공휴', "월이나 공휴일" 의 '이나'·'나' 도 휴관 목록을 잇는 말이다. 놓치면 틀린 "가능"이 나온다)
  *   - "금일"(오늘). 앞뒤에 다른 요일이 붙은 "목금일", "목, 금일" 은 요일 목록이다
  * 다음 경우는 띄어 쓰지 않았어도 요일로 읽는다. 휴관 요일을 놓치면 틀린 "가능"이 나오기 때문이다.
  *   - 뒤에 "요일"이 붙은 경우: "매주월요일", "2, 4 월요일". 날짜의 월·일 뒤에는 "요일"이 오지 않는다
@@ -498,20 +499,24 @@ function applyExtensions(weekdays: Record<Weekday, DaySchedule>, source: string)
 function splitPeriodClauses(
   text: string,
   year: number,
+  endYear?: number,
 ): { baseText: string; clauses: Array<{ from: string; to?: string; clause: string }> } {
   const clauses: Array<{ from: string; to?: string; clause: string }> = [];
   let baseText = text;
-  const ymd = (y: number, mo: number, d: number) =>
-    `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const ymd = ymdString;
 
-  const pattern = /(?:(\d{4})\s*[.년]\s*)?(\d{1,2})\s*[.월]\s*(\d{1,2})\s*[.일]?\s*(?:\([월화수목금토일]\))?\s*부터/g;
+  const pattern = /(?:(\d{4})\s*[.년]\s*)?(\d{1,2})\s*[.월]\s*(\d{1,2})\s*[.일]?\s*(?:\(([월화수목금토일])\))?\s*부터/g;
   // '부터' 바로 뒤에 끝 날짜가 오는 경우. "9.15.(화)부터 12.31.(목)까지 ..."
   //   시각("21:00까지")은 ':' 라서 걸리지 않는다
   const untilDate = /^\s*(?:(\d{4})\s*[.년]\s*)?(\d{1,2})\s*[.월]\s*(\d{1,2})\s*[.일]?\s*(?:\([월화수목금토일]\))?\s*까지/;
   for (const m of text.matchAll(pattern)) {
     const mo = Number(m[2]);
     const d = Number(m[3]);
-    const y = m[1] ? Number(m[1]) : year;
+    // 괄호 안 요일이 있으면 그 요일이 맞는 가장 이른 해를 고른다. "1.5(월)부터" 는 12월 시작 전시라면 다음 해다.
+    //   요일이 없거나 어느 해와도 안 맞으면 예전처럼 시작 연도로 본다
+    const resolved = resolveYears(m[1], mo, d, m[4] ? KO_TO_DAY[m[4]] : undefined, year, endYear);
+    if (!resolved) continue;
+    const y = Number((resolved.matched[0] ?? resolved.fallback).slice(0, 4));
     if (!isRealDate(y, mo, d)) continue;
 
     let rest = text.slice(m.index + m[0].length);
@@ -731,43 +736,73 @@ function readMidDayBreak(text: string): { start: number; end: number } | null {
   return { start, end };
 }
 
-// 그 날짜의 실제 요일
-function weekdayOf(y: number, mo: number, d: number): Weekday {
+// 그 날짜의 실제 요일. engine/time.ts 의 weekdayOf('YYYY-MM-DD') 와 달리 연·월·일을 따로 받고 UTC 로 센다
+function weekdayOfYmd(y: number, mo: number, d: number): Weekday {
   return ORDER[(new Date(Date.UTC(y, mo - 1, d)).getUTCDay() + 6) % 7];
+}
+
+function ymdString(y: number, mo: number, d: number): string {
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+// 상설전처럼 종료일이 아주 먼 전시에서 후보 해를 끝없이 늘리지 않는다
+const MAX_YEAR_SPAN = 30;
+
+/**
+ * 연도 없이 적힌 날짜가 될 수 있는 해. 시작 연도부터 종료 연도까지 (종료 연도를 모르면 다음 해까지).
+ *   12월에 시작한 전시의 "1.5(월)" 은 다음 해, 2024년에 시작한 상설전의 "3.30(월)" 은 2026년일 수 있다
+ */
+function candidateYears(year: number, endYear?: number): number[] {
+  const last = endYear !== undefined && endYear >= year ? Math.min(endYear, year + MAX_YEAR_SPAN) : year + 1;
+  const years: number[] = [];
+  for (let y = year; y <= last; y++) years.push(y);
+  return years;
+}
+
+/**
+ * 괄호 안 요일에 맞는 해를 고른다. 연도가 적혀 있으면 그대로 쓴다.
+ * 요일이 맞는 해(matched)와, 어느 해도 안 맞을 때 쓸 시작 연도 쪽 날짜(fallback)를 돌려준다.
+ * 날짜가 어느 해에도 없으면("2.30") null
+ */
+function resolveYears(
+  explicitYear: string | undefined,
+  mo: number,
+  d: number,
+  weekday: Weekday | undefined,
+  year: number,
+  endYear?: number,
+): { matched: string[]; fallback: string } | null {
+  const years = (explicitYear ? [Number(explicitYear)] : candidateYears(year, endYear)).filter(y => isRealDate(y, mo, d));
+  if (years.length === 0) return null;
+  const matched = explicitYear || !weekday ? years : years.filter(y => weekdayOfYmd(y, mo, d) === weekday);
+  return { matched: matched.map(y => ymdString(y, mo, d)), fallback: ymdString(years[0], mo, d) };
 }
 
 /**
  * "11.17(화)", "9.2(수)", "2026.9.2(수)" -> 'YYYY-MM-DD'
  *
- * 연도가 없으면 시작 연도와 다음 해 중 괄호 안 요일이 맞는 해를 고른다.
+ * 연도가 없으면 시작 연도~종료 연도(모르면 다음 해) 중 괄호 안 요일이 맞는 해를 고른다.
  *   12월에 시작한 전시의 "1.5(월)" 은 다음 해 1월 5일이다. 시작 연도로 넣으면 엉뚱한 날을 닫고
  *   진짜 휴관일을 열어 틀린 "가능"이 나온다.
- * 두 해 모두 요일이 안 맞으면 날짜를 믿을 수 없으므로 mismatch 로 표시한다.
- *   호출하는 쪽은 그 날짜를 예외로 넣지 않고, 휴관이면 예전처럼 그 요일을 매주 닫는다.
+ * dates: 요일이 맞는 날짜 전부. 여러 해가 맞을 수 있다(기간이 긴 전시).
+ *   비었으면 요일이 어느 해와도 안 맞는 것이다. 날짜나 요일 중 하나가 틀렸으므로
+ *   호출하는 쪽은 휴관이면 그 요일을 매주 닫고 fallback(시작 연도 쪽 날짜)도 닫는다.
  * 연도가 적힌 날짜는 적힌 대로 쓴다.
  */
 function readExceptionDates(
   text: string,
   year: number,
-): Array<{ date: string; raw: string; weekday: Weekday; mismatch: boolean }> {
-  const out: Array<{ date: string; raw: string; weekday: Weekday; mismatch: boolean }> = [];
+  endYear?: number,
+): Array<{ dates: string[]; fallback: string; raw: string; weekday: Weekday }> {
+  const out: Array<{ dates: string[]; fallback: string; raw: string; weekday: Weekday }> = [];
   // "11.17(화)", "10월 11일(토)", "4/13(월)" 세 형식을 받는다. 괄호 안은 "(금요일)" 이어도 된다
   // 연도도 "2025/12/27(토)" 처럼 빗금으로 적을 수 있다. 빼먹으면 기본 연도가 붙어 엉뚱한 해가 된다
   const pattern = /(?:(\d{4})\s*[.년/]\s*)?(\d{1,2})\s*[.월/]\s*(\d{1,2})\s*[.일]?\s*\(([월화수목금토일])(?:요일)?\)/g;
   for (const m of text.matchAll(pattern)) {
-    const mo = Number(m[2]);
-    const d = Number(m[3]);
     const weekday = KO_TO_DAY[m[4]];
-    const candidates = (m[1] ? [Number(m[1])] : [year, year + 1]).filter(c => isRealDate(c, mo, d));
-    if (candidates.length === 0) continue;
-    const matched = m[1] ? candidates[0] : candidates.find(c => weekdayOf(c, mo, d) === weekday);
-    const y = matched ?? candidates[0];
-    out.push({
-      date: `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
-      raw: m[0],
-      weekday,
-      mismatch: matched === undefined,
-    });
+    const resolved = resolveYears(m[1], Number(m[2]), Number(m[3]), weekday, year, endYear);
+    if (!resolved) continue;
+    out.push({ dates: resolved.matched, fallback: resolved.fallback, raw: m[0], weekday });
   }
   return out;
 }
@@ -824,9 +859,11 @@ function readUntilTime(tail: string): string | null {
  *       }
  *
  * @param raw PRO_TIME 원문
- * @param year 특정 날짜 예외에 붙일 연도 (보통 전시 시작 연도)
+ * @param year 연도 없이 적힌 날짜("11.17(화)")를 찾기 시작할 연도 (보통 전시 시작 연도)
+ * @param endYear 전시 종료 연도. 주면 year~endYear(최대 30년) 중 괄호 안 요일이 맞는 해를 찾고,
+ *   안 주면 year 와 다음 해만 본다. 요일 없이 적힌 휴관 날짜("1월 1일")는 지금처럼 year·다음 해만 닫는다
  */
-export function parseHours(raw: string, year: number): ParsedOperatingHours {
+export function parseHours(raw: string, year: number, endYear?: number): ParsedOperatingHours {
   const text = normalize(raw || '');
   if (!text) return unknown();
 
@@ -859,7 +896,7 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
   const exceptions: ParsedOperatingHours['exceptions'] = [];
 
   // "N일부터 일정이 바뀐다"는 절을 떼어낸다. 기본 일정은 그 절 없이 읽는다
-  const { baseText, clauses: periodClauses } = splitPeriodClauses(text, year);
+  const { baseText, clauses: periodClauses } = splitPeriodClauses(text, year, endYear);
 
   // (2) 특정 날짜 예외를 먼저 떼어낸다. 남은 문구가 요일 규칙이 된다.
   //    먼저 떼지 않으면 (3)에서 "11.17" 의 숫자를 시각으로 착각할 수 있다.
@@ -871,7 +908,7 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
   //   그 날 하루를 놓쳐 틀린 "가능"이 나오는 것보다 매주 닫아 틀린 "불가"가 나오는 쪽이 낫다
   let closureText = text;
   const pendingUntil: Array<{ date: string; weekday: Weekday; close: string }> = [];
-  for (const found of readExceptionDates(text, year)) {
+  for (const found of readExceptionDates(text, year, endYear)) {
     const idx = rest.indexOf(found.raw);
     if (idx < 0) continue;
     // 그 날짜 뒤쪽에서 시간 구간을 찾는다
@@ -879,35 +916,46 @@ export function parseHours(raw: string, year: number): ParsedOperatingHours {
     // "9.15.(화)부터" 는 하루만의 예외가 아니라 그 날부터 바뀌는 일정이다 (periods 가 담는다)
     if (/^\s*부터/.test(after)) continue;
     const tail = after.slice(0, 60);
-    const rangeMatch = /(\d{1,2}:\d{2})\s*[~-]\s*(\d{1,2}:\d{2})/.exec(tail);
+    // 날짜 바로 뒤에 휴관 말이 시각보다 먼저 오면 그 날은 휴관이다. 뒤의 시각은 다음 안내의 것이다.
+    //   "3.30(월) 휴관 / 토 10:00~20:00" 의 10:00~20:00 을 3.30 의 운영 시간으로 읽으면
+    //   휴관일이 "가능"이 되고 토요일 규칙도 사라진다
+    //   사이에 다른 숫자(날짜·시각)가 끼면 그 휴관 말은 이 날짜의 것이 아니다.
+    //   "'21.12.23(목)~'22.2.27(일) 매주 월요일 휴관" 의 2.27 은 기간 끝이지 휴관일이 아니다
+    const closeAt = tail.search(/휴관|휴무/);
+    const closedFirst = closeAt >= 0 && !/\d|~/.test(tail.slice(0, closeAt)) && !/매주|매월|요일/.test(tail.slice(0, closeAt));
+    const rangeMatch = closedFirst ? null : /(\d{1,2}:\d{2})\s*[~-]\s*(\d{1,2}:\d{2})/.exec(tail);
     const range = rangeMatch ? readRange(rangeMatch[0]) : null;
-    const until = readUntilTime(tail);
+    const until = closedFirst ? null : readUntilTime(tail);
+    const closed = !range && !until && closeAt >= 0;
 
     // 날짜와 함께 지울 길이. 예외로 옮긴 시각이 요일 규칙에도 남으면
     // "11.17(화) 오픈식 14:00~16:00" 의 14:00~16:00 이 다른 요일에까지 들어간다
     let consume = found.raw.length;
-    // 괄호 안 요일이 어느 해에도 맞지 않는 날짜는 예외로 넣지 않는다 (엉뚱한 날을 바꾸게 된다).
-    //   시간 구간은 그대로 지워 다른 요일 규칙에 섞이지 않게 하고,
-    //   휴관이면 closureText 에 남겨 그 요일을 매주 닫는다. 틀린 "가능"보다 틀린 "불가"가 낫다
-    if (found.mismatch) {
-      if (range || until) closureText = closureText.replace(found.raw, ' ');
-      if (range && rangeMatch) consume += rangeMatch.index + rangeMatch[0].length;
-      rest = rest.slice(0, idx) + ' ' + rest.slice(idx + consume);
+    if (range && rangeMatch) consume += rangeMatch.index + rangeMatch[0].length;
+    rest = rest.slice(0, idx) + ' ' + rest.slice(idx + consume);
+
+    if (closed) {
+      if (found.dates.length > 0) {
+        // 요일이 맞는 날을 모두 닫는다. 여러 해가 맞으면 지난 해를 닫아도 해가 없다
+        closureText = closureText.replace(found.raw, ' ');
+        for (const date of found.dates) exceptions.push({ date, schedule: { isOpen: false, intervals: [] } });
+      } else {
+        // 요일이 어느 해와도 안 맞으면 날짜와 요일 중 어느 쪽이 틀렸는지 모른다.
+        //   closureText 에 남겨 그 요일을 매주 닫고, 시작 연도 쪽 날짜도 닫는다. 틀린 "가능"보다 틀린 "불가"가 낫다
+        exceptions.push({ date: found.fallback, schedule: { isOpen: false, intervals: [] } });
+      }
       continue;
     }
-    if (range || until || /휴관|휴무/.test(tail)) closureText = closureText.replace(found.raw, ' ');
-    if (range && rangeMatch) {
-      exceptions.push({
-        date: found.date,
-        schedule: { isOpen: true, intervals: [range] },
-      });
-      consume += rangeMatch.index + rangeMatch[0].length;
+    if (range || until) closureText = closureText.replace(found.raw, ' ');
+    // 여는 시간을 바꾸는 예외는 날짜가 하나로 정해질 때만 넣는다.
+    //   요일이 안 맞거나 여러 해가 맞으면 엉뚱한 날을 열 수 있다. 시간 구간은 위에서 이미 지웠다
+    if (found.dates.length !== 1) continue;
+    const date = found.dates[0];
+    if (range) {
+      exceptions.push({ date, schedule: { isOpen: true, intervals: [range] } });
     } else if (until) {
-      pendingUntil.push({ date: found.date, weekday: found.weekday, close: until });
-    } else if (/휴관|휴무/.test(tail)) {
-      exceptions.push({ date: found.date, schedule: { isOpen: false, intervals: [] } });
+      pendingUntil.push({ date, weekday: found.weekday, close: until });
     }
-    rest = rest.slice(0, idx) + ' ' + rest.slice(idx + consume);
   }
 
   // (3) 조각으로 나눈다. '/'와 '※', '*'가 규칙 경계로 쓰인다.

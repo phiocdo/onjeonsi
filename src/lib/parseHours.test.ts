@@ -818,10 +818,57 @@ describe('parseHours — 요일이 아닌 글자를 요일로 읽지 않는다',
     expect(closedDates('10:00~18:00, 2025/12/27(토) 휴관', 2026)).toEqual(['2025-12-27']);
   });
 
-  it('괄호 안 요일이 어느 해에도 맞지 않으면 날짜 대신 그 요일을 매주 닫는다', () => {
-    // 2026·2027년의 3월 30일은 일요일이 아니다. 엉뚱한 날을 닫고 진짜 휴관일을 열면 틀린 "가능"이 된다
-    expect(closedDates('10:00 - 18:00, 03.30(일), 04.06(일) 휴관')).toEqual([]);
+  it('종료 연도를 주면 그 사이에서 요일이 맞는 해를 찾는다', () => {
+    // 2024년에 시작한 상설전의 "3.30(월)" 은 2026년이다 (2024 토, 2025 일)
+    const r = parseHours('10:00~18:00 3.30(월) 휴관', 2024, 2027);
+    expect(r.exceptions).toEqual([{ date: '2026-03-30', schedule: { isOpen: false, intervals: [] } }]);
+    expect(r.weekdays.mon.isOpen).toBe(true);
+    // 종료 연도를 모르면 예전처럼 다음 해까지만 보고, 안 맞으면 그 요일을 매주 닫는다
+    expect(parseHours('10:00~18:00 3.30(월) 휴관', 2024).weekdays.mon.isOpen).toBe(false);
+  });
+
+  it('여러 해가 맞으면 휴관은 모두 닫고, 여는 시간 예외는 넣지 않는다', () => {
+    // 2015·2020·2026년 3월 30일이 월요일이다
+    const closed = parseHours('10:00~18:00 3.30(월) 휴관', 2015, 2030);
+    expect(closed.exceptions.map(e => e.date)).toEqual(['2015-03-30', '2020-03-30', '2026-03-30']);
+    expect(closed.weekdays.mon.isOpen).toBe(true);
+    // 어느 해의 3.30 을 여는지 모르면 넣지 않는다. 시간 구간이 다른 요일 규칙에 섞이지도 않는다
+    const open = parseHours('10:00~18:00, 3.30(월) 14:00~16:00 특별 운영', 2015, 2030);
+    expect(open.exceptions).toEqual([]);
+    expect(open.weekdays.mon.intervals).toEqual([{ open: '10:00', close: '18:00' }]);
+  });
+
+  it('날짜 바로 뒤에 휴관이 오면 뒤의 시각은 그 날짜의 것이 아니다', () => {
+    // 예전에는 3.30 을 10:00~20:00 운영 예외로 넣고 토요일 규칙을 지웠다 (휴관일이 "가능")
+    const r = parseHours('10:00~18:00, 3.30(월) 휴관 / 토 10:00~20:00', 2026);
+    expect(r.exceptions).toEqual([{ date: '2026-03-30', schedule: { isOpen: false, intervals: [] } }]);
+    expect(span('10:00~18:00, 3.30(월) 휴관 / 토 10:00~20:00', 'sat')).toBe('10:00-20:00');
+    // 요일이 안 맞는 날짜도 같다. 예전에는 일요일이 열렸다
+    expect(openDays('10:00~18:00, 3.30(일) 휴관, 금 21:00까지 연장')).toEqual(ALL_BUT('sun'));
+    expect(span('10:00~18:00, 3.30(일) 휴관, 금 21:00까지 연장', 'fri')).toBe('10:00-21:00');
+    // 시각이 먼저 오면 그 날짜의 시간이다
+    expect(parseHours('10:00~18:00, 11.22(일)은 16:00까지, 월 휴관', 2026).weekdays.mon.isOpen).toBe(false);
+    // 사이에 다른 날짜·'~'·"매주 X요일" 이 끼면 그 휴관 말은 이 날짜의 것이 아니다 (기간 양 끝을 닫지 않는다)
+    expect(closedDates("'21.12.23(목)~'22.2.27(일) 매주 월요일 휴관 10:00-18:00", 2021)).toEqual([]);  });
+
+  it('"N월 N일(요일)부터" 절도 괄호 안 요일이 맞는 해로 읽는다', () => {
+    // 2025년 12월에 시작한 전시의 "1.5(월)부터" 는 2026-01-05 다 (2025-01-05 는 일요일)
+    const r = parseHours('10:00~18:00, 1.5(월)부터 금 21:00까지 연장', 2025);
+    expect(r.periods?.[0].from).toBe('2026-01-05');
+    // 끝 날짜도 고른 해를 따른다
+    const p = parseHours('10:00~18:00, 1.5(월)부터 2.28까지 금 21:00까지 연장', 2025);
+    expect(p.periods?.[0]).toMatchObject({ from: '2026-01-05', to: '2026-02-28' });
+  });
+
+  it('괄호 안 요일이 어느 해에도 맞지 않으면 그 요일을 매주 닫고 시작 연도 쪽 날짜도 닫는다', () => {
+    // 2026·2027년의 3월 30일은 일요일이 아니다. 날짜와 요일 중 어느 쪽이 틀렸는지 모르므로 둘 다 닫는다
+    expect(closedDates('10:00 - 18:00, 03.30(일), 04.06(일) 휴관')).toEqual(['2026-03-30', '2026-04-06']);
     expect(openDays('10:00 - 18:00, 03.30(일), 04.06(일) 휴관')).toEqual(ALL_BUT('sun'));
+    // 요일 오타("3.31(수)", 2026-03-31 은 화요일): 전시가 2026년에 끝나면 다음 해로 넘기지 않는다
+    expect(closedDates('10:00~18:00, 3.31(수) 휴관', 2026)).toEqual(['2027-03-31']);
+    const typo = parseHours('10:00~18:00, 3.31(수) 휴관', 2026, 2026);
+    expect(typo.exceptions.filter(e => !e.schedule.isOpen).map(e => e.date)).toEqual(['2026-03-31']);
+    expect(typo.weekdays.wed.isOpen).toBe(false);
     // 휴관이 아닌 예외는 넣지 않되, 그 시간이 다른 요일 규칙에 섞이지도 않는다
     const r = parseHours('17:30 ~ 21:30 *12.21(수) 24:00까지 연장 운영', 2025);
     expect(r.exceptions).toEqual([]);

@@ -202,9 +202,10 @@ async function fetchExhibitions() {
 
     const exhibitions = filtered.map(({ item, start, end }) => {
       const hoursText = (item.PRO_TIME || '').trim();
-      // 특정 날짜 예외("11.17(화)")에 붙일 연도는 전시 시작 연도로 본다
+      // 연도 없이 적힌 날짜("11.17(화)")는 전시 시작 연도~종료 연도 중 괄호 안 요일이 맞는 해로 본다
       const year = start ? Number(start.slice(0, 4)) : new Date().getFullYear();
-      const operatingHours = parseHours(hoursText, year);
+      const endYear = end ? Number(end.slice(0, 4)) : undefined;
+      const operatingHours = parseHours(hoursText, year, endYear);
       if (operatingHours.scheduleType === 'unknown') unknownHours++;
 
       const title = (item.TITLE || '').trim();

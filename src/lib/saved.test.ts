@@ -9,6 +9,7 @@ import {
   createSavedStore,
   daysLeft,
   glanceQuery,
+  glanceRangeText,
   laterEntry,
   normalizeSavedItem,
   parseSaved,
@@ -429,6 +430,31 @@ describe('glanceQuery', () => {
     // 예전에는 23:50~23:59였다. 내 주변 첫 화면과 같은 구간(src/lib/glance.ts)으로 맞췄다
     expect(glanceQuery(TODAY, '23:50')).toEqual({ date: TODAY, stayStart: '23:40', stayEnd: '23:50' });
     expect(glanceQuery(TODAY, '23:58')).toEqual({ date: TODAY, stayStart: '23:40', stayEnd: '23:50' });
+  });
+});
+
+describe('glanceRangeText', () => {
+  const text = (time: string) => glanceRangeText(glanceQuery(TODAY, time), time);
+
+  it.each([
+    ['13:17', '지금(13:10)부터 2시간 안, 즉 15:10까지'],
+    ['21:50', '지금(21:50)부터 2시간 안, 즉 23:50까지'], // 2시간이 정확히 23:50에 닿는 마지막 시각
+    ['21:59', '지금(21:50)부터 2시간 안, 즉 23:50까지'],
+  ])('2시간을 다 잡으면 %s → %s', (time, expected) => {
+    expect(text(time)).toBe(expected);
+  });
+
+  it.each([
+    ['22:00', '지금(22:00)부터 오늘 23:50까지'],
+    ['22:30', '지금(22:30)부터 오늘 23:50까지'],
+    ['23:40', '지금(23:40)부터 오늘 23:50까지'],
+    ['23:49', '지금(23:40)부터 오늘 23:50까지'],
+  ])('23:50에 걸려 짧아지면 2시간이라 하지 않는다 %s → %s', (time, expected) => {
+    expect(text(time)).toBe(expected);
+  });
+
+  it.each(['23:50', '23:55', '23:59'])('23:50 이후(%s)는 구간을 당겼으므로 지금이라 하지 않는다', (time) => {
+    expect(text(time)).toBe('오늘 마지막 구간(23:40~23:50)에');
   });
 });
 

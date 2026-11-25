@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router-dom'
 import { getCatalog, getHolidays, judgeEntry, todayInSeoul } from '../lib/catalog'
-import { SOON_DAYS, daysLeft, glanceQuery, laterEntry, periodLabel, savedStore, splitSaved } from '../lib/saved'
+import { SOON_DAYS, daysLeft, glanceQuery, glanceRangeText, laterEntry, periodLabel, savedStore, splitSaved } from '../lib/saved'
 import type { JudgeResult } from '../types'
 import { OPEN } from './OneExhibit'
 import { BookmarkIcon } from './SaveButton'
@@ -38,7 +38,7 @@ export default function SavedMenu() {
       const judge = judgeEntry(row.entry, query, holidays)
       return { row, judge, later: laterEntry(judge, query.stayStart) }
     })
-    return { today: query.date, query, rows, more: active.length - rows.length, gone: gone.length }
+    return { today: query.date, query, basis: glanceRangeText(query, time), rows, more: active.length - rows.length, gone: gone.length }
   }, [open, items, map])
 
   // 패널 밖을 누르거나 Esc를 누르면 닫는다
@@ -119,7 +119,7 @@ export default function SavedMenu() {
           {extra && <p className="saved-menu-more">{extra}</p>}
           {/* 배지 뜻 풀이. 기준(지금부터 2시간)은 내 주변 화면의 기본값과 같다 */}
           {view.rows.length > 0 && (
-            <p className="saved-menu-basis">‘가능’·‘불가’는 지금부터 2시간 안({view.query.stayEnd}까지)에 가서 관람을 마칠 수 있는지예요.</p>
+            <p className="saved-menu-basis">‘가능’·‘불가’는 {view.basis} 가서 관람을 마칠 수 있는지예요.</p>
           )}
           <Link className="saved-menu-all" to="/saved" onClick={() => setOpen(false)}>전체 보기 →</Link>
         </div>

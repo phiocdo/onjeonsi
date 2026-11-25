@@ -3,7 +3,7 @@ import OneExhibit, { type Status } from '../components/OneExhibit'
 import SaveButton from '../components/SaveButton'
 import { readVisitedIds } from '../lib/archive'
 import { getCatalog, getHolidays, judgeEntry, todayInSeoul, type CatalogQuery } from '../lib/catalog'
-import { SOON_DAYS, daysLeft, glanceQuery, laterEntry, periodLabel, savedStore, splitSaved, type ActiveRow, type SavedRow } from '../lib/saved'
+import { SOON_DAYS, daysLeft, glanceQuery, glanceRangeText, laterEntry, periodLabel, savedStore, splitSaved, type ActiveRow, type SavedRow } from '../lib/saved'
 import type { JudgeResult } from '../types'
 import './Saved.css'
 
@@ -16,10 +16,10 @@ function NOW() {
   return { date: todayInSeoul(now), time: now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' }) }
 }
 
-// 지금 기준 판정 조건
+// 지금 기준 판정 조건과 그때 시각 (안내 문구에 같이 쓴다)
 function GLANCE() {
   const { date, time } = NOW()
-  return glanceQuery(date, time)
+  return { query: glanceQuery(date, time), now: time }
 }
 
 // 날짜 점 구분 변환
@@ -83,14 +83,14 @@ export default function Saved() {
   const map = useMemo(() => new Map(catalog.map((c) => [c.exhibition.id, c])), [catalog])
   // 판정 조건(내 주변 기본값과 같은 지금부터 2시간). 화면을 열 때 정하고, 다른 탭에 갔다 돌아오면 다시 정한다
   // (오래 열어 둔 화면이 몇 시간 전·어제 기준으로 남지 않게)
-  const [query, setQuery] = useState(GLANCE)
+  const [{ query, now }, setGlance] = useState(GLANCE)
   const today = query.date
   const visited = useMemo(() => readVisitedIds(), [])
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     const refresh = () => {
-      if (document.visibilityState === 'visible') setQuery(GLANCE())
+      if (document.visibilityState === 'visible') setGlance(GLANCE())
     }
     document.addEventListener('visibilitychange', refresh)
     return () => document.removeEventListener('visibilitychange', refresh)
@@ -127,7 +127,7 @@ export default function Saved() {
 
       {/* 배지 뜻 풀이. 기준(지금부터 2시간)은 내 주변 화면의 기본값과 같다 */}
       <p className="saved-basis">
-        ‘가능’·‘불가’는 지금({query.stayStart})부터 2시간 안, 즉 {query.stayEnd}까지 가서 관람을 마칠 수 있는지를 알려 줘요.
+        ‘가능’·‘불가’는 {glanceRangeText(query, now)} 가서 관람을 마칠 수 있는지를 알려 줘요.
         ‘확인 필요’는 운영 정보가 충분하지 않아 가기 전에 직접 확인해 봐야 하는 전시예요.
       </p>
 

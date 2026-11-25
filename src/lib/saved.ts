@@ -15,7 +15,8 @@
 import type { JudgeResult } from '../types';
 import { SAVED_VERSION, type ExhibitionSnapshot, type SavedData, type SavedItem } from '../types/records';
 import { browserStorage, readSnapshot, snapshotOf, toIso, type ArchiveStorage, type CatalogLookup } from './archive';
-import { getCatalog, type CatalogEntry } from './catalog';
+import { getCatalog, type CatalogEntry, type CatalogQuery } from './catalog';
+import { GLANCE_MINUTES } from './glance';
 
 export const SAVED_KEY = 'onjeonsi:saved';
 /** 읽을 수 없는 찜 데이터(깨진 JSON, 다른 버전)를 새 목록으로 덮어쓰기 전에 원본을 옮겨 두는 키. 화면은 읽지 않는다(손으로 되살리는 용도) */
@@ -257,6 +258,27 @@ export function periodLabel(start: string | null, end: string | null, today: str
  * 예전부터 이 파일에서 import하던 곳이 그대로 쓰도록 다시 내보낸다.
  */
 export { glanceQuery } from './glance';
+
+function minutesOf(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * 판정 구간(glanceQuery 결과)을 배지 안내 문구에 넣을 말로 바꾼다. now는 구간을 만들 때 쓴 지금 시각('HH:MM').
+ * '‘가능’·‘불가’는 {이 말} 가서 관람을 마칠 수 있는지' 꼴로 쓴다.
+ * - 2시간을 다 잡으면: '지금(13:10)부터 2시간 안, 즉 15:10까지'
+ * - 23:50에 걸려 2시간보다 짧으면(21:50 이후): '지금(22:30)부터 오늘 23:50까지'
+ * - 23:50 이후라 구간을 23:40~23:50으로 당겼으면 시작이 지금보다 이르므로 '지금'이라 하지 않는다:
+ *   '오늘 마지막 구간(23:40~23:50)에'
+ */
+export function glanceRangeText(query: CatalogQuery, now: string): string {
+  const { stayStart, stayEnd } = query;
+  const start = minutesOf(stayStart);
+  if (Math.floor(minutesOf(now) / 10) * 10 > start) return `오늘 마지막 구간(${stayStart}~${stayEnd})에`;
+  if (minutesOf(stayEnd) - start < GLANCE_MINUTES) return `지금(${stayStart})부터 오늘 ${stayEnd}까지`;
+  return `지금(${stayStart})부터 2시간 안, 즉 ${stayEnd}까지`;
+}
 
 /**
  * 판정이 '가능'이지만 시작 시각(from)보다 늦게 입장할 수 있으면 그 입장 시각('14:00'), 아니면 null.

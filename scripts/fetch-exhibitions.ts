@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseHours } from '../src/lib/parseHours.ts';
 import { makeExhibitionId, findDuplicateIds } from './exhibition-id.ts';
+import { isTargetEvent } from './exhibition-filter.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -154,23 +155,8 @@ async function fetchExhibitions() {
     }
     console.log(`📥 받아온 행사: ${rows.length}건`);
 
-    // 종로구 / 중구 및 전시/미술 관련 행사 필터링
-    const inTargetArea = rows.filter(item => {
-      const gu = (item.GUNAME || '').trim();
-      const code = (item.CODENAME || '').trim();
-      const place = (item.PLACE || '').trim();
-
-      const isTargetGu = gu.includes('종로구') || gu.includes('중구');
-      const isTargetGenre =
-        code.includes('전시') ||
-        code.includes('미술') ||
-        place.includes('미술관') ||
-        place.includes('박물관') ||
-        place.includes('갤러리') ||
-        place.includes('DDP');
-
-      return isTargetGu && isTargetGenre;
-    });
+    // 종로구·중구의 전시 분류만 고른다. 장소(미술관·박물관 등)는 보지 않는다(근거는 exhibition-filter.ts)
+    const inTargetArea = rows.filter(isTargetEvent);
 
     console.log(`🎯 종로구·중구 전시: ${inTargetArea.length}건`);
 

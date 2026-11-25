@@ -636,9 +636,10 @@ describe('parseHours — 특정 날짜 예외', () => {
   });
 
   it('"N월 N일(요일)" 형식도 읽는다', () => {
-    const r = parseHours('10:30~12:00 (90분) *10월 11일(토)은 휴관', 2026);
+    // 2025-10-11 이 토요일이다
+    const r = parseHours('10:30~12:00 (90분) *10월 11일(토)은 휴관', 2025);
     expect(r.exceptions).toEqual([
-      { date: '2026-10-11', schedule: { isOpen: false, intervals: [] } },
+      { date: '2025-10-11', schedule: { isOpen: false, intervals: [] } },
     ]);
   });
 
@@ -802,8 +803,29 @@ describe('parseHours — 요일이 아닌 글자를 요일로 읽지 않는다',
     // 예전에는 매주 토요일을 닫았다
     expect(openDays('10:00~18:00, 11월 21일(토) 휴관')).toEqual(ORDER);
     expect(closedDates('10:00~18:00, 11월 21일(토) 휴관')).toEqual(['2026-11-21']);
-    expect(openDays('10:00 - 18:00, 03.30(일), 04.06(일) 휴관')).toEqual(ORDER);
-    expect(closedDates('10:00 - 18:00, 03.30(일), 04.06(일) 휴관')).toEqual(['2026-03-30', '2026-04-06']);
+    // 2025-03-30, 2025-04-06 이 일요일이다
+    expect(parseHours('10:00 - 18:00, 03.30(일), 04.06(일) 휴관', 2025).weekdays.sun.isOpen).toBe(true);
+    expect(closedDates('10:00 - 18:00, 03.30(일), 04.06(일) 휴관', 2025)).toEqual(['2025-03-30', '2025-04-06']);
+  });
+
+  it('연도가 없으면 시작 연도와 다음 해 중 괄호 안 요일이 맞는 해를 고른다', () => {
+    // 12월에 시작한 전시의 "1.5(월)" 은 다음 해다. 2025-01-05 는 일요일
+    expect(closedDates('10:00~18:00, 1.5(월) 휴관', 2025)).toEqual(['2026-01-05']);
+    expect(openDays('10:00~18:00, 1.5(월) 휴관', 2025)).toEqual(ORDER);
+    // 2026-01-01 은 목요일, 2027-01-01 이 금요일
+    expect(closedDates('10:00~18:00, 12.31(목), 1.1(금) 휴관')).toEqual(['2026-12-31', '2027-01-01']);
+    // 연도가 적힌 날짜는 적힌 대로 쓴다
+    expect(closedDates('10:00~18:00, 2025/12/27(토) 휴관', 2026)).toEqual(['2025-12-27']);
+  });
+
+  it('괄호 안 요일이 어느 해에도 맞지 않으면 날짜 대신 그 요일을 매주 닫는다', () => {
+    // 2026·2027년의 3월 30일은 일요일이 아니다. 엉뚱한 날을 닫고 진짜 휴관일을 열면 틀린 "가능"이 된다
+    expect(closedDates('10:00 - 18:00, 03.30(일), 04.06(일) 휴관')).toEqual([]);
+    expect(openDays('10:00 - 18:00, 03.30(일), 04.06(일) 휴관')).toEqual(ALL_BUT('sun'));
+    // 휴관이 아닌 예외는 넣지 않되, 그 시간이 다른 요일 규칙에 섞이지도 않는다
+    const r = parseHours('17:30 ~ 21:30 *12.21(수) 24:00까지 연장 운영', 2025);
+    expect(r.exceptions).toEqual([]);
+    expect(openDays('17:30 ~ 21:30 *12.21(수) 24:00까지 연장 운영', 2025)).toEqual(ORDER);
   });
 
   it('"4/13(월)" 처럼 빗금으로 적은 날짜도 날짜 예외로 읽는다', () => {
@@ -831,6 +853,15 @@ describe('parseHours — 요일이 아닌 글자를 요일로 읽지 않는다',
     // 요일 목록은 그대로 닫는다
     expect(openDays('10:00~18:00 (목금일 휴관)')).toEqual(ALL_BUT('thu', 'fri', 'sun'));
     expect(openDays('10:00~18:00 (월휴관)')).toEqual(ALL_BUT('mon'));
+  });
+
+  it('"일공휴일", "월이나" 처럼 붙여 쓴 휴관 요일도 닫는다', () => {
+    // 낱말로 보고 건너뛰면 일요일·월요일이 열려 틀린 "가능"이 나온다
+    expect(openDays('10:00~18:00 (토,일공휴일 휴관)')).toEqual(ALL_BUT('sat', 'sun'));
+    expect(openDays('10:00~18:00 (월이나 공휴일 휴관)')).toEqual(ALL_BUT('mon'));
+    expect(openDays('10:00~18:00 (월나 공휴일 휴관)')).toEqual(ALL_BUT('mon'));
+    // "월이 공휴일이면" 의 '월' 은 휴관 요일 목록이 아니다
+    expect(openDays('10:00~18:00 월이 공휴일이면 다음날 휴관')).toEqual(ORDER);
   });
 });
 

@@ -126,6 +126,16 @@
         ],
         "description": "서울문화포털 상세 페이지 (HMPG_ADDR)"
       },
+      "isFree": {
+        "type": "boolean",
+        "description": "무료면 true, 유료면 false (IS_FREE). 모르면 키를 두지 않는다. 없으면 '모름'이지 '무료'가 아니다"
+      },
+      "fee": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000,
+        "description": "요금 문구 원문 (USE_FEE, 앞뒤 공백만 지움). 없으면 키를 두지 않는다. isFree와 어긋날 수 있다"
+      },
       "fetchedAt": {
         "anyOf": [
           {

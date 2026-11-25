@@ -14,6 +14,11 @@ JSON 데이터 파일의 형식을 정의한 JSON Schema(draft-07) 파일입니�
 위 파일들은 `npm run validate`와 배포 워크플로가 검사합니다. 시설 파일과 `manual.json`은 수집하지 않는 값이라,
 스키마에 어긋나면 배포가 멈춥니다.
 
+### 전시 요금 필드 (선택)
+
+- `isFree`: 무료면 `true`, 유료면 `false`(서울시 API `IS_FREE`). 키가 없으면 "모름"이지 "무료"가 아닙니다.
+- `fee`: 요금 문구 원문(`USE_FEE`, 앞뒤 공백만 지움, 1~1000자). 키가 없으면 "모름"이고, `isFree`와 어긋나도 고치지 않습니다.
+
 ## 추가 예정
 
 - 제안 스키마 5개(`judge-scenarios`, `personal-records-export`, `shared-reviews-seed`, `popular-venues`, `venue-links`):

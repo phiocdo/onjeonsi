@@ -205,7 +205,8 @@ async function fetchExhibitions() {
         title,
         start,
         end,
-        field: item.CODENAME || '전시/미술',
+        // 필터가 전시 분류만 남기므로 값은 늘 있다. 필터처럼 앞뒤 공백을 떼고 저장한다
+        field: (item.CODENAME ?? '').trim(),
         placeName,
         hoursText,
         operatingHours,

@@ -15,7 +15,7 @@
 import type { JudgeResult } from '../types';
 import { SAVED_VERSION, type ExhibitionSnapshot, type SavedData, type SavedItem } from '../types/records';
 import { browserStorage, readSnapshot, snapshotOf, toIso, type ArchiveStorage, type CatalogLookup } from './archive';
-import { getCatalog, type CatalogEntry, type CatalogQuery } from './catalog';
+import { getCatalog, type CatalogEntry } from './catalog';
 
 export const SAVED_KEY = 'onjeonsi:saved';
 /** 읽을 수 없는 찜 데이터(깨진 JSON, 다른 버전)를 새 목록으로 덮어쓰기 전에 원본을 옮겨 두는 키. 화면은 읽지 않는다(손으로 되살리는 용도) */
@@ -250,27 +250,13 @@ export function periodLabel(start: string | null, end: string | null, today: str
   return left === 0 ? '오늘 종료' : `D-${left}`;
 }
 
-// 내 주변 화면의 기본 시간대와 같게 판정한다 (src/pages/NearbyExhibitions.tsx의 NOW)
-const GLANCE_MINUTES = 120;
-const LAST_SLOT = 23 * 60 + 50;
-
-function hhmm(total: number): string {
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
 /**
- * 북마크 화면의 판정 조건. 내 주변 화면의 기본값과 같다:
- * 지금 시각을 10분 단위로 내린 때부터 2시간, 23:50을 넘지 않는다.
+ * 북마크 화면의 판정 조건. 내 주변 화면의 첫 시간 선택값과 같은 함수(./glance)를 쓴다:
+ * 지금 시각을 10분 단위로 내린 때부터 2시간, 23:50을 넘지 않고, 23:50 이후는 23:40~23:50.
  * 그래서 같은 전시가 내 주변과 북마크에서 같은 가능/불가로 나온다. 상세 창을 열 때도 이 조건을 넘긴다.
- * 다른 점 하나: 23:50 이후에는 내 주변은 시작·끝이 모두 23:50이 되어 시간 범위 오류로 판정하지 않지만,
- * 여기서는 끝을 23:59로 두고 판정한다(북마크 화면에는 시간을 고칠 입력이 없어서).
+ * 예전부터 이 파일에서 import하던 곳이 그대로 쓰도록 다시 내보낸다.
  */
-export function glanceQuery(date: string, time: string): CatalogQuery {
-  const [h, m] = time.split(':').map(Number);
-  const start = Math.min(h * 60 + Math.floor(m / 10) * 10, LAST_SLOT);
-  const end = Math.min(start + GLANCE_MINUTES, LAST_SLOT);
-  return { date, stayStart: hhmm(start), stayEnd: end > start ? hhmm(end) : '23:59' };
-}
+export { glanceQuery } from './glance';
 
 /**
  * 판정이 '가능'이지만 시작 시각(from)보다 늦게 입장할 수 있으면 그 입장 시각('14:00'), 아니면 null.

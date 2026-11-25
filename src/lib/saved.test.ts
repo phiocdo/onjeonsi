@@ -424,10 +424,11 @@ describe('glanceQuery', () => {
     expect(glanceQuery(TODAY, '00:05')).toEqual({ date: TODAY, stayStart: '00:00', stayEnd: '02:00' });
   });
 
-  it('끝은 23:50을 넘지 않고, 2시간을 못 잡으면 23:59까지', () => {
+  it('끝은 23:50을 넘지 않고, 23:50 이후는 23:40~23:50', () => {
     expect(glanceQuery(TODAY, '22:45')).toEqual({ date: TODAY, stayStart: '22:40', stayEnd: '23:50' });
-    expect(glanceQuery(TODAY, '23:50')).toEqual({ date: TODAY, stayStart: '23:50', stayEnd: '23:59' });
-    expect(glanceQuery(TODAY, '23:58')).toEqual({ date: TODAY, stayStart: '23:50', stayEnd: '23:59' });
+    // 예전에는 23:50~23:59였다. 내 주변 첫 화면과 같은 구간(src/lib/glance.ts)으로 맞췄다
+    expect(glanceQuery(TODAY, '23:50')).toEqual({ date: TODAY, stayStart: '23:40', stayEnd: '23:50' });
+    expect(glanceQuery(TODAY, '23:58')).toEqual({ date: TODAY, stayStart: '23:40', stayEnd: '23:50' });
   });
 });
 

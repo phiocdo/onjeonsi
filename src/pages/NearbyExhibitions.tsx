@@ -3,6 +3,7 @@ import { calculateDistance, type Coordinate } from '../engine/distance'
 import { rankExhibitions } from '../engine/sort'
 import { readVisitedIds } from '../lib/archive'
 import { basisLabel, displayLocation, displayVenueName, getCatalog, getHolidays, judgeCatalog, todayInSeoul, type CatalogQuery, type JudgedEntry } from '../lib/catalog'
+import { glanceWindow } from '../lib/glance'
 import type { JudgeResult } from '../types'
 import OneExhibit, { OPEN } from '../components/OneExhibit'
 import './NearbyExhibitions.css'
@@ -58,9 +59,9 @@ function NOW() {
   const date = todayInSeoul(now)
   const [y, m, d] = date.split('-').map(Number)
   const raw = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' })
-  const [hh, mm] = raw.split(':').map(Number)
-  const startTotal = hh * 60 + Math.floor(mm / 10) * 10
-  return { y, m, d, start: SPLIT(startTotal), end: SPLIT(startTotal + 120) }
+  const { start, end } = glanceWindow(raw)
+  const total = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3))
+  return { y, m, d, start: SPLIT(total(start)), end: SPLIT(total(end)) }
 }
 
 // 연/월 기준 일 수

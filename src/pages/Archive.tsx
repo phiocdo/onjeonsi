@@ -3,10 +3,11 @@ import { OPEN } from '../components/OneExhibit'
 import TagInput, { TagList } from '../components/TagInput'
 import { displayVenueName, getCatalog, todayInSeoul, type CatalogEntry } from '../lib/catalog'
 import { fromVisitRecord, getRatingSummary } from '../lib/ratings'
-import { recommendPersonal, type Candidate } from '../lib/recommend'
+import { personalBasis, recommendPersonal, snapshotTags, type Candidate } from '../lib/recommend'
 import { SEED_RECORDS } from '../lib/seed'
 import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
 import { backfillShared, clearAndSync, saveAndSync, shareQueue } from '../lib/shareSync'
+import { TAGS, tagsOf } from '../lib/tags'
 import {
   ARCHIVE_KEY,
   browserStorage,
@@ -72,7 +73,6 @@ function ITEM({ entry, found, today, share, drop }: { entry: VisitRecord; found:
 export default function Archive() {
   const catalog = useMemo(() => getCatalog(), [])
   const map = useMemo(() => new Map(catalog.map((c) => [c.exhibition.id, c])), [catalog])
-  const fields = useMemo(() => Array.from(new Set(catalog.map((c) => c.exhibition.field).filter((f): f is string => Boolean(f)))), [catalog])
   const today = useMemo(() => todayInSeoul(), [])
   const storage = useMemo(() => browserStorage(), [])
 
@@ -121,20 +121,21 @@ export default function Archive() {
   const range = allowedVisitRange(period, today)
   const dateNotice = visitFormNotice(date, period, today)
 
-  const liked = records.filter((r) => r.rating >= 4)
-  const genres = Array.from(new Set(liked.flatMap((r) => (r.exhibition.field ? [r.exhibition.field] : []))))
-  const basis = genres.length ? genres : interests
+  // 맞춤 추천은 주제 태그 기준 (src/lib/recommend.ts). 기록의 태그는 카탈로그에 있으면 그 전시로, 빠졌으면 기록할 때의 사본으로 구한다
+  const myRecords = useMemo(() => records.map((r) => {
+    const found = map.get(r.exhibitionId)
+    return { ...fromVisitRecord(r), tags: found ? tagsOf(found) : snapshotTags(r.exhibition) }
+  }), [records, map])
+  const { tags: basis, fromLiked } = personalBasis(myRecords, interests)
   const picks = useMemo(() => {
-    const candidates: Candidate[] = catalog.filter((c) => c.exhibition.end >= today).map((c) => ({ id: c.exhibition.id, venueId: c.venue?.id ?? null, field: c.exhibition.field ?? null, distanceM: null, result: 'possible' }))
-    // 분야는 전시 정보 사본에서 가져온다 (카탈로그에 있으면 읽을 때 최신으로 고쳐져 있다)
-    const myRecords = records.map((r) => ({ ...fromVisitRecord(r), field: r.exhibition.field }))
+    const candidates: Candidate[] = catalog.filter((c) => c.exhibition.end >= today).map((c) => ({ id: c.exhibition.id, venueId: c.venue?.id ?? null, tags: tagsOf(c), distanceM: null, result: 'possible' }))
     const ratingOf = (c: Candidate) => getRatingSummary(c.id, c.venueId, { stats, seed: SEED_RECORDS })
     const { items } = recommendPersonal(candidates, { myRecords, interests, seenIds: records.map((r) => r.exhibitionId), ratingOf, popularVenueIds: [], limit: 4 })
     return items.flatMap((item) => {
       const entry = map.get(item.id)
-      return entry ? [{ entry, reason: item.reason }] : []
+      return entry ? [{ entry, reason: item.reason, topics: tagsOf(entry).slice(0, 2) }] : []
     })
-  }, [catalog, today, records, map, interests, stats])
+  }, [catalog, today, records, myRecords, map, interests, stats])
 
   const first = new Date(view.year, view.month, 1).getDay()
   const last = new Date(view.year, view.month + 1, 0).getDate()
@@ -192,9 +193,9 @@ export default function Archive() {
     UPDATE((prev) => ({ ...prev, records: prev.records.filter((r) => r.id !== id) }), target?.shared ? [target.exhibitionId] : [])
   }
 
-  // 관심 분야 토글
-  function TOGGLE(field: string) {
-    UPDATE((prev) => ({ ...prev, interests: prev.interests.includes(field) ? prev.interests.filter((c) => c !== field) : [...prev.interests, field] }))
+  // 관심 주제 토글 (TAGS 이름으로 저장. 예전에 저장한 분야 이름은 건드리지 않는다)
+  function TOGGLE(tag: string) {
+    UPDATE((prev) => ({ ...prev, interests: prev.interests.includes(tag) ? prev.interests.filter((c) => c !== tag) : [...prev.interests, tag] }))
   }
 
   // 아카이브 JSON 파일로 내려받기
@@ -214,7 +215,7 @@ export default function Archive() {
 
   // 아카이브 전체 삭제 (확인 후)
   function WIPE() {
-    if (!window.confirm(`기록 ${records.length}개와 관심 분야를 모두 삭제합니다. 익명 공유한 별점·관람 시간·태그도 서버에서 삭제합니다. 되돌릴 수 없습니다.\n먼저 내보내기로 백업해 두십시오.`)) return
+    if (!window.confirm(`기록 ${records.length}개와 관심 주제를 모두 삭제합니다. 익명 공유한 별점·관람 시간·태그도 서버에서 삭제합니다. 되돌릴 수 없습니다.\n먼저 내보내기로 백업해 두십시오.`)) return
     // 저장소에서 지우지 못했으면 화면도 그대로 두고 서버도 부르지 않는다 (화면만 비우면 새로고침 때 기록이 되살아나 헷갈린다)
     // 지웠으면 서버의 내 공유 행 전부 삭제. 앞서 대기 중이던 전시별 작업은 버리고, 실패하면 '전체 삭제'로 다시 시도를 기다린다
     if (!clearAndSync(storage)) {
@@ -324,27 +325,27 @@ export default function Archive() {
           <div className="panel recommend">
             <h2>맞춤 추천</h2>
 
-            {genres.length ? (
-              <p className="recommend-basis">높게 평가한(★4 이상) 전시와 같은 분류: {genres.join(', ')}</p>
+            {fromLiked ? (
+              <p className="recommend-basis">높게 평가한(★4 이상) 전시의 주제: {basis.join(', ')}</p>
             ) : (
               <>
-                <p className="recommend-basis">{records.length ? '★4 이상 기록이 아직 없습니다. 관심 분야를 선택하십시오.' : '기록이 없습니다. 관심 분야를 먼저 선택하십시오.'}</p>
+                <p className="recommend-basis">{records.length ? '★4 이상 기록의 주제가 아직 없습니다. 관심 주제를 선택하십시오.' : '기록이 없습니다. 관심 주제를 먼저 선택하십시오.'}</p>
                 <div className="chips">
-                  {fields.map((field) => (
-                    <button key={field} type="button" className={interests.includes(field) ? 'chip chosen' : 'chip'} onClick={() => TOGGLE(field)}>{field}</button>
+                  {TAGS.map((tag) => (
+                    <button key={tag} type="button" className={interests.includes(tag) ? 'chip chosen' : 'chip'} onClick={() => TOGGLE(tag)}>{tag}</button>
                   ))}
                 </div>
               </>
             )}
 
             <div className="recommend-list">
-              {picks.map(({ entry, reason }) => (
+              {picks.map(({ entry, reason, topics }) => (
                 <button type="button" className="recommend-item" key={entry.exhibition.id} onClick={() => OPEN(entry.exhibition.id)}>
                   {entry.exhibition.imageUrl && <img src={entry.exhibition.imageUrl} alt={entry.exhibition.title} loading="lazy" decoding="async" />}
                   <span>
                     <strong>{entry.exhibition.title}</strong>
                     <em>{displayVenueName(entry) || '장소 미상'}</em>
-                    {entry.exhibition.field && <em>{entry.exhibition.field}</em>}
+                    {topics.length > 0 && <em>{topics.join(', ')}</em>}
                     <em className="recommend-reason">{reason}</em>
                   </span>
                 </button>

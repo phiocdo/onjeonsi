@@ -6,16 +6,23 @@
  *   const popular = recommendPopular(candidates, { ratingOf, popularVenueIds })
  *   const { items, filledWithPopular } = recommendPersonal(candidates, { myRecords, interests, seenIds, ratingOf, popularVenueIds })
  *
- * 주의: 지금 mock Category(현대미술, 회화 …)와 auto.json field(서울시 대분류: 전시/미술, 교육/체험 …)는 일치하지 않음.
- * 실제 데이터는 전시/미술이 대부분이라 맞춤 추천 효과가 작음. 분야 값을 같은 종류로 맞춰 넘기는 것은 호출하는 쪽 책임이다.
+ * 맞춤 기준은 주제 태그(src/lib/tags.ts의 TAGS·tagsOf)다. 서울시 field(전시/미술 …)는 수집 데이터가 거의 다
+ * "전시/미술" 하나라 누구에게나 같은 전시가 나와서 쓰지 않는다. 비슷한 전시(similar.ts)와 같은 태그 함수를 쓴다.
+ * 후보·내 기록의 태그는 호출하는 쪽이 tagsOf(entry)로 붙여 넘긴다(카탈로그에서 빠진 기록은 snapshotTags).
+ * interests 값 중 TAGS에 없는 것(예전에 저장한 분야 이름 '전시/미술' 등)은 무시한다. 저장 값은 지우지 않는다.
+ * 사용자 태그(userTags.ts)는 쓰지 않는다.
  */
+import type { Exhibition, Venue } from '../types';
+import type { ExhibitionSnapshot } from '../types/records';
 import type { RatingRecord, RatingSummary } from './ratings';
+import { sharedTags, TAGS, tagsOf, type Tag } from './tags';
 
 /** 화면이 catalog 결과를 이 모양으로 넘긴다 */
 export interface Candidate {
   id: string;
   venueId: string | null;
-  field: string | null;
+  // 주제 태그 (tagsOf)
+  tags: string[];
   distanceM: number | null;
   result: 'possible' | 'impossible' | 'unknown';
 }
@@ -32,8 +39,11 @@ export interface PersonalResult {
   filledWithPopular: boolean;
 }
 
-/** 내 기록. VisitRecord는 fromVisitRecord(ratings.ts)로 바꾼 뒤 record.exhibition.field를 붙여 넘긴다 */
-export type MyRecord = RatingRecord & { field?: string | null };
+/**
+ * 내 기록. VisitRecord는 fromVisitRecord(ratings.ts)로 바꾼 뒤 전시의 주제 태그를 붙여 넘긴다
+ * (카탈로그에 있으면 tagsOf(entry), 없으면 snapshotTags(record.exhibition))
+ */
+export type MyRecord = RatingRecord & { tags?: string[] };
 
 export const POPULAR_REASON = '근처 인기 전시';
 
@@ -62,8 +72,29 @@ function byDistance(a: Candidate, b: Candidate): number {
   return a.distanceM - b.distanceM;
 }
 
-function hasField(field: string | null | undefined): field is string {
-  return typeof field === 'string' && field.trim() !== '';
+/**
+ * 카탈로그에서 빠진 기록(끝난 전시)의 주제 태그를 기록할 때 복사해 둔 정보로 구한다.
+ * 사본에는 제목·장소 이름(displayVenueName 결과)·시설 id만 있어 그것으로 tagsOf에 넘길 모양을 만든다.
+ * 시설에 연결된 전시는 사본의 장소 이름이 시설 이름이라 원래 placeName의 키워드는 놓칠 수 있다.
+ */
+export function snapshotTags(s: Pick<ExhibitionSnapshot, 'title' | 'venueName' | 'venueId'>): Tag[] {
+  const name = s.venueName ?? undefined;
+  return tagsOf({
+    exhibition: { title: s.title, placeName: name } as Exhibition,
+    venue: s.venueId ? ({ id: s.venueId, name: name ?? '' } as Venue) : null,
+  });
+}
+
+/**
+ * 맞춤 기준 태그: 별점 4 이상 기록들의 태그 합집합(fromLiked: true), 없으면 interests 중 TAGS에 있는 것.
+ * 순서는 TAGS 순서. 화면의 근거 문구도 이것을 쓴다.
+ */
+export function personalBasis(myRecords: MyRecord[], interests: string[]): { tags: Tag[]; fromLiked: boolean } {
+  const liked = myRecords.filter((r) => r.rating >= 4).flatMap((r) => r.tags ?? []);
+  const likedTags = TAGS.filter((t) => liked.includes(t));
+  if (likedTags.length > 0) return { tags: likedTags, fromLiked: true };
+  // TAGS에 없는 값(예전 분야 이름 등)은 여기서 빠진다
+  return { tags: TAGS.filter((t) => interests.includes(t)), fromLiked: false };
 }
 
 /**
@@ -114,35 +145,35 @@ export function recommendPopular(candidates: Candidate[], opts: PopularOptions):
 }
 
 /**
- * 맞춤 전시: 내가 별점 4 이상 준 기록의 분야(없으면 interests)와 같은 분야의 'possible' 전시를 가까운 순으로.
- * - 이미 본 전시(seenIds와 myRecords의 전시)는 뺀다. field가 없는 내 기록은 분야 계산에서 빼고 본 전시로만 쓴다.
- * - 분야가 없는 후보는 맞춤 대상에서 뺀다(인기 채우기에는 들어갈 수 있다).
+ * 맞춤 전시: personalBasis의 태그(★4 이상 기록의 주제, 없으면 관심 주제)와 겹치는 태그가 있는 'possible' 전시를
+ * 겹치는 태그 수가 많은 순 → 가까운 순으로.
+ * - 이미 본 전시(seenIds와 myRecords의 전시)는 뺀다. 태그가 없는 내 기록은 기준 계산에서 빠지고 본 전시로만 쓴다.
+ * - 겹치는 태그가 없는 후보(태그가 없는 후보 포함)는 맞춤 대상에서 뺀다(인기 채우기에는 들어갈 수 있다).
+ * - reason에는 겹친 태그를 TAGS 순서로 최대 2개, ', '로 잇는다(태그 이름 안에 '·'가 있어서).
  * - 모자라면 recommendPopular 결과로 채우고 filledWithPopular를 true로 한다.
  *   채운 항목의 reason·source는 recommendPopular가 준 그대로다("별점 4.5 (…)" 또는 "근처 인기 전시", source 'popular').
  */
 export function recommendPersonal(candidates: Candidate[], opts: PersonalOptions): PersonalResult {
   const limit = Math.max(0, opts.limit ?? 5);
-
-  const likedFields = unique(
-    opts.myRecords.filter((r) => r.rating >= 4 && hasField(r.field)).map((r) => r.field as string),
-  );
-  const fromLiked = likedFields.length > 0;
-  const fields = fromLiked ? likedFields : unique(opts.interests.filter(hasField));
+  const { tags: basis, fromLiked } = personalBasis(opts.myRecords, opts.interests);
 
   const seen = new Set([...opts.seenIds, ...opts.myRecords.map((r) => r.exhibitionId)]);
 
   const matches = candidates
-    .filter(
-      (c) => c.result === 'possible' && hasField(c.field) && fields.includes(c.field) && !seen.has(c.id),
-    )
-    .sort(byDistance)
+    .filter((c) => c.result === 'possible' && !seen.has(c.id))
+    .map((c) => ({ c, common: sharedTags(basis, c.tags) }))
+    .filter((m) => m.common.length > 0)
+    .sort((a, b) => b.common.length - a.common.length || byDistance(a.c, b.c))
     .slice(0, limit);
 
-  const items: RecommendCard[] = matches.map((c) => ({
-    id: c.id,
-    reason: fromLiked ? `내가 높게 평가한 ${c.field} 분야` : `관심 분야 ${c.field}`,
-    source: 'personal',
-  }));
+  const items: RecommendCard[] = matches.map(({ c, common }) => {
+    const shown = common.slice(0, 2).join(', ');
+    return {
+      id: c.id,
+      reason: fromLiked ? `내가 높게 평가한 전시와 같은 주제: ${shown}` : `관심 주제: ${shown}`,
+      source: 'personal',
+    };
+  });
 
   let filledWithPopular = false;
   if (items.length < limit) {
@@ -159,8 +190,4 @@ export function recommendPersonal(candidates: Candidate[], opts: PersonalOptions
   }
 
   return { items, filledWithPopular };
-}
-
-function unique<T>(xs: T[]): T[] {
-  return Array.from(new Set(xs));
 }

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { parseHours } from '../src/lib/parseHours.ts';
 import { makeExhibitionId, findDuplicateIds } from './exhibition-id.ts';
 import { isTargetEvent } from './exhibition-filter.ts';
+import { feeFields, summarizeFees } from './exhibition-fee.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +39,8 @@ interface RawSeoulEvent {
   LAT: string; // Latitude (위도)
   LOT: string; // Longitude (경도)
   PRO_TIME: string; // 운영시간 문구. 자유 서술이라 그대로는 못 쓴다
+  IS_FREE: string; // 무료/유료
+  USE_FEE: string; // 요금 문구 (자유 서술)
 }
 
 /**
@@ -216,6 +219,8 @@ async function fetchExhibitions() {
         imageUrl: item.MAIN_IMG || '',
         detailUrl,
         ...toLatLng(item.LAT, item.LOT),
+        // 요금(isFree·fee). 모르는 값이면 필드를 두지 않는다 — scripts/exhibition-fee.ts
+        ...feeFields(item.IS_FREE, item.USE_FEE),
         fetchedAt: new Date().toISOString()
       };
     });
@@ -245,6 +250,9 @@ async function fetchExhibitions() {
     console.log(`✅ ${outputPath} 저장 완료 (${exhibitions.length}건)`);
     if (swapped) console.log(`   시작일·종료일이 뒤집혀 있어 바로잡은 전시: ${swapped}건`);
     console.log(`   운영시간 파싱: ${exhibitions.length - unknownHours}건 / 판별 불가 ${unknownHours}건`);
+    const fees = summarizeFees(filtered.map(({ item }) => item));
+    console.log(fees.info);
+    if (fees.warning) console.warn(fees.warning);
   } catch (error) {
     console.error('❌ 스크립트 실행 중 에러 발생:', error);
     // 에러를 로그만 찍고 0으로 끝내면, 수집이 조용히 건너뛰어진 채

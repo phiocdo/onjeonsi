@@ -98,6 +98,8 @@ export interface Exhibition {
   detailUrl?: string; // 서울문화포털 상세 페이지 (HMPG_ADDR)
   lat?: number;
   lng?: number;
+  isFree?: boolean; // 무료면 true, 유료면 false (서울시 API IS_FREE). 없으면 모름 — 무료가 아니다
+  fee?: string; // 요금 문구 원문 (USE_FEE). isFree와 어긋날 수 있다
   fetchedAt?: string;
 }
 

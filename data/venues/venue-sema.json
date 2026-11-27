@@ -9,6 +9,7 @@
   "type": "미술관",
   "lat": 37.5641060692766,
   "lng": 126.973699316136,
+  "kakaoPlaceId": "10507051",
   "representative": true,
   "hours": {
     "tue": { "open": "10:00", "close": "20:00" },

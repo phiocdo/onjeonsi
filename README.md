@@ -44,6 +44,7 @@ cp .env.example .env
 | --- | --- | --- |
 | `SEOUL_DATA_API_KEY` | 전시 수집 스크립트 | [서울 열린데이터광장](https://data.seoul.go.kr) → 문화행사 정보 |
 | `HOLIDAY_API_KEY` | 공휴일 수집 스크립트 | [공공데이터포털](https://www.data.go.kr) → 특일 정보 |
+| `KCISA_API_KEY` | `manual.json` 보충 후보 찾기 (선택, 환경 변수로만) | [공공데이터포털](https://www.data.go.kr) → 한국문화정보원 한눈에보는문화정보 |
 | `VITE_KAKAO_MAP_KEY` | 지도 표시 (브라우저) | [Kakao Developers](https://developers.kakao.com) → JavaScript 키 |
 
 `.env`는 `.gitignore`에 들어 있습니다. 저장소가 공개되어 있으니 키를 커밋하면 안됩니다.
@@ -94,6 +95,25 @@ npm run dev
 - 운영시간을 시설 파일(`data/venues/`)에만 맡기려면 `scheduleType`을 `"unknown"`으로 두고 7개 요일을 `{ "isOpen": false, "intervals": [] }`로 씁니다.
   이때 `placeName`이 시설 이름·별칭과 맞아 시설에 연결되어야 합니다. 연결되지 않으면 늘 "확인 필요"가 나옵니다.
 - 고친 뒤 `npm run validate`로 검사합니다.
+
+### 보충 후보 찾기 (한국문화정보원 한눈에보는문화정보)
+
+출처: 한국문화정보원 한눈에보는문화정보 (공공데이터포털, 이용허락범위 제한 없음).
+**`manual.json` 보충 후보를 찾는 데만 쓰고 자동 수집하지 않습니다.** 배포 워크플로는 이 API를 부르지 않습니다.
+
+- 서울시 API에 없는 종로구·중구 전시 중 `data/venues/`의 시설에 연결되는 것만 후보로 뽑습니다.
+  이 API는 운영시간·휴관·입장 마감을 주지 않아서, 시설 운영시간으로 판정할 수 있는 전시만 다룹니다.
+- 우선순위는 `auto.json` > `manual.json` > 이 API입니다. 같은 전시(제목·기간·시설이 같음)가 앞쪽에 있으면 "이미 있음"으로 둡니다.
+- 결과는 `review/kcisa/`에만 씁니다(`candidates.md`, `candidates.json`, `manual-draft.json`). `data/`는 고치지 않습니다.
+  사람이 공식 사이트에서 운영시간·휴관을 확인한 뒤 초안을 `manual.json`에 옮기고 `npm run validate`로 검사합니다.
+
+```powershell
+$env:KCISA_API_KEY = "<발급받은 키>"
+npx tsx scripts/fetch-kcisa-candidates.ts            # API 호출 → review/kcisa/
+npx tsx scripts/fetch-kcisa-candidates.ts --offline  # 네트워크 없이 review/kcisa/ 샘플 XML로 → review/kcisa/offline/
+```
+
+키는 환경 변수 `KCISA_API_KEY`에서만 읽습니다(`.env`를 읽지 않음). 일일 호출 한도는 10000회입니다.
 
 ### 수집 스크립트 실행
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { DaySchedule, Exhibition, ParsedOperatingHours, Venue, Weekday } from '../types';
 import { parseHours } from '../lib/parseHours';
-import { resolveSchedule, judgeResolved } from './resolveSchedule';
+import { resolveSchedule, judgeResolved, mentionsSessionEntry } from './resolveSchedule';
 import { judge } from './judge';
 import { REASONS } from './reasons';
 
@@ -148,7 +148,12 @@ describe('resolveSchedule: 시설 없음 + 플래그 on', () => {
   it.each(['always_open', 'unknown'] as const)('scheduleType %s → venue null', (scheduleType) => {
     const hours = makeHours({ tue: open('10:00', '18:00') }, scheduleType);
     const r = resolveSchedule(null, hours, ON);
-    expect(r).toEqual({ venue: null, basis: null, mismatches: [] });
+    // 읽지 못한 문구(unknown)는 judgeResolved가 회차 말을 보도록 hoursUnread를 남긴다
+    expect(r).toEqual({
+      venue: null, basis: null, mismatches: [],
+      ...(scheduleType === 'unknown' ? { hoursUnread: true } : {}),
+    });
+    // 이 전시에는 원문(hoursText)이 없으니 지금처럼 MISSING_VENUE
     expect(run(r, TUE, '10:00', '12:00').reasons).toEqual([REASONS.MISSING_VENUE]);
   });
 
@@ -723,5 +728,40 @@ describe('judgeResolved: 시설 없음 → 입력 검사 · 전시 기간 검사
     const r = resolveSchedule(craftMuseum(), onlySessions, ON);
     expect(runEx(r, SAT_OUT_AFTER, '14:00', '17:00')).toEqual({ ...OUT, basis: 'venue' });
     expect(runEx(r, SAT, '17:00', '14:00')).toEqual({ ...INVALID, basis: 'venue' });
+  });
+});
+
+describe('mentionsSessionEntry — 입장 회차 말', () => {
+  it.each([
+    '매주 화-일요일, 일일 4회차 (10:00 / 13:10 / 14:50 / 16:30부터 80분간 이용)',
+    '1일 3회 운영 (사전예약)',
+    '하루 5회 입장',
+    '매시 정각 입장',
+    '매 정각 입장 (선착순)',
+    '매 30분 간격 입장',
+    '회차별 상이',
+  ])('"%s" → true', (text) => {
+    expect(mentionsSessionEntry(text)).toBe(true);
+  });
+
+  it.each([
+    '도슨트 1일 2회 운영, 10:00~18:00',
+    '전시해설 1일 2회 (14:00, 16:00)',
+    '큐레이터 투어 매시 정각',
+    '교육 프로그램 1회차 10:00',
+    '체험 프로그램 1일 3회',
+    '10:00~18:00 (월요일 휴관)',
+    '11월 1일 10:00~18:00',
+    '',
+  ])('"%s" → false', (text) => {
+    expect(mentionsSessionEntry(text)).toBe(false);
+  });
+
+  it('도슨트 문장과 입장 회차 문장이 따로 있으면 true', () => {
+    expect(mentionsSessionEntry('도슨트 1일 2회 / 일일 4회차 입장')).toBe(true);
+  });
+
+  it('undefined → false', () => {
+    expect(mentionsSessionEntry(undefined)).toBe(false);
   });
 });

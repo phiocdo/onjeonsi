@@ -4,6 +4,7 @@ import { effectiveWeekday, isOpen, venueLastEntry } from './isOpen';
 import { isSessionDay, pickDaySchedule } from './scheduleForDate';
 import { toMinutes, fromMinutes, weekdayOf } from './time';
 import { REASONS } from './reasons';
+import { explicitClosedWeekdays } from '../lib/parseHours';
 
 const WEEKDAYS: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
@@ -32,6 +33,11 @@ export interface ResolveResult {
     hours: ParsedOperatingHours;
     options: ResolveOptions;
   };
+  /**
+   * useExhibitionHours가 true이고 전시 운영 시간을 해석기가 읽지 못했으면(scheduleType 'unknown') true.
+   * judgeResolved가 원문에 회차 운영 말이 있는지(mentionsSessionEntry) 볼 때 쓴다. 아니면 넣지 않는다.
+   */
+  hoursUnread?: true;
 }
 
 export interface ResolveOptions {
@@ -51,7 +57,10 @@ interface TrustedDay {
   intervals: TrustedInterval[];
 }
 
-/** 요일별 전시 정보. 'closed'는 판정 날짜에 확실히 쉬는 경우(날짜 예외·공휴일 휴관·쉬는 주)만. 없으면 "모름". */
+/**
+ * 요일별 전시 정보. 'closed'는 판정 날짜에 확실히 쉬는 경우(날짜 예외·공휴일 휴관·쉬는 주, 원문이 명시한
+ * 휴관 요일)만. 없으면 "모름".
+ */
 type TrustMap = Partial<Record<Weekday, TrustedDay | 'closed'>>;
 
 /**
@@ -59,6 +68,7 @@ type TrustMap = Partial<Record<Weekday, TrustedDay | 'closed'>>;
  * - isOpen: true, 구간이 하나 이상, 각 구간 open < close (둘 다 HH:MM), 구간끼리 겹치지 않음
  * - 회차로 운영하는 요일(isSessionDay)은 믿지 않는다
  * isOpen: false는 해석기가 "모름"과 "휴관"을 구분하지 못해 "모름"으로 본다.
+ * (원문이 분명히 휴관이라고 한 요일은 datedVenue가 explicitClosedOn으로 따로 골라 휴관으로 본다)
  */
 function trustDay(day: DaySchedule | undefined): TrustedDay | null {
   if (!day || day.isOpen !== true || day.intervals.length === 0) return null;
@@ -295,7 +305,74 @@ export function resolveSchedule(
   if (options.useExhibitionHours && hours?.scheduleType === 'scheduled') {
     result.source = { venue, hours, options: { ...options } };
   }
+  if (options.useExhibitionHours && hours?.scheduleType === 'unknown') result.hoursUnread = true;
   return result;
+}
+
+// 입장 자체가 회차로 정해졌다는 말. "일일 4회차", "1일 3회", "매시 정각 입장", "매 30분 간격"
+//   좁게 본다: 이 말이 있으면 판정이 '확인 필요'로 바뀌기 때문이다
+const SESSION_WORD =
+  /회차|(?:1일|일일|하루)\s*\d{1,2}\s*회(?![관의])|매\s*시\s*(?:정각|00\s*분)|매\s*정각|정시\s*마다|매\s*\d{1,3}\s*분\s*(?:마다|간격)/g;
+// 관람 입장이 아니라 해설·교육 프로그램의 회차를 말하는 문장. "도슨트 1일 2회", "교육 프로그램 1회차"
+const PROGRAM_WORD = /도슨트|해설|설명|투어|교육|체험|프로그램/;
+
+/**
+ * 운영시간 원문에 입장 회차를 뜻하는 말이 있는지. 순수 함수다.
+ * - '회차', '1일·일일·하루 N회', '매시 정각', '매 정각', '정시마다', '매 N분 마다·간격'
+ * - 같은 문장('/'·'※'·줄바꿈·';'·'|' 사이)에서 그 말 앞 20자·뒤 10자 안에 도슨트·해설·설명·투어·교육·체험·
+ *   프로그램이 있으면 그 프로그램의 회차라 입장 회차로 보지 않는다
+ * judgeResolved가 해석기가 읽지 못한 문구(scheduleType 'unknown')에만 쓴다. 읽은 문구는 해석기의 sessions를 따른다.
+ */
+export function mentionsSessionEntry(hoursText: string | undefined): boolean {
+  for (const segment of (hoursText ?? '').split(/[/※\n;|]/)) {
+    for (const m of segment.matchAll(SESSION_WORD)) {
+      const start = m.index;
+      const end = start + m[0].length;
+      const near = segment.slice(Math.max(0, start - 20), start) + ' ' + segment.slice(end, end + 10);
+      if (!PROGRAM_WORD.test(near)) return true;
+    }
+  }
+  return false;
+}
+
+/** explicitClosedWeekdays 결과. 같은 문구를 판정마다 다시 해석하지 않게 둔다(순수 함수 결과라 안전하다). */
+const explicitCache = new Map<string, Weekday[]>();
+
+function explicitClosed(hoursText: string, year: number, endYear: number | undefined): Weekday[] {
+  const key = `${year}|${endYear ?? ''}|${hoursText}`;
+  let days = explicitCache.get(key);
+  if (!days) {
+    days = explicitClosedWeekdays(hoursText, year, endYear);
+    explicitCache.set(key, days);
+  }
+  return days;
+}
+
+/**
+ * 원문이 판정 날짜의 요일을 분명히 휴관이라고 했는지("월요일 휴관"). 맞으면 그 요일 휴관으로 본다.
+ * - 해석 결과에서 그날 일정이 기본 요일(weekday)·기간(period) 일정이고 isOpen: false일 때만.
+ *   날짜 예외·공휴일 일정·몇째 주 규칙은 이미 trustForDate가 따로 다룬다
+ * - 공휴일에는 보지 않는다. "월요일 휴관(공휴일이면 개관)"처럼 공휴일에는 달라질 수 있고,
+ *   해석기가 읽은 공휴일 규칙(holiday)이 있으면 그것을 따르며, 없으면 지금처럼 "모름"으로 둔다
+ * - 원문 요일은 parseHours와 같은 규칙(explicitClosedWeekdays, 전시 시작·종료 연도)으로 읽는다.
+ *   저장된 해석 결과를 다시 만들지 않아도 된다
+ */
+function explicitClosedOn(
+  hours: ParsedOperatingHours,
+  exhibition: JudgeInput['exhibition'],
+  date: string,
+  holidays: string[],
+): boolean {
+  const text = exhibition.hoursText;
+  if (!text || holidays.includes(date)) return false;
+  const picked = pickDaySchedule(hours, date, holidays);
+  if (!picked || picked.offWeek || picked.schedule.isOpen !== false) return false;
+  if (picked.source !== 'weekday' && picked.source !== 'period') return false;
+  // 수집 스크립트(fetch-exhibitions)가 parseHours에 넘기는 값과 같게: 시작 연도, 종료 연도(없으면 생략)
+  const year = /^\d{4}/.test(exhibition.start ?? '') ? Number(exhibition.start.slice(0, 4)) : null;
+  const endYear = /^\d{4}/.test(exhibition.end ?? '') ? Number(exhibition.end.slice(0, 4)) : undefined;
+  if (year === null) return false;
+  return explicitClosed(text, year, endYear).includes(weekdayOf(date));
 }
 
 /**
@@ -399,9 +476,15 @@ function judgeWithoutVenue(input: Omit<JudgeInput, 'venue'>, sessionDate: boolea
  * 언급하지 않았으면(mentionsHoliday) 공휴일 미안내 규칙(applyHolidayUnstated)을 회차 요일 규칙 다음에
  * 적용한다. 시설 근거가 있는 전시(venue·merged)와 공휴일이 아닌 날은 바뀌지 않는다.
  *
+ * 플래그가 true이고 원문이 판정 날짜의 요일을 분명히 휴관이라고 했으면(explicitClosedOn, 공휴일 제외)
+ * 시설이 그날 열어도 그 요일 휴관(불가, CLOSED_WEEKDAY)이다. merged도 같다(휴관은 어느 쪽이든 닫힘).
+ *
+ * 플래그가 true인데 해석기가 문구를 읽지 못했고(hoursUnread) 원문에 입장 회차 말이 있으면
+ * (mentionsSessionEntry) 시설 시간으로 판정한 결과에 회차 요일 규칙(applySessionDay)을 적용한다.
+ *
  * 판정용 시설이 없으면(플래그와 무관) judgeWithoutVenue: 입력 검사(INVALID_INPUT) → 전시 기간
  * 검사(불가, OUT_OF_PERIOD)를 먼저 하고, 둘 다 통과했을 때만 확인 필요 + MISSING_VENUE
- * (플래그 on이고 그날이 회차면 SESSION_DAY)를 낸다.
+ * (플래그 on이고 그날이 회차거나 읽지 못한 문구에 회차 말이 있으면 SESSION_DAY)를 낸다.
  */
 export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: ResolveResult): JudgeResult {
   const dated = datedVenue(input, resolved);
@@ -421,8 +504,12 @@ export function judgeResolved(input: Omit<JudgeInput, 'venue'>, resolved: Resolv
     return holidayUnstated ? applyHolidayUnstated(result) : result;
   }
 
-  if (resolved.venue === null) return judgeWithoutVenue(input, false);
-  return judge({ ...input, venue: resolved.venue });
+  // 해석기가 읽지 못한 문구(플래그 on)에 입장 회차 말이 있으면 시설 시간으로 "가능"을 내지 않는다.
+  // 회차 요일과 같은 규칙(applySessionDay, 시설 없으면 judgeWithoutVenue의 SESSION_DAY)을 쓴다
+  const unreadSessions = resolved.hoursUnread === true && mentionsSessionEntry(input.exhibition.hoursText);
+  if (resolved.venue === null) return judgeWithoutVenue(input, unreadSessions);
+  const judged = judge({ ...input, venue: resolved.venue });
+  return unreadSessions ? applySessionDay(judged) : judged;
 }
 
 /**
@@ -440,13 +527,20 @@ function datedVenue(
   }
   const wd = src.venue ? effectiveWeekday(src.venue, input.date, input.holidays) : weekdayOf(input.date);
   const trusted = trustForDate(hours, input.date, input.holidays, wd);
+  // 원문이 그 요일을 분명히 휴관이라고 했으면(공휴일 아님) 그날도 확실한 휴관이다
+  const weekdayClosed = trusted[wd] !== 'closed' && explicitClosedOn(hours, input.exhibition, input.date, input.holidays);
+  if (weekdayClosed) trusted[wd] = 'closed';
   const built = build(src.venue, trusted, src.options);
   let venue = built.venue;
-  // 전시가 그날 확실히 쉬면 지정 휴관일로 막는다. 시설이 이미 쉬는 날이면 시설 사유를 그대로 둔다
+  // 전시가 그날 확실히 쉬면 막는다. 시설이 이미 쉬는 날이면 시설 사유를 그대로 둔다(교집합: 어느 쪽이든 닫힘)
+  // - 원문의 휴관 요일 → 그 요일 정기 휴관(CLOSED_WEEKDAY). 공휴일이 아니므로 ifHoliday는 상관없다
+  // - 날짜 예외·공휴일 휴관·쉬는 주 → 지정 휴관일(CLOSED_DATE)
   if (venue && trusted[wd] === 'closed' && isOpen(venue, input.date, input.holidays).status !== 'closed') {
     venue = {
       ...venue,
-      closed: { ...venue.closed, dates: [...(venue.closed?.dates ?? []), input.date] },
+      closed: weekdayClosed
+        ? { dates: venue.closed?.dates, weekday: weekdayOf(input.date) }
+        : { ...venue.closed, dates: [...(venue.closed?.dates ?? []), input.date] },
     };
   }
   return { hours, basis: built.basis, venue };

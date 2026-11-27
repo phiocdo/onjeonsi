@@ -864,6 +864,39 @@ function readUntilTime(tail: string): string | null {
  *   안 주면 year 와 다음 해만 본다. 요일 없이 적힌 휴관 날짜("1월 1일")는 지금처럼 year·다음 해만 닫는다
  */
 export function parseHours(raw: string, year: number, endYear?: number): ParsedOperatingHours {
+  return parseInto(raw, year, endYear, null);
+}
+
+/**
+ * 원문이 "휴관"·"휴무"로 분명히 닫은 요일. parseHours의 (4) 휴관 단계가 닫은 요일과 같다.
+ *   "10:00~18:00 매주 월요일 휴관"   -> ['mon']
+ *   "10:00~18:00 / 휴관: 월·화"      -> ['mon', 'tue']
+ *   "10:00~18:00 (토,일공휴일 휴관)" -> ['sat', 'sun']
+ * 해석 결과(weekdays)의 isOpen: false 는 이 휴관과 "운영 요일 지정에 없어 닫힌 요일"("화-토 ..." 의 월)을
+ * 구분하지 못한다. 엔진은 이 함수로 원문이 명시한 휴관만 골라 "확실한 휴관"으로 본다.
+ * - parseHours 와 같은 규칙을 쓴다. 해석기가 시각을 하나도 못 읽어 unknown 으로 끝나는 문구
+ *   (시각 없는 "월요일 휴관" 등)는 (4) 단계에 이르지 않으므로 []다
+ * - 기간 절(periods)만 닫는 요일은 넣지 않는다. 다만 지금 해석기는 "12월 1일부터 월요일 휴관" 의 월도
+ *   (4) 단계에서 기본 요일 일정부터 닫으므로 그 요일은 들어간다 (해석 결과와 같게 둔다)
+ * - 공휴일 규칙("공휴일이면 개관", "월이 공휴일이면 다음날 휴관")은 여기서 보지 않는다. 해석기가 읽은 대로
+ *   holiday 에 남고, 공휴일에 이 값을 어떻게 쓸지는 엔진이 정한다
+ * year, endYear 는 parseHours 와 같은 값을 준다(날짜 예외로 옮긴 "11.21(토) 휴관" 의 '(토)' 를 요일로 읽지 않게).
+ * 이른 순(월~일)이고 중복이 없다.
+ */
+export function explicitClosedWeekdays(raw: string, year: number, endYear?: number): Weekday[] {
+  const closed = new Set<Weekday>();
+  const parsed = parseInto(raw, year, endYear, closed);
+  // 휴관으로 읽었어도 해석 결과에서 그 요일이 열려 있으면 넣지 않는다 (지금 규칙으로는 없지만 결과와 어긋나지 않게)
+  return ORDER.filter(d => closed.has(d) && parsed.weekdays[d]?.isOpen === false);
+}
+
+/** parseHours 본체. closedOut 이 있으면 (4) 휴관 단계가 닫은 요일을 담는다. */
+function parseInto(
+  raw: string,
+  year: number,
+  endYear: number | undefined,
+  closedOut: Set<Weekday> | null,
+): ParsedOperatingHours {
   const text = normalize(raw || '');
   if (!text) return unknown();
 
@@ -1105,6 +1138,7 @@ export function parseHours(raw: string, year: number, endYear?: number): ParsedO
   const applyClosure = (days: string, near: string, dates: string) => {
     for (const day of readClosedWeekdays(days)) {
       weekdays[day] = emptyDay();
+      closedOut?.add(day);
     }
     if (/공휴일|국경일/.test(near)) {
       holiday = { isOpen: false, intervals: [] };

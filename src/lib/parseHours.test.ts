@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseHours } from './parseHours';
+import { explicitClosedWeekdays, parseHours } from './parseHours';
 import type { Weekday } from '../types';
 
 const ORDER: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -1067,5 +1067,60 @@ describe('parseHours — 코드 리뷰 회귀', () => {
 
   it('"목, 금일" 은 요일 목록이다', () => {
     expect(openDays('10:00~18:00, 목, 금일 휴관')).toEqual(['mon', 'tue', 'wed', 'sat']);
+  });
+});
+
+describe('explicitClosedWeekdays — 원문이 명시한 휴관 요일', () => {
+  const closedOf = (text: string) => explicitClosedWeekdays(text, 2026, 2027);
+
+  it('"매주 월요일 휴관" → 월', () => {
+    expect(closedOf('10:00~18:00 매주 월요일 휴관')).toEqual(['mon']);
+  });
+
+  it('"휴관: 월·화" (휴관 말 뒤 목록) → 월·화', () => {
+    expect(closedOf('10:00~18:00 / 휴관: 월·화')).toEqual(['mon', 'tue']);
+  });
+
+  it('"(토,일공휴일 휴관)" 붙여 쓴 목록 → 토·일 (공휴일은 요일이 아니다)', () => {
+    expect(closedOf('월-금 10:00~18:00 (토,일공휴일 휴관)')).toEqual(['sat', 'sun']);
+  });
+
+  it('"월이 공휴일이면 다음날 휴관" 의 월은 휴관 요일이 아니다', () => {
+    expect(closedOf('10:00~18:00 (월이 공휴일이면 다음날 휴관)')).toEqual([]);
+    // 월요일 휴관이 따로 적혀 있으면 그것만
+    expect(closedOf('10:00~18:00 월요일 휴관, 월이 공휴일이면 다음날 휴관')).toEqual(['mon']);
+  });
+
+  it('"일부 전시실 휴관" 의 일은 요일이 아니다', () => {
+    expect(closedOf('10:00~18:00 (일부 전시실 휴관)')).toEqual([]);
+  });
+
+  it('운영 요일 지정에 없어 닫힌 요일은 휴관이 아니다 ("화-토 ..." 의 일·월)', () => {
+    expect(closedOf('화-토 10:00~18:00')).toEqual([]);
+    expect(closedOf('10:00~18:00, 화-토요일 운영')).toEqual([]);
+    // 같이 적혀 있으면 휴관이라고 한 요일만
+    expect(closedOf('화-토 10:00~18:00 (일, 월, 공휴일 휴관)')).toEqual(['mon', 'sun']);
+  });
+
+  it('날짜 예외로 옮긴 휴관 날짜의 요일은 매주 휴관이 아니다', () => {
+    expect(closedOf('10:00~18:00 / 11.21(토) 휴관')).toEqual([]);
+  });
+
+  it('"N일부터 월요일 휴관" 은 지금 해석기 규칙대로(기본 요일 일정에서 월을 닫는다) 따른다', () => {
+    const text = '10:00~18:00, 12월 1일부터 월요일 휴관';
+    expect(parseHours(text, 2026, 2027).weekdays.mon.isOpen).toBe(false);
+    expect(closedOf(text)).toEqual(['mon']);
+  });
+
+  it('해석기가 못 읽는 문구(시각 없음)는 [] — parseHours 와 같은 규칙', () => {
+    expect(closedOf('매주 월요일 휴관')).toEqual([]);
+    expect(parseHours('매주 월요일 휴관', 2026).scheduleType).toBe('unknown');
+  });
+
+  it('parseHours 결과는 바뀌지 않는다', () => {
+    const text = '화 - 일 10:00~18:00 ※월요일 휴관, 금요일 21:00 까지 야간개관';
+    const before = JSON.stringify(parseHours(text, 2026, 2027));
+    expect(closedOf(text)).toEqual(['mon']);
+    expect(JSON.stringify(parseHours(text, 2026, 2027))).toBe(before);
   });
 });

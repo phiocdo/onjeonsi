@@ -19,6 +19,7 @@ import type { DaySchedule, Exhibition, JudgeInput, ParsedOperatingHours, Venue }
 import { judge, type ResolvedVenue } from './judge';
 import { judgeResolved, resolveSchedule } from './resolveSchedule';
 import { REASONS } from './reasons';
+import { parseHours } from '../lib/parseHours';
 
 const OPEN_10_18 = { open: '10:00', close: '18:00' };
 
@@ -706,6 +707,130 @@ describe('F-05 판정 시나리오', () => {
         result: 'unknown',
         reasons: [REASONS.SESSION_DAY],
         basis: 'exhibition',
+      });
+    });
+  });
+
+  describe('추가: 읽지 못한 회차 문구·원문이 명시한 휴관 요일 (judgeResolved, useExhibitionHours: true)', () => {
+    /**
+     * 운영시간은 수집 스크립트처럼 parseHours(원문, 시작 연도, 종료 연도)로 만든다.
+     * 2026-11-16 월(평일), 2026-11-18 수, 2026-11-23 월(이 파일의 가상 공휴일).
+     */
+    const ON = { useExhibitionHours: true };
+    const OFF = { useExhibitionHours: false };
+    const MON = '2026-11-16';
+    const HOLIDAY_MON = '2026-11-23';
+    /** 월요일도 여는 시설(기준 시설에서 월 휴관만 뺐다) */
+    const OPEN_MONDAY = venueWith({ closed: { dates: ['01-01', '2026-12-01'] } });
+    const textRun = (
+      venue: Venue | null,
+      hoursText: string,
+      date: string,
+      stayStart: string,
+      stayEnd: string,
+      options = ON,
+    ) => {
+      const exhibition = { ...BASE_EXHIBITION, hoursText, operatingHours: parseHours(hoursText, 2026, 2027) };
+      return judgeResolved(
+        { exhibition, date, stayStart, stayEnd, holidays: HOLIDAYS },
+        resolveSchedule(venue, exhibition.operatingHours, options),
+      );
+    };
+
+    describe('문제 1: 읽지 못한 회차 문구', () => {
+      const SESSIONS = '매주 화-일요일, 일일 4회차 (10:00 / 13:10 / 14:50 / 16:30부터 80분간 이용)';
+
+      it('S43 "일일 4회차"(해석기 unknown) + 시설 연결 → 회차 사이 시각도 확인 필요, SESSION_DAY 하나', () => {
+        expect(parseHours(SESSIONS, 2026, 2027).scheduleType).toBe('unknown');
+        // 13:10 회차와 14:50 회차 사이. 예전에는 시설 시간(10:00~18:00)으로 가능이었다
+        expect(textRun(BASE_VENUE, SESSIONS, WED, '13:30', '16:00')).toEqual({
+          result: 'unknown', reasons: [REASONS.SESSION_DAY], basis: 'venue',
+        });
+      });
+
+      it('S44 같은 문구: 시설 휴관 요일·어긴 조건은 불가 그대로 / 시설 없으면 SESSION_DAY', () => {
+        expect(textRun(BASE_VENUE, SESSIONS, MON, '13:30', '16:00')).toEqual({
+          result: 'impossible', reasons: [REASONS.CLOSED_WEEKDAY('월')], basis: 'venue',
+        });
+        expect(textRun(BASE_VENUE, SESSIONS, WED, '17:30', '19:00')).toMatchObject({ result: 'impossible', basis: 'venue' });
+        expect(textRun(null, SESSIONS, WED, '13:30', '16:00')).toEqual({ result: 'unknown', reasons: [REASONS.SESSION_DAY] });
+      });
+
+      it('S45 플래그 off면 지금과 같다 (시설 시간으로 가능)', () => {
+        expect(textRun(BASE_VENUE, SESSIONS, WED, '13:30', '16:00', OFF)).toMatchObject({ result: 'possible', basis: 'venue' });
+      });
+
+      it('S46 도슨트 회차만 말하는 문구는 영향 없음', () => {
+        // 해석기가 읽는 문구: 상시 관람 10:00~18:00 그대로(merged 가능)
+        expect(textRun(BASE_VENUE, '도슨트 1일 2회 운영, 10:00~18:00', WED, '13:00', '16:00')).toMatchObject({
+          result: 'possible', basis: 'merged',
+        });
+        // 해석기가 못 읽는 문구여도 회차가 도슨트 것이면 시설 시간으로 판정(예전과 같음)
+        const docentOnly = '도슨트 1일 2회 운영 (전시 시간은 홈페이지 참고)';
+        expect(parseHours(docentOnly, 2026, 2027).scheduleType).toBe('unknown');
+        expect(textRun(BASE_VENUE, docentOnly, WED, '13:00', '16:00')).toMatchObject({ result: 'possible', basis: 'venue' });
+      });
+    });
+
+    describe('문제 2: 원문이 명시한 휴관 요일', () => {
+      const MON_CLOSED = '10:00~20:00 (월요일 휴관)';
+
+      it('S47 "월요일 휴관" 전시 문구만 → 월요일 불가 CLOSED_WEEKDAY / 화요일은 가능', () => {
+        expect(textRun(null, MON_CLOSED, MON, '14:00', '16:00')).toEqual({
+          result: 'impossible', reasons: [REASONS.CLOSED_WEEKDAY('월')], basis: 'exhibition',
+        });
+        expect(textRun(null, MON_CLOSED, '2026-11-17', '14:00', '16:00')).toMatchObject({ result: 'possible', basis: 'exhibition' });
+      });
+
+      it('S48 같은 문구 + 시설은 월요일 개관 → merged에서도 월요일 불가 (휴관은 어느 쪽이든 닫힘)', () => {
+        expect(textRun(OPEN_MONDAY, MON_CLOSED, MON, '14:00', '16:00')).toEqual({
+          result: 'impossible', reasons: [REASONS.CLOSED_WEEKDAY('월')], basis: 'merged',
+        });
+        // 시설이 이미 쉬는 날이면 시설 사유 그대로 (12/1 임시 휴관은 화요일)
+        expect(textRun(OPEN_MONDAY, '10:00~20:00 (화요일 휴관)', '2026-12-01', '14:00', '16:00')).toEqual({
+          result: 'impossible', reasons: [REASONS.CLOSED_DATE], basis: 'merged',
+        });
+      });
+
+      it('S49 "월요일 휴관(공휴일이면 개관)" + 월요일 공휴일 → 기존 규칙 그대로(해석기 holiday 없음 → 모름)', () => {
+        const text = '10:00~18:00 월요일 휴관(공휴일이면 개관)';
+        expect(parseHours(text, 2026, 2027).holiday).toBeNull();
+        expect(textRun(null, text, HOLIDAY_MON, '14:00', '16:00')).toEqual({
+          result: 'unknown', reasons: [REASONS.MISSING_HOURS], basis: 'exhibition',
+        });
+        // 시설과 합치면 시설 규칙(공휴일이면 다음 날 휴관 → 월 공휴일 개관)대로 가능
+        expect(textRun(BASE_VENUE, text, HOLIDAY_MON, '14:00', '16:00')).toMatchObject({ result: 'possible', basis: 'merged' });
+        // 공휴일이 아닌 월요일은 원문대로 휴관
+        expect(textRun(null, text, MON, '14:00', '16:00')).toEqual({
+          result: 'impossible', reasons: [REASONS.CLOSED_WEEKDAY('월')], basis: 'exhibition',
+        });
+        // 해석기가 공휴일 휴관을 읽은 문구는 그 규칙(CLOSED_DATE)
+        expect(textRun(null, '10:00~18:00 (월요일, 공휴일 휴관)', HOLIDAY_MON, '14:00', '16:00')).toEqual({
+          result: 'impossible', reasons: [REASONS.CLOSED_DATE], basis: 'exhibition',
+        });
+      });
+
+      it('S50 정보가 없어서 닫힌 요일("화-토 ...")은 지금처럼 확인 필요 MISSING_HOURS', () => {
+        expect(textRun(null, '화-토 10:00~18:00', MON, '14:00', '16:00')).toEqual({
+          result: 'unknown', reasons: [REASONS.MISSING_HOURS], basis: 'exhibition',
+        });
+        expect(textRun(null, '10:00~18:00, 화-토요일 운영', MON, '14:00', '16:00')).toEqual({
+          result: 'unknown', reasons: [REASONS.MISSING_HOURS], basis: 'exhibition',
+        });
+        // 시설과 합치면 시설 시간 그대로(예전과 같음)
+        expect(textRun(OPEN_MONDAY, '화-토 10:00~18:00', MON, '14:00', '16:00')).toMatchObject({ result: 'possible', basis: 'merged' });
+      });
+
+      it('S51 그날만 여는 날짜 예외가 있으면 예외가 이긴다', () => {
+        const text = '10:00~18:00 월요일 휴관 / 11.16(월) 10:00~18:00 특별 개관';
+        expect(textRun(null, text, MON, '14:00', '16:00')).toMatchObject({ result: 'possible', basis: 'exhibition' });
+        expect(textRun(null, text, '2026-11-30', '14:00', '16:00')).toMatchObject({
+          result: 'impossible', reasons: [REASONS.CLOSED_WEEKDAY('월')],
+        });
+      });
+
+      it('S52 플래그 off면 지금과 같다 (시설만)', () => {
+        expect(textRun(OPEN_MONDAY, MON_CLOSED, MON, '14:00', '16:00', OFF)).toMatchObject({ result: 'possible', basis: 'venue' });
       });
     });
   });

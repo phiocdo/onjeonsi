@@ -12,10 +12,13 @@ import {
   buildExport,
   clearArchive,
   createRecord,
+  emptyArchive,
   exportFileName,
   isCalendarDate,
   loadArchive,
+  mergeImport,
   normalizeRecord,
+  parseImport,
   readVisitedIds,
   saveArchive,
   snapshotOf,
@@ -365,5 +368,99 @@ describe('clearArchive', () => {
     expect(clearArchive(s)).toBe(true);
     expect(s.data.size).toBe(0);
     expect(loadArchive(s, lookup).data).toEqual({ version: 2, records: [], interests: [] });
+  });
+});
+
+describe('parseImport / mergeImport', () => {
+  /** 내보내기 파일 내용 (buildExport 결과를 JSON으로) */
+  function exported(records: unknown[], interests: unknown[] = []): string {
+    return JSON.stringify({ version: 2, exportedAt: NOW.toISOString(), records, interests });
+  }
+
+  function parsed(text: string, look: CatalogLookup = lookup) {
+    const r = parseImport(text, look, TODAY);
+    if (!r.ok) throw new Error(`가져오기 실패: ${r.error}`);
+    return r.value;
+  }
+
+  it('내보낸 파일을 그대로 다시 읽는다 (공유는 끈다)', () => {
+    const record = validRecord();
+    const text = JSON.stringify(buildExport({ version: 2, records: [record], interests: ['공예'] }, NOW));
+    const value = parsed(text);
+    expect(value.records).toEqual([{ ...record, shared: false }]);
+    expect(value.interests).toEqual(['공예']);
+    expect(value.invalid).toBe(0);
+  });
+
+  it('JSON이 아니면 not-json, BOM은 받는다', () => {
+    expect(parseImport('{', lookup)).toEqual({ ok: false, error: 'not-json' });
+    expect(parseImport('', lookup)).toEqual({ ok: false, error: 'not-json' });
+    expect(parseImport(`\uFEFF${exported([])}`, lookup).ok).toBe(true);
+  });
+
+  it('온전시 파일 모양이 아니면 not-archive', () => {
+    for (const text of ['[]', 'null', '"text"', '{}', '{"version":"2","records":[]}', '{"version":1,"records":[]}', '{"version":2}', '{"version":2,"records":{}}']) {
+      expect(parseImport(text, lookup), text).toEqual({ ok: false, error: 'not-archive' });
+    }
+  });
+
+  it('더 새 버전이면 newer-version', () => {
+    expect(parseImport('{"version":3,"records":[]}', lookup)).toEqual({ ok: false, error: 'newer-version' });
+  });
+
+  it('잘못된 기록과 파일 안에서 id가 겹친 기록은 버리고 센다', () => {
+    const record = validRecord();
+    const value = parsed(exported([record, { ...record, note: '두 번째' }, { ...record, id: 'bad', rating: 9 }, 'x']));
+    expect(value.records.map((r) => r.id)).toEqual(['r1']);
+    expect(value.invalid).toBe(3);
+  });
+
+  it('카탈로그에서 빠진 전시는 파일의 사본을 쓴다', () => {
+    const record = { ...validRecord(), exhibitionId: 'gone', exhibition: { ...validRecord().exhibition, title: '끝난 전시' } };
+    expect(parsed(exported([record]), nothing).records[0].exhibition.title).toBe('끝난 전시');
+  });
+
+  it('관심 주제는 주제 태그만 받는다 (빈 값·중복·예전 분야 이름·앞뒤 공백은 버린다)', () => {
+    expect(parsed(exported([], ['현대미술', '', '현대미술', 3, '전시/미술', ' 공예'])).interests).toEqual(['현대미술']);
+  });
+
+  it('관람일이 오늘보다 뒤인 기록은 버리고 센다. 오늘 기록은 받는다', () => {
+    const record = validRecord();
+    const value = parsed(exported([{ ...record, id: 'future', date: '2030-01-01' }, { ...record, id: 'today', date: TODAY }]));
+    expect(value.records.map((r) => r.id)).toEqual(['today']);
+    expect(value.invalid).toBe(1);
+  });
+
+  it('전시 기간 밖 기록은 받는다 (기간 검사 전에 남긴 기록)', () => {
+    // EXHIBITION 기간은 2026-11-01 ~ 2026-12-31
+    const value = parsed(exported([{ ...validRecord(), date: '2026-10-15' }]));
+    expect(value.records).toHaveLength(1);
+  });
+
+  it('합치면 새 기록만 더하고, 같은 id는 지금 것을 남긴다', () => {
+    const mine = validRecord();
+    const other = { ...validRecord(), id: 'r2', date: '2026-11-19' };
+    const imported = parsed(exported([{ ...mine, note: '파일 쪽 메모' }, other], ['현대미술', '공예']));
+    const result = mergeImport({ version: 2, records: [mine], interests: ['공예'] }, imported);
+    expect(result.data.records.map((r) => [r.id, r.note])).toEqual([['r1', '좋았다'], ['r2', '좋았다']]);
+    expect(result.data.records[0].shared).toBe(true);
+    expect(result.data.records[1].shared).toBe(false);
+    expect(result.data.interests).toEqual(['공예', '현대미술']);
+    expect(result).toMatchObject({ added: 1, duplicates: 1, interestsAdded: 1 });
+  });
+
+  it('같은 파일을 두 번 가져와도 기록이 늘지 않는다', () => {
+    const imported = parsed(exported([validRecord()], ['현대미술']));
+    const once = mergeImport(emptyArchive(), imported).data;
+    const twice = mergeImport(once, imported);
+    expect(twice.data).toEqual(once);
+    expect(twice).toMatchObject({ added: 0, duplicates: 1, interestsAdded: 0 });
+  });
+
+  it('합친 결과를 저장하고 다시 읽으면 같다', () => {
+    const s = new MemoryStorage();
+    const merged = mergeImport(emptyArchive(), parsed(exported([validRecord()], ['현대미술']))).data;
+    expect(saveArchive(s, merged)).toBe(true);
+    expect(loadArchive(s, lookup).data).toEqual(merged);
   });
 });

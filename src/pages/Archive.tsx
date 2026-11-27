@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent } from 'react'
 import { OPEN } from '../components/OneExhibit'
 import TagInput, { TagList } from '../components/TagInput'
 import { displayVenueName, getCatalog, todayInSeoul, type CatalogEntry } from '../lib/catalog'
@@ -15,7 +15,11 @@ import {
   createRecord,
   emptyArchive,
   exportFileName,
+  IMPORT_ERROR_MESSAGE,
+  IMPORT_MAX_BYTES,
   loadArchive,
+  mergeImport,
+  parseImport,
   viewOf,
   type RecordStatus,
 } from '../lib/archive'
@@ -87,6 +91,8 @@ export default function Archive() {
   const [note, setNote] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [shared, setShared] = useState(false)
+  // 가져오기 버튼이 여는 파일 선택 창
+  const importInput = useRef<HTMLInputElement>(null)
   const stats = useSyncExternalStore(subscribeStats, getCachedStats)
   // 서버에 반영하지 못한 공유 변경 (메모리에만 있음, src/lib/shareSync.ts 참고)
   const sync = useSyncExternalStore(shareQueue.subscribe, shareQueue.getSnapshot)
@@ -213,6 +219,64 @@ export default function Archive() {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
+  // 내보낸 JSON 파일을 지금 아카이브에 합친다 (확인 후, src/lib/archive.ts parseImport·mergeImport)
+  // 같은 기록(id)은 지금 것을 남기고, 가져온 기록은 익명 공유가 꺼진 채로 들어가므로 서버에 보내지 않는다
+  // 파일을 읽고 확인 창을 띄우는 동안 다른 탭이 아카이브를 바꿀 수 있어, 합치기 전에 저장소에서 다시 읽는다
+  async function IMPORT(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    // 같은 파일을 다시 골라도 change가 나도록 비운다
+    e.target.value = ''
+    if (!file) return
+    if (file.size > IMPORT_MAX_BYTES) {
+      window.alert(IMPORT_ERROR_MESSAGE['too-large'])
+      return
+    }
+    let text: string
+    try {
+      text = await file.text()
+    } catch {
+      window.alert('파일을 읽지 못했습니다. 다시 시도하십시오.')
+      return
+    }
+    const parsed = parseImport(text, (id) => map.get(id))
+    if (!parsed.ok) {
+      window.alert(IMPORT_ERROR_MESSAGE[parsed.error])
+      return
+    }
+    const { invalid } = parsed.value
+    const preview = mergeImport(loadArchive(storage, (id) => map.get(id)).data, parsed.value)
+    const skipped = [
+      preview.duplicates ? `이미 있는 기록 ${preview.duplicates}개는 건너뜁니다.` : '',
+      invalid ? `형식이 잘못됐거나 관람일이 오늘 이후인 기록 ${invalid}개는 가져오지 않습니다.` : '',
+    ].filter(Boolean)
+    if (!preview.added && !preview.interestsAdded) {
+      window.alert(['새로 가져올 기록이 없습니다.', ...skipped].join('\n'))
+      return
+    }
+    const adding = [preview.added ? `기록 ${preview.added}개` : '', preview.interestsAdded ? `관심 주제 ${preview.interestsAdded}개` : ''].filter(Boolean).join('와 ')
+    const message = [`${adding}를 가져옵니다.`, ...skipped]
+    if (preview.added) message.push('가져온 기록은 익명 공유가 꺼진 상태로 들어갑니다. 공유하려면 기록마다 다시 켜십시오.')
+    if (!window.confirm(message.join('\n'))) return
+    // 확인 창이 떠 있는 동안 바뀐 것까지 반영해 합친다. 공유가 꺼진 기록만 더하므로 서버에 보낼 전시는 없다
+    const current = loadArchive(storage, (id) => map.get(id)).data
+    const merged = mergeImport(current, parsed.value)
+    if (!saveAndSync(storage, merged.data, [])) {
+      // 저장하지 못했으면 화면에 보였다가 새로고침 때 사라지지 않도록 가져오기 전 상태로 둔다
+      setArchive(current)
+      window.alert('가져온 기록을 브라우저에 저장하지 못했습니다. 저장 공간이 부족할 수 있습니다. 아무것도 바뀌지 않았습니다.')
+      return
+    }
+    setArchive(merged.data)
+    setSaveFailed(false)
+    // 기록을 더했으면 달력을 더한 기록 중 가장 최근 관람일로 옮긴다 (새 기록은 지금 기록 뒤에 붙는다)
+    if (merged.added) {
+      const latest = LATEST(merged.data.records.slice(current.records.length))
+      setPicked(latest)
+      const [year, month] = latest.split('-').map(Number)
+      setView({ year, month: month - 1 })
+    }
+  }
+
   // 아카이브 전체 삭제 (확인 후)
   function WIPE() {
     if (!window.confirm(`기록 ${records.length}개와 관심 주제를 모두 삭제합니다. 익명 공유한 별점·관람 시간·태그도 서버에서 삭제합니다. 되돌릴 수 없습니다.\n먼저 내보내기로 백업해 두십시오.`)) return
@@ -308,6 +372,8 @@ export default function Archive() {
             </div>
             <div className="archive-tools">
               <button type="button" onClick={EXPORT} disabled={!records.length && !interests.length}>내보내기(JSON)</button>
+              <button type="button" onClick={() => importInput.current?.click()}>가져오기(JSON)</button>
+              <input ref={importInput} type="file" accept="application/json,.json" hidden onChange={IMPORT} />
               <button type="button" onClick={WIPE} disabled={!records.length && !interests.length}>아카이브 전체 삭제</button>
               <span>내보낸 파일에는 메모도 포함됩니다.</span>
             </div>

@@ -1,5 +1,5 @@
 /**
- * 아카이브(관람 기록) 읽기·저장·내보내기·삭제.
+ * 아카이브(관람 기록) 읽기·저장·내보내기·가져오기·삭제.
  *
  * - 저장소는 인자로 받는다. 화면은 localStorage를, 테스트는 메모리 저장소를 넘긴다.
  * - 저장 키는 ARCHIVE_KEY 하나다. 예전 화면은 키 두 개(기록, 관심 분야)에 v1 형식으로 저장했고,
@@ -19,6 +19,7 @@ import {
   type VisitRecord,
 } from '../types/records';
 import { displayVenueName, todayInSeoul, type CatalogEntry } from './catalog';
+import { TAGS } from './tags';
 import { normalizeTags } from './userTags';
 
 export const ARCHIVE_KEY = 'onjeonsi:archive';
@@ -372,6 +373,110 @@ export function buildExport(data: ArchiveData, now: Date = new Date()): ArchiveE
 /** 내보내기 파일 이름. 날짜는 서울 기준 (예: onjeonsi-archive-2026-11-21.json) */
 export function exportFileName(now: Date = new Date()): string {
   return `onjeonsi-archive-${todayInSeoul(now)}.json`;
+}
+
+// ─── 가져오기 ────────────────────────────────────────────
+
+/**
+ * 가져올 수 있는 파일 크기 상한(바이트). localStorage는 보통 5MB 안팎이라 이보다 크면 어차피 저장하지 못한다.
+ * 화면은 파일을 읽기 전에 file.size로 먼저 막는다.
+ */
+export const IMPORT_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * 가져오기 실패 이유
+ * - too-large: 파일이 IMPORT_MAX_BYTES보다 크다. parseImport는 내지 않고, 화면이 file.size로 판단해 쓴다
+ * - not-json: JSON이 아니다
+ * - not-archive: 온전시 내보내기 파일 모양이 아니다(version·records가 없거나 형식이 다름)
+ * - newer-version: 이 화면보다 새 버전 형식이다. 모르는 필드를 버리게 되므로 받지 않는다
+ */
+export type ImportError = 'too-large' | 'not-json' | 'not-archive' | 'newer-version';
+
+export const IMPORT_ERROR_MESSAGE: Record<ImportError, string> = {
+  'too-large': `파일이 너무 큽니다. ${IMPORT_MAX_BYTES / 1024 / 1024}MB 이하의 내보내기 파일만 가져올 수 있습니다.`,
+  'not-json': 'JSON 파일이 아닙니다. 내보내기로 받은 파일을 고르십시오.',
+  'not-archive': '온전시 아카이브 내보내기 파일이 아닙니다.',
+  'newer-version': '더 새로운 버전에서 내보낸 파일입니다. 페이지를 새로고침한 뒤 다시 시도하십시오.',
+};
+
+/** 파일에서 읽은 아카이브. 기록은 normalizeRecord를 거쳤고 공유는 모두 꺼져 있다 */
+export interface ImportedArchive {
+  records: VisitRecord[];
+  interests: string[];
+  // 형식이 잘못됐거나, 관람일이 오늘보다 뒤이거나, 파일 안에서 id가 겹쳐 버린 기록 수
+  invalid: number;
+}
+
+export type ImportParseResult = { ok: true; value: ImportedArchive } | { ok: false; error: ImportError };
+
+/**
+ * 내보내기 파일(buildExport 결과, schema/personal-records-export.schema.json) 내용을 읽는다. 저장하지 않는다.
+ * - version이 ARCHIVE_VERSION이어야 한다. 더 크면 newer-version, 없거나 다르면 not-archive
+ * - 기록은 저장소에서 읽을 때와 같은 규칙(normalizeRecord)으로 읽는다. 잘못된 기록과 파일 안에서 id가 겹친
+ *   기록(뒤의 것)은 버리고 invalid로 센다. 카탈로그에 있는 전시는 사본을 최신으로 고친다
+ * - 관람일이 오늘(서울)보다 뒤인 기록도 버린다. 화면 입력으로는 만들 수 없다(visitDate.ts).
+ *   전시 기간 밖 기록은 받는다. 기간 검사(#75) 전에 남긴 기록이 내보낸 파일에 있을 수 있고,
+ *   저장소에 있는 같은 기록도 지우지 않기 때문이다(공유 대상에서만 빠진다)
+ * - 관심 주제는 화면에서 고르고 끌 수 있는 주제 태그(TAGS)만 받는다. 예전 분야 이름이나 모르는 값은
+ *   화면에 보이지 않아 끌 수 없는데 추천에는 쓰이므로 버린다
+ * - 익명 공유(shared)는 모두 끈다. 다른 기기에서 가져오면 새 익명 id로 올라가 같은 사람의 별점이 서버에
+ *   두 번 집계될 수 있고, 파일을 가져오는 것만으로 서버에 올라가는 것도 사용자가 예상하기 어렵다.
+ *   공유하려면 기록마다 다시 켠다
+ * - exportedAt은 보지 않는다(사람이 고친 파일이어도 기록만 맞으면 받는다)
+ */
+export function parseImport(text: string, lookup: CatalogLookup, today: string = todayInSeoul()): ImportParseResult {
+  // 메모장 등에서 저장하면 앞에 BOM이 붙을 수 있다
+  const parsed = parseJson(text.replace(/^\uFEFF/, ''));
+  if (parsed === undefined) return { ok: false, error: 'not-json' };
+  if (!isObject(parsed) || typeof parsed.version !== 'number') return { ok: false, error: 'not-archive' };
+  if (parsed.version > ARCHIVE_VERSION) return { ok: false, error: 'newer-version' };
+  if (parsed.version !== ARCHIVE_VERSION || !Array.isArray(parsed.records)) return { ok: false, error: 'not-archive' };
+
+  const records = normalizeRecords(parsed.records, lookup)
+    .filter((r) => r.date <= today)
+    .map((r) => ({ ...r, shared: false }));
+  const tags = new Set<string>(TAGS);
+  return {
+    ok: true,
+    value: {
+      records,
+      interests: normalizeInterests(parsed.interests).filter((i) => tags.has(i)),
+      invalid: parsed.records.length - records.length,
+    },
+  };
+}
+
+export interface MergeResult {
+  data: ArchiveData;
+  // 새로 더한 기록 수
+  added: number;
+  // 이미 있어서(같은 id) 건너뛴 기록 수
+  duplicates: number;
+  // 새로 더한 관심 주제 수
+  interestsAdded: number;
+}
+
+/**
+ * 가져온 아카이브를 지금 아카이브에 합친다. 순수 함수다.
+ * - 같은 id의 기록이 이미 있으면 지금 것을 남긴다. 같은 파일을 두 번 가져와도 기록이 늘지 않는다
+ * - 새 기록은 지금 기록 뒤에 붙인다(화면은 관람일·만든 시각으로 다시 정렬한다)
+ * - 관심 주제는 합친다. 지금 순서를 지키고 새 주제를 뒤에 붙인다
+ */
+export function mergeImport(current: ArchiveData, imported: ImportedArchive): MergeResult {
+  const ids = new Set(current.records.map((r) => r.id));
+  const added = imported.records.filter((r) => !ids.has(r.id));
+  const interests = new Set(current.interests);
+  const newInterests = imported.interests.filter((i) => !interests.has(i));
+  return {
+    data: {
+      version: ARCHIVE_VERSION,
+      records: [...current.records, ...added],
+      interests: [...current.interests, ...newInterests],
+    },
+    added: added.length,
+    duplicates: imported.records.length - added.length,
+    interestsAdded: newInterests.length,
+  };
 }
 
 // ─── 화면 표시 ────────────────────────────────────────────

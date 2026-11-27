@@ -1117,10 +1117,92 @@ describe('explicitClosedWeekdays — 원문이 명시한 휴관 요일', () => {
     expect(parseHours('매주 월요일 휴관', 2026).scheduleType).toBe('unknown');
   });
 
+  it('요일이 날짜와 안 맞아 매주 닫은 요일은 명시 휴관이 아니다', () => {
+    // 2026-11-21 은 토요일이다. 해석기는 틀린 "가능"을 막으려고 매주 월요일도 닫는다
+    const text = '10:00~18:00 / 11월 21일(월) 휴관';
+    expect(parseHours(text, 2026, 2026).weekdays.mon.isOpen).toBe(false);
+    expect(explicitClosedWeekdays(text, 2026, 2026)).toEqual([]);
+  });
+
+  it('날짜에 붙은 요일과 따로 적은 휴관 요일이 같이 있으면 따로 적은 요일만', () => {
+    expect(explicitClosedWeekdays('10:00~18:00 / 11월 21일(월) 휴관, 매주 화요일 휴관', 2026, 2026)).toEqual(['tue']);
+    expect(explicitClosedWeekdays('10:00~18:00 매주 월요일, 11월 21일(월) 휴관', 2026, 2026)).toEqual(['mon']);
+  });
+
+  it('날짜 뒤 괄호 요일을 "(월요일)" 로 풀어 써도 명시 휴관이 아니다', () => {
+    expect(explicitClosedWeekdays('10:00~18:00 / 11월 21일 (월요일) 휴관', 2026, 2026)).toEqual([]);
+  });
+
   it('parseHours 결과는 바뀌지 않는다', () => {
     const text = '화 - 일 10:00~18:00 ※월요일 휴관, 금요일 21:00 까지 야간개관';
     const before = JSON.stringify(parseHours(text, 2026, 2027));
     expect(closedOf(text)).toEqual(['mon']);
     expect(JSON.stringify(parseHours(text, 2026, 2027))).toBe(before);
+  });
+});
+
+describe('parseHours — 조건부 휴관과 기간 시작 요일', () => {
+  it('"월요일이 공휴일이면 화요일 휴관" 은 매주 화요일도, 모든 공휴일도 닫지 않는다', () => {
+    const text = '9:30 ~ 17:30 매주 월요일 휴관(월요일이 공휴일인 경우 화요일에 휴관)';
+    expect(openDays(text)).toEqual(['tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+    expect(parseHours(text, 2026).holiday).toBeNull();
+  });
+
+  it('"다음날", "다음 평일" 로 적은 조건부 휴관도 공휴일 전체를 닫지 않는다', () => {
+    expect(parseHours('10:00~18:00 (월요일 휴관, 월요일이 공휴일인 경우 다음날 휴관)', 2026).holiday).toBeNull();
+    expect(parseHours('10:00~18:00 월요일 휴관(공휴일인 경우 다음 평일 휴관)', 2026).holiday).toBeNull();
+  });
+
+  it('"공휴일일 경우" 의 일을 일요일로 읽지 않는다', () => {
+    expect(openDays('10:00~18:00 매주 월요일 휴관 (월요일이 공휴일일 경우 화요일 휴관)')).toEqual([
+      'tue', 'wed', 'thu', 'fri', 'sat', 'sun',
+    ]);
+  });
+
+  it('다른 날을 말하지 않는 "공휴일인 경우 휴관" 은 공휴일 휴관이다', () => {
+    expect(parseHours('10:00~18:00, 공휴일인 경우 휴관', 2026).holiday).toEqual({ isOpen: false, intervals: [] });
+  });
+
+  it('조건 절 앞에 적은 매주 휴관 요일은 그대로 닫는다', () => {
+    expect(openDays('10:00~18:00 매주 월요일, 공휴일인 경우 다음날 휴관')).not.toContain('mon');
+    expect(openDays('10:00~18:00 / 매주 월요일 공휴일인 경우 다음날 휴관')).not.toContain('mon');
+    expect(openDays('10:00~18:00 월 공휴일과 겹치면 화 휴관')).toEqual(['tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+  });
+
+  it('조건 뒤 쉼표, 괄호 안 조건도 조건부 휴관이다', () => {
+    const comma = parseHours('10:00~18:00 매주 월요일 휴관 (월요일이 공휴일인 경우, 그 다음날 휴관)', 2026);
+    expect(comma.holiday).toBeNull();
+    expect(comma.weekdays.mon.isOpen).toBe(false);
+    const paren = parseHours('10:00~18:00, 매주 월요일(공휴일인 경우 화요일) 휴관', 2026);
+    expect(paren.holiday).toBeNull();
+    expect(ORDER.filter(d => paren.weekdays[d].isOpen)).toEqual(['tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+  });
+
+  it('괄호 뒤에 다른 말이 오면 조건 절이 아니다', () => {
+    expect(openDays('10:00~18:00 (공휴일인 경우 개관) 화요일 휴관')).not.toContain('tue');
+  });
+
+  it('"일요일이 공휴일일 때 휴관" 은 공휴일 휴관이고 일요일은 닫지 않는다', () => {
+    const r = parseHours('10:00~18:00 일요일이 공휴일일 때 휴관', 2026);
+    expect(r.weekdays.sun.isOpen).toBe(true);
+    expect(r.holiday).toEqual({ isOpen: false, intervals: [] });
+  });
+
+  it('"부터 ~ 까지" 의 끝 날짜는 휴관 날짜가 아니다', () => {
+    const r = parseHours('10:00~18:00 / 12.1.(화)부터 12.31.(목)까지 매주 월요일 휴관', 2026);
+    expect(r.exceptions.map(e => e.date)).not.toContain('2026-12-31');
+  });
+
+  it('"12.1.(화)부터 휴관" 은 그 날부터 모든 요일을 닫는다', () => {
+    const r = parseHours('10:00~18:00 / 12.1.(화)부터 휴관', 2026);
+    expect(ORDER.filter(d => r.weekdays[d].isOpen)).toEqual(ORDER);
+    expect(r.periods).toHaveLength(1);
+    expect(r.periods![0].from).toBe('2026-12-01');
+    expect(ORDER.filter(d => r.periods![0].weekdays[d].isOpen)).toEqual([]);
+  });
+
+  it('"12.1.(화)부터" 의 화요일은 휴관 요일이 아니다', () => {
+    expect(openDays('10:00~18:00, 2026.12.1.(화)부터 매주 월요일 휴관')).toContain('tue');
+    expect(openDays('10:00~18:00 / 12.1.(화)부터 월요일 휴관')).toContain('tue');
   });
 });

@@ -114,6 +114,14 @@ const CLOSURE_ITEM = new RegExp(
     '\\d+\\s*[월일]|[월화수목금토일](?:요일)?|' +
     '법정\\s*공휴일|대체\\s*공휴일|공휴일|국경일|신정|구정|설날|설|추석|명절|성탄절|크리스마스|당일|연휴|전날|다음\\s*날|및)+$',
 );
+// 조건부 공휴일 휴관 절. "월요일이 공휴일이면 화요일", "공휴일인 경우, 그 다음날", "(공휴일인 경우 화요일)"
+//   - 앞의 "X요일이·가" 는 조건의 주어라 휴관 요일이 아니다
+//   - 캡처는 조건 뒤에서 휴관 말 앞까지. 여기에 다른 날("화요일", "다음날", "익일", "평일")이 있으면 그날만 쉰다는 조건이다
+//   - 조건이 괄호 안에 있고 휴관 말이 괄호 밖이면 닫는 괄호 하나까지 본다. 괄호 뒤에 다른 말이 있으면 조건 절이 아니다
+//     ("(공휴일인 경우 개관) 화요일 휴관" 의 화요일은 그대로 닫는다)
+const CONDITIONAL_HOLIDAY =
+  /(?:[월화수목금토일]\s*(?:요일)?\s*[이가]\s*)?공휴일\s*(?:이면|인\s*경우|일\s*경우|일\s*때|인\s*때|과\s*겹치(?:면|는\s*경우))\s*,?([^,/()（）※\n]*)[)）]?\s*$/;
+const OTHER_DAY = /다음|익일|평일|[월화수목금토일]\s*요일|(?:^|[^가-힣])[월화수목금토일]\s*$/;
 // 성탄절은 양력 날짜가 정해져 있어 이름만 적혀도 12월 25일로 닫는다
 const CHRISTMAS = /성탄절|크리스마스/;
 
@@ -222,6 +230,7 @@ function readClosureAfter(after: string): string {
  *     (조사 "은·는·도·에·만", "및·과·와", "휴관" 의 '휴', "요일" 의 '요', "월정기휴관" 의 '정기' 는 낱말로 보지 않는다.
  *      "토,일공휴일" 의 '공휴', "월이나 공휴일" 의 '이나'·'나' 도 휴관 목록을 잇는 말이다. 놓치면 틀린 "가능"이 나온다)
  *   - "금일"(오늘). 앞뒤에 다른 요일이 붙은 "목금일", "목, 금일" 은 요일 목록이다
+ *   - "공휴일일 경우" 의 뒤 '일'. 앞 글자 '일' 이 요일처럼 보여도 "공휴일" 의 일부다
  * 다음 경우는 띄어 쓰지 않았어도 요일로 읽는다. 휴관 요일을 놓치면 틀린 "가능"이 나오기 때문이다.
  *   - 뒤에 "요일"이 붙은 경우: "매주월요일", "2, 4 월요일". 날짜의 월·일 뒤에는 "요일"이 오지 않는다
  *   - 앞이 "매주"이거나 "및"·"과"·"와"인 경우: "매주월·화", "공휴일및월"
@@ -238,6 +247,7 @@ function readClosedWeekdays(near: string): Weekday[] {
   for (const m of near.matchAll(/[월화수목금토일]/g)) {
     if (todayChars.has(m.index)) continue;
     const before = near.slice(0, m.index);
+    if (m[0] === '일' && /공휴일$/.test(before)) continue;
     const after = near.slice(m.index + 1);
     // "토,일공휴일", "월이나 공휴일" 처럼 붙여 쓴 휴관 목록도 요일로 읽는다. 놓치면 틀린 "가능"이 나온다
     if (/^[가-힣]/.test(after) && !/^(?:[월화수목금토일요휴및과와은는도에만]|정기|공휴|이?나(?![가-힣]))/.test(after)) continue;
@@ -489,6 +499,12 @@ function applyExtensions(weekdays: Record<Weekday, DaySchedule>, source: string)
   }
 }
 
+// 날짜 바로 뒤 괄호 요일. "11월 21일(월)", "11.21(토)", "11월 21일 (월요일)" 의 '(월)' 등. 캡처는 날짜 쪽 끝 글자
+const DATED_WEEKDAY = /(\d\s*[.일]?)\s*\(\s*[월화수목금토일](?:요일)?\s*\)/g;
+
+// "9.15.(화)부터", "2024년 4월 12일(금)부터" 처럼 기간 절을 여는 날짜
+const PERIOD_HEAD = /(?:(\d{4})\s*[.년]\s*)?(\d{1,2})\s*[.월]\s*(\d{1,2})\s*[.일]?\s*(?:\(([월화수목금토일])\))?\s*부터/g;
+
 /**
  * "9.15.(화)부터 ...", "2024년 4월 12일(금)부터 ..." 처럼
  * 어느 날짜부터 일정이 바뀌는 절을 떼어낸다.
@@ -505,7 +521,7 @@ function splitPeriodClauses(
   let baseText = text;
   const ymd = ymdString;
 
-  const pattern = /(?:(\d{4})\s*[.년]\s*)?(\d{1,2})\s*[.월]\s*(\d{1,2})\s*[.일]?\s*(?:\(([월화수목금토일])\))?\s*부터/g;
+  const pattern = PERIOD_HEAD;
   // '부터' 바로 뒤에 끝 날짜가 오는 경우. "9.15.(화)부터 12.31.(목)까지 ..."
   //   시각("21:00까지")은 ':' 라서 걸리지 않는다
   const untilDate = /^\s*(?:(\d{4})\s*[.년]\s*)?(\d{1,2})\s*[.월]\s*(\d{1,2})\s*[.일]?\s*(?:\([월화수목금토일]\))?\s*까지/;
@@ -878,8 +894,11 @@ export function parseHours(raw: string, year: number, endYear?: number): ParsedO
  *   (시각 없는 "월요일 휴관" 등)는 (4) 단계에 이르지 않으므로 []다
  * - 기간 절(periods)만 닫는 요일은 넣지 않는다. 다만 지금 해석기는 "12월 1일부터 월요일 휴관" 의 월도
  *   (4) 단계에서 기본 요일 일정부터 닫으므로 그 요일은 들어간다 (해석 결과와 같게 둔다)
- * - 공휴일 규칙("공휴일이면 개관", "월이 공휴일이면 다음날 휴관")은 여기서 보지 않는다. 해석기가 읽은 대로
- *   holiday 에 남고, 공휴일에 이 값을 어떻게 쓸지는 엔진이 정한다
+ * - 공휴일 규칙("공휴일이면 개관", "공휴일 휴관")은 여기서 보지 않는다. 해석기가 읽은 대로 holiday 에 남고,
+ *   공휴일에 이 값을 어떻게 쓸지는 엔진이 정한다. "월이 공휴일이면 다음날 휴관" 같은 조건부 휴관은 날짜를 정할 수
+ *   없어 해석기가 읽지 않는다(holiday 도, 그 요일도 닫지 않는다)
+ * - 날짜에 붙은 요일은 넣지 않는다. "11월 21일(월) 휴관" 처럼 요일이 날짜와 안 맞으면 해석기는 매주 월요일을
+ *   닫지만(틀린 "가능"을 막으려는 추정), 원문이 월요일을 휴관이라 한 것은 아니므로 엔진은 "모름"으로 둔다
  * year, endYear 는 parseHours 와 같은 값을 준다(날짜 예외로 옮긴 "11.21(토) 휴관" 의 '(토)' 를 요일로 읽지 않게).
  * 이른 순(월~일)이고 중복이 없다.
  */
@@ -939,7 +958,8 @@ function parseInto(
   //   "11월 21일(토) 휴관" 의 '(토)' 를 매주 토요일 휴관으로 읽지 않게 한다.
   //   날짜 예외로 못 읽은 날짜("2026-11-21(토)", "21일(토)")는 남겨 예전처럼 그 요일을 닫는다.
   //   그 날 하루를 놓쳐 틀린 "가능"이 나오는 것보다 매주 닫아 틀린 "불가"가 나오는 쪽이 낫다
-  let closureText = text;
+  // "12.1.(화)부터 월요일 휴관" 의 '(화)' 는 기간이 시작하는 날의 요일이지 휴관 요일이 아니다
+  let closureText = text.replace(PERIOD_HEAD, head => head.replace(/\([월화수목금토일]\)/, ' '));
   const pendingUntil: Array<{ date: string; weekday: Weekday; close: string }> = [];
   for (const found of readExceptionDates(text, year, endYear)) {
     const idx = rest.indexOf(found.raw);
@@ -948,6 +968,8 @@ function parseInto(
     const after = rest.slice(idx + found.raw.length);
     // "9.15.(화)부터" 는 하루만의 예외가 아니라 그 날부터 바뀌는 일정이다 (periods 가 담는다)
     if (/^\s*부터/.test(after)) continue;
+    // "12.1.(화)부터 12.31.(목)까지 ..." 의 12.31 은 기간의 끝이다 (periods 의 to 가 담는다)
+    if (/^\s*까지/.test(after) && /부터\s*$/.test(rest.slice(0, idx))) continue;
     const tail = after.slice(0, 60);
     // 날짜 바로 뒤에 휴관 말이 시각보다 먼저 오면 그 날은 휴관이다. 뒤의 시각은 다음 안내의 것이다.
     //   "3.30(월) 휴관 / 토 10:00~20:00" 의 10:00~20:00 을 3.30 의 운영 시간으로 읽으면
@@ -1138,7 +1160,11 @@ function parseInto(
   const applyClosure = (days: string, near: string, dates: string) => {
     for (const day of readClosedWeekdays(days)) {
       weekdays[day] = emptyDay();
-      closedOut?.add(day);
+    }
+    // 날짜에 붙은 요일("11월 21일(월)", "21일(토)")은 날짜 예외로 못 옮겨 남은 것이다.
+    //   요일이 날짜와 안 맞거나 날짜를 못 읽어 매주 닫았을 뿐, 원문이 그 요일을 휴관이라 한 것은 아니다
+    if (closedOut) {
+      for (const day of readClosedWeekdays(days.replace(DATED_WEEKDAY, '$1 '))) closedOut.add(day);
     }
     if (/공휴일|국경일/.test(near)) {
       holiday = { isOpen: false, intervals: [] };
@@ -1162,7 +1188,16 @@ function parseInto(
   };
   for (const m of closureText.matchAll(/(.*?)(?:휴관|휴무)/gs)) {
     // 시간 구간 앞쪽은 운영시간 설명이므로 제외하고, 마지막 시각 뒤부터만 본다
-    const before = m[1].replace(/[\s\S]*\d{1,2}:\d{2}/, '');
+    let before = m[1].replace(/[\s\S]*\d{1,2}:\d{2}/, '');
+    // 조건부 공휴일 휴관 절은 떼고 앞부분만 읽는다. 앞에 적은 "매주 월요일" 은 그대로 닫는다
+    //   - "월요일이 공휴일이면 화요일 휴관" 은 그 공휴일 다음 날 하루만 쉰다는 조건이다. 매주 화요일과 모든 공휴일을
+    //     닫으면 틀린 "불가"가 나온다. 날짜를 정할 수 없으니 조건 절은 읽지 않는다
+    //   - 다른 날을 말하지 않는 "일요일이 공휴일일 때 휴관" 은 공휴일 휴관으로 읽는다. 주어 요일(일요일)은 닫지 않는다
+    const conditional = CONDITIONAL_HOLIDAY.exec(before);
+    if (conditional) {
+      const head = before.slice(0, conditional.index);
+      before = OTHER_DAY.test(conditional[1]) ? head : `${head} 공휴일 `;
+    }
     // 20자 안이라도 휴관 목록이 아닌 앞쪽 안내는 뗀다 ("토·일 야간개관 운영, 월 휴관" -> "월")
     const near = trimToClosureList(before.slice(-20));
     // 요일은 20자 밖으로 이어진 긴 휴관 목록까지 본다.
@@ -1243,6 +1278,10 @@ function parseInto(
     ) as Record<Weekday, DaySchedule>;
 
     applyExtensions(changed, clause);
+    // "12.1.(화)부터 휴관" 처럼 요일 없이 그 날부터 닫는 경우는 모든 요일을 닫는다
+    if (/^\s*(?:임시\s*|전면\s*|장기\s*)?(?:휴관|휴무)/.test(clause)) {
+      for (const d of ORDER) changed[d] = emptyDay();
+    }
     // "N일부터 월요일 휴관" 처럼 닫는 경우
     for (const m of clause.matchAll(/([월화수목금토일])\s*(?:요일)?[^가-힣]{0,4}(?:휴관|휴무)/g)) {
       changed[KO_TO_DAY[m[1]]] = emptyDay();

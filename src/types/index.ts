@@ -8,6 +8,8 @@ export interface Venue {
   type: '미술관' | '박물관';
   lat: number;
   lng: number;
+  // 카카오맵 장소 ID. 있으면 상세 창 카카오맵 링크가 장소 페이지(place.map.kakao.com/{id})로 간다 ex) '17952661'
+  kakaoPlaceId?: string;
   representative: boolean;
   hours?: Partial<Record<Weekday, { open: string; close: string }>>;
   // ifHoliday: 휴관 요일이 공휴일이면 연다. nextDay는 다음 날 대체 휴관, open은 대체 휴관 없음

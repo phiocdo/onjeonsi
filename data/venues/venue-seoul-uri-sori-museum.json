@@ -8,6 +8,7 @@
   "type": "박물관",
   "lat": 37.577157928122,
   "lng": 126.989622047178,
+  "kakaoPlaceId": "1811870430",
   "representative": false,
   "hours": {
     "tue": { "open": "09:00", "close": "18:00" },

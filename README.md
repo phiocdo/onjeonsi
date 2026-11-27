@@ -45,7 +45,8 @@ cp .env.example .env
 | `SEOUL_DATA_API_KEY` | 전시 수집 스크립트 | [서울 열린데이터광장](https://data.seoul.go.kr) → 문화행사 정보 |
 | `HOLIDAY_API_KEY` | 공휴일 수집 스크립트 | [공공데이터포털](https://www.data.go.kr) → 특일 정보 |
 | `KCISA_API_KEY` | `manual.json` 보충 후보 찾기 (선택, 환경 변수로만) | [공공데이터포털](https://www.data.go.kr) → 한국문화정보원 한눈에보는문화정보 |
-| `VITE_KAKAO_MAP_KEY` | 지도 표시 (브라우저) | [Kakao Developers](https://developers.kakao.com) → JavaScript 키 |
+| `VITE_KAKAO_MAP_KEY` | 지도 표시, 상세 창 카카오맵 장소 찾기 (브라우저) | [Kakao Developers](https://developers.kakao.com) → JavaScript 키 |
+| `KAKAO_REST_API_KEY` | 시설 파일의 카카오맵 장소 ID(`kakaoPlaceId`) 후보 찾기 (선택, 환경 변수로만) | [Kakao Developers](https://developers.kakao.com) → 같은 앱의 REST API 키 |
 
 `.env`는 `.gitignore`에 들어 있습니다. 저장소가 공개되어 있으니 키를 커밋하면 안됩니다.
 

@@ -60,6 +60,11 @@
       "maximum": 127.3,
       "description": "경도"
     },
+    "kakaoPlaceId": {
+      "type": "string",
+      "pattern": "^[1-9]\\d*$",
+      "description": "카카오맵 장소 ID (place.map.kakao.com/{id}의 숫자). 있으면 전시 상세 창의 카카오맵 링크가 장소 페이지로 간다. 없으면 화면이 장소 검색으로 찾는다. 후보는 scripts/find-kakao-place-ids.ts로 찾고 사람이 확인해 적는다"
+    },
     "representative": {
       "type": "boolean",
       "description": "true이면 hours와 입장 마감(lastEntry 또는 lastEntryBeforeClose)이 필수"

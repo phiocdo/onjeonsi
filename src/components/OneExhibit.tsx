@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { displayLocation, displayVenueName, getCatalog, getHolidays, judgeEntry, todayInSeoul, type CatalogEntry, type CatalogQuery } from '../lib/catalog'
 import { detailQuery, entryLastEntryLabel, reasonLines, similarWithJudge, type DetailCondition } from '../lib/detailDisplay'
+import { kakaoMapLink, useKakaoPlaceLink } from '../lib/kakaoMapLink'
 import { getRatingSummary } from '../lib/ratings'
 import { SEED_RECORDS } from '../lib/seed'
 import { getCachedStats, subscribeStats } from '../lib/sharedRatings'
@@ -83,7 +84,6 @@ function DETAIL(entry: CatalogEntry, passed: JudgeResult | undefined, query: Cat
   const { date } = query
   const holidays = getHolidays()
   const judge = passed ?? judgeEntry(entry, query, holidays)
-  const target = venue?.name ?? placeName
 
   return {
     title: ex.title, venue: placeName, eyebrow: venue ? `${venue.name} · ${venue.gu} · ${venue.type}` : placeName, poster: ex.imageUrl || undefined,
@@ -94,7 +94,7 @@ function DETAIL(entry: CatalogEntry, passed: JudgeResult | undefined, query: Cat
     source: venue ? `${venue.source} · 서울 열린데이터광장` : '서울 열린데이터광장',
     checked: venue?.verified ?? EMPTY, official: ex.link && ex.link.startsWith('http') ? ex.link : undefined,
     portal: ex.detailUrl && ex.detailUrl.startsWith('http') ? ex.detailUrl : undefined,
-    mapUrl: pos ? `https://map.kakao.com/link/map/${encodeURIComponent(target)},${pos.lat},${pos.lng}` : `https://map.kakao.com/link/search/${encodeURIComponent(target)}`,
+    mapUrl: kakaoMapLink(entry),
     hasCoord: pos !== null
   }
 }
@@ -125,6 +125,9 @@ export function WINDOW() {
     return { today: now.date, query: detailQuery(pick.cond, now) }
   }, [pick])
   const similar = useMemo(() => SIMILAR(pick?.id, basis?.query ?? null), [pick, basis])
+  const found = pick ? getCatalog().find((item) => item.exhibition.id === pick.id) : undefined
+  // 시설에 장소 ID가 없으면 열린 뒤 장소 검색으로 카카오맵 장소 페이지를 찾는다
+  const placeLink = useKakaoPlaceLink(found)
 
   useEffect(() => {
     LISTENERS.add(setPick)
@@ -142,7 +145,6 @@ export function WINDOW() {
 
   if (!pick || !basis) return null
   const { query, today } = basis
-  const found = getCatalog().find((item) => item.exhibition.id === pick.id)
   const detail = found ? DETAIL(found, pick.judge, query, today) : null
   const rating = found ? getRatingSummary(found.exhibition.id, found.venue?.id ?? null, { stats, seed: SEED_RECORDS }) : null
 
@@ -206,7 +208,7 @@ export function WINDOW() {
                     <div className="link-row">
                       {detail.official && <a href={detail.official} target="_blank" rel="noreferrer">공식 홈페이지 ↗</a>}
                       {detail.portal && <a href={detail.portal} target="_blank" rel="noreferrer">서울문화포털 ↗</a>}
-                      <a href={detail.mapUrl} target="_blank" rel="noreferrer">카카오맵 ↗</a>
+                      <a href={placeLink ?? detail.mapUrl} target="_blank" rel="noreferrer">카카오맵 ↗</a>
                     </div>
                   </div>
 
